@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
   const isApiRoute = pathname.startsWith('/api/');
