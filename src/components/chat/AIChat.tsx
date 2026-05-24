@@ -1,0 +1,201 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { MessageCircle, X, Send, Loader2, Bot, User } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { ChatMessage, Profile } from '@/types';
+
+interface AIChatProps {
+  profile: Profile;
+  dailyCalories: number;
+  dailyWater: number;
+  userId: string;
+  onFoodLogged?: () => void;
+}
+
+function MessageBubble({ msg }: { msg: ChatMessage }) {
+  const isUser = msg.role === 'user';
+  return (
+    <div className={cn('flex gap-2 items-end', isUser ? 'flex-row-reverse' : 'flex-row')}>
+      <div
+        className={cn(
+          'h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0',
+          isUser ? 'bg-emerald-500/20' : 'bg-zinc-700'
+        )}
+      >
+        {isUser ? <User size={14} className="text-emerald-400" /> : <Bot size={14} className="text-zinc-300" />}
+      </div>
+      <div
+        className={cn(
+          'max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
+          isUser
+            ? 'bg-emerald-500 text-white rounded-br-sm'
+            : 'bg-zinc-800 text-zinc-200 rounded-bl-sm'
+        )}
+      >
+        {msg.content.split('\n').map((line, i) => (
+          <span key={i}>
+            {line}
+            {i < msg.content.split('\n').length - 1 && <br />}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: 'assistant',
+      content: `Olá${profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 👋 Sou seu coach de saúde. Pode me dizer o que comeu hoje ou fazer perguntas sobre sua dieta!`,
+    },
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [open, messages]);
+
+  async function sendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || loading) return;
+
+    const userMsg: ChatMessage = { role: 'user', content: text };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...messages, userMsg].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          userContext: {
+            userId,
+            name: profile.full_name,
+            targetCalories: profile.target_calories,
+            dailyCalories,
+            remaining: (profile.target_calories ?? 0) - dailyCalories,
+            dailyWater,
+            targetWater: profile.target_water_ml,
+            weight: profile.current_weight,
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.message) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
+      }
+
+      if (data.foodLogged && onFoodLogged) {
+        onFoodLogged();
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Desculpe, tive um problema. Tente novamente.' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      {/* Floating button */}
+      <button
+        onClick={() => setOpen(true)}
+        className={cn(
+          'fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full shadow-xl',
+          'bg-emerald-500 hover:bg-emerald-400 text-white',
+          'flex items-center justify-center transition-all duration-200 active:scale-95',
+          open && 'hidden'
+        )}
+        aria-label="Abrir chat com IA"
+      >
+        <MessageCircle size={24} />
+      </button>
+
+      {/* Chat panel */}
+      {open && (
+        <div className="fixed bottom-20 right-0 left-0 sm:left-auto sm:right-4 z-50 sm:w-96 animate-slide-up">
+          <div className="mx-4 sm:mx-0 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            style={{ maxHeight: '70vh', height: '480px' }}>
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
+              <div className="h-8 w-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                <Bot size={16} className="text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-zinc-100">Coach IA</p>
+                <p className="text-xs text-emerald-400">Online</p>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="ml-auto h-7 w-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+              {messages.map((msg, i) => (
+                <MessageBubble key={i} msg={msg} />
+              ))}
+              {loading && (
+                <div className="flex items-center gap-2 text-zinc-500">
+                  <div className="h-7 w-7 rounded-full bg-zinc-700 flex items-center justify-center">
+                    <Bot size={14} className="text-zinc-400" />
+                  </div>
+                  <div className="bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-2.5">
+                    <Loader2 size={14} className="animate-spin text-zinc-400" />
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <form
+              onSubmit={sendMessage}
+              className="flex items-center gap-2 p-3 border-t border-zinc-800 flex-shrink-0"
+            >
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ex: Comi 2 ovos e um suco..."
+                disabled={loading}
+                className="flex-1 h-10 bg-zinc-800 rounded-xl px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || loading}
+                className="h-10 w-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 flex items-center justify-center text-white transition-all active:scale-95"
+              >
+                <Send size={16} />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
