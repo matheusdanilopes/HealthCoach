@@ -4,8 +4,6 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { createClient } from '@/lib/supabase/client';
-import { todayISO } from '@/lib/utils';
 
 interface WeightLogModalProps {
   open: boolean;
@@ -28,21 +26,11 @@ export default function WeightLogModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const supabase = createClient();
-    const w = parseFloat(weight);
-
-    await Promise.all([
-      supabase.from('weight_logs').upsert({
-        user_id: userId,
-        date: todayISO(),
-        weight: w,
-      }),
-      supabase
-        .from('profiles')
-        .update({ current_weight: w, updated_at: new Date().toISOString() })
-        .eq('id', userId),
-    ]);
-
+    await fetch('/api/weight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weight_kg: parseFloat(weight) }),
+    });
     setLoading(false);
     onLogged();
     onClose();

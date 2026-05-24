@@ -31,7 +31,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
     setLogs((prev) => [...prev, log]);
   }, []);
 
-  const handleDelete = useCallback((id: number) => {
+  const handleDelete = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
@@ -127,7 +127,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
           setLogs((prev) => [
             ...prev,
             {
-              id: Date.now(),
+              id: `local-${Date.now()}`,
               user_id: userId,
               created_at: new Date().toISOString(),
               food_name: '🏃 Treino',

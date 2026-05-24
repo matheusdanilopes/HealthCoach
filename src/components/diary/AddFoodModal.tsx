@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { createClient } from '@/lib/supabase/client';
 import type { FoodLog, MealType } from '@/types';
 
 const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
@@ -50,25 +49,24 @@ export default function AddFoodModal({
     if (!foodName || !calories) return;
     setLoading(true);
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('food_logs')
-      .insert({
-        user_id: userId,
+    const res = await fetch('/api/food', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         food_name: foodName,
         meal_type: mealType,
         calories: parseInt(calories),
         protein: protein ? parseFloat(protein) : null,
         carbs: carbs ? parseFloat(carbs) : null,
         fat: fat ? parseFloat(fat) : null,
-      })
-      .select()
-      .single();
+      }),
+    });
 
     setLoading(false);
-    if (error || !data) return;
+    if (!res.ok) return;
 
-    onAdded(data as FoodLog);
+    const data = await res.json() as FoodLog;
+    onAdded(data);
     reset();
     onClose();
   }

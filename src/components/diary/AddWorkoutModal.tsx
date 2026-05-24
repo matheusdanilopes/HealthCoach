@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { createClient } from '@/lib/supabase/client';
 
 interface AddWorkoutModalProps {
   open: boolean;
@@ -23,15 +22,14 @@ export default function AddWorkoutModal({ open, onClose, userId, onAdded }: AddW
     if (!activity || !calories) return;
     setLoading(true);
 
-    const supabase = createClient();
-    await supabase.from('food_logs').insert({
-      user_id: userId,
-      food_name: `🏃 ${activity}`,
-      meal_type: 'snack',
-      calories: -Math.abs(parseInt(calories)),
-      protein: null,
-      carbs: null,
-      fat: null,
+    await fetch('/api/food', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        food_name: `🏃 ${activity}`,
+        meal_type: 'snack',
+        calories: -Math.abs(parseInt(calories)),
+      }),
     });
 
     onAdded(parseInt(calories));

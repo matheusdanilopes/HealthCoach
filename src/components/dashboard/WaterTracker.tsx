@@ -2,8 +2,6 @@
 
 import { useState } from 'react';
 import { Droplets, Plus } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { todayISO } from '@/lib/utils';
 
 interface WaterTrackerProps {
   current: number;
@@ -21,11 +19,10 @@ export default function WaterTracker({ current, target, userId, onUpdate }: Wate
 
   async function addWater(ml: number) {
     setLoading(true);
-    const supabase = createClient();
-    await supabase.from('water_logs').insert({
-      user_id: userId,
-      date: todayISO(),
-      amount_ml: ml,
+    await fetch('/api/water', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount_ml: ml }),
     });
     onUpdate(current + ml);
     setLoading(false);

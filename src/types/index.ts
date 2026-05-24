@@ -1,11 +1,10 @@
 export interface Profile {
   id: string;
-  updated_at: string | null;
   full_name: string | null;
   birth_date: string | null;
   sex: 'male' | 'female' | null;
   current_weight: number | null;
-  height: number | null;
+  height_cm: number | null;
   activity_level: 'sedentary' | 'moderate' | 'active' | null;
   tdee: number | null;
   target_calories: number | null;
@@ -13,7 +12,7 @@ export interface Profile {
 }
 
 export interface FoodLog {
-  id: number;
+  id: string;
   user_id: string;
   created_at: string;
   food_name: string;
@@ -25,17 +24,17 @@ export interface FoodLog {
 }
 
 export interface WaterLog {
-  id: number;
+  id: string;
   user_id: string;
-  date: string;
+  log_date: string;
   amount_ml: number;
 }
 
 export interface WeightLog {
-  id: number;
+  id: string;
   user_id: string;
-  date: string;
-  weight: number;
+  log_date: string;
+  weight_kg: number;
 }
 
 export interface DailyStats {

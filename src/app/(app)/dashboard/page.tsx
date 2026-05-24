@@ -1,51 +1,45 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { auth } from '@/auth';
+import { sql } from '@/lib/db';
 import { todayISO } from '@/lib/utils';
 import DashboardClient from './DashboardClient';
+import type { Profile, FoodLog } from '@/types';
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  const session = await auth();
+  if (!session?.user) redirect('/login');
 
   const today = todayISO();
-  const dayStart = `${today}T00:00:00.000Z`;
-  const dayEnd = `${today}T23:59:59.999Z`;
+  const userId = session.user.id;
 
-  const [profileRes, foodLogsRes, waterLogsRes, weightLogsRes] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase
-      .from('food_logs')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('created_at', dayStart)
-      .lte('created_at', dayEnd)
-      .order('created_at'),
-    supabase
-      .from('water_logs')
-      .select('amount_ml')
-      .eq('user_id', user.id)
-      .eq('date', today),
-    supabase
-      .from('weight_logs')
-      .select('weight, date')
-      .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .limit(1),
+  const [profileRows, foodRows, waterRows, weightRows] = await Promise.all([
+    sql<Profile & { id: string }>`SELECT * FROM users WHERE id = ${userId}`,
+    sql<FoodLog>`
+      SELECT id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at
+      FROM food_logs WHERE user_id = ${userId} AND log_date = ${today}
+      ORDER BY created_at
+    `,
+    sql<{ total: string }>`
+      SELECT COALESCE(SUM(amount_ml), 0) AS total FROM water_logs
+      WHERE user_id = ${userId} AND log_date = ${today}
+    `,
+    sql<{ weight_kg: string }>`
+      SELECT weight_kg FROM weight_logs WHERE user_id = ${userId}
+      ORDER BY log_date DESC LIMIT 1
+    `,
   ]);
 
-  const profile = profileRes.data;
-  const foodLogs = foodLogsRes.data ?? [];
-  const totalWater = (waterLogsRes.data ?? []).reduce((s, l) => s + l.amount_ml, 0);
-  const latestWeight = weightLogsRes.data?.[0]?.weight ?? profile?.current_weight ?? 0;
+  const profile = profileRows[0] ?? null;
+  const totalWater = parseInt(waterRows[0]?.total ?? '0', 10);
+  const latestWeight = parseFloat(weightRows[0]?.weight_kg ?? String(profile?.current_weight ?? 0));
 
   return (
     <DashboardClient
       profile={profile}
-      initialFoodLogs={foodLogs}
+      initialFoodLogs={foodRows}
       initialWater={totalWater}
       latestWeight={latestWeight}
-      userId={user.id}
+      userId={userId}
     />
   );
 }

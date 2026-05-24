@@ -148,7 +148,7 @@ export default function DashboardClient({
           setFoodLogs((prev) => [
             ...prev,
             {
-              id: Date.now(),
+              id: `local-${Date.now()}`,
               user_id: userId,
               created_at: new Date().toISOString(),
               food_name: `🏃 Treino`,

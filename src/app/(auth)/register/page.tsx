@@ -3,17 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { signIn } from 'next-auth/react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Activity, ChevronRight, ChevronLeft } from 'lucide-react';
-import {
-  calculateAge,
-  calculateTMB,
-  calculateTDEE,
-  calculateTargetCalories,
-  calculateWaterTarget,
-} from '@/lib/calculations';
 
 const ACTIVITY_OPTIONS = [
   {
@@ -67,52 +60,25 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, fullName, birthDate, sex, weight, height, activityLevel }),
     });
 
-    if (authError || !authData.user) {
-      setError(authError?.message ?? 'Erro ao criar conta.');
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error ?? 'Erro ao criar conta.');
       setLoading(false);
       return;
     }
 
-    const age = calculateAge(birthDate);
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
-    const tmb = calculateTMB(w, h, age, sex);
-    const tdee = calculateTDEE(tmb, activityLevel);
-    const targetCal = calculateTargetCalories(tdee);
-    const targetWater = calculateWaterTarget(w);
-
-    const { error: profileError } = await supabase.from('profiles').upsert({
-      id: authData.user.id,
-      full_name: fullName,
-      birth_date: birthDate,
-      sex,
-      current_weight: w,
-      height: h,
-      activity_level: activityLevel,
-      tdee,
-      target_calories: targetCal,
-      target_water_ml: targetWater,
-      updated_at: new Date().toISOString(),
-    });
-
-    if (profileError) {
-      setError('Erro ao salvar perfil. Tente novamente.');
+    const result = await signIn('credentials', { email, password, redirect: false });
+    if (result?.error) {
+      setError('Conta criada, mas erro ao entrar. Tente fazer login.');
       setLoading(false);
       return;
     }
-
-    await supabase.from('weight_logs').insert({
-      user_id: authData.user.id,
-      date: new Date().toISOString().split('T')[0],
-      weight: w,
-    });
 
     router.push('/dashboard');
     router.refresh();

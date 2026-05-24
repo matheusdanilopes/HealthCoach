@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { createClient } from '@/lib/supabase/server';
+import { auth } from '@/auth';
+import { sql } from '@/lib/db';
 
 let openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -47,12 +48,11 @@ interface UserContext {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
+    const session = await auth();
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const user = session.user;
 
     const { messages, userContext }: { messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; userContext: UserContext } =
       await req.json();
@@ -100,21 +100,25 @@ INSTRUÇÕES:
         if (tc.function?.name === 'log_food') {
           const args = JSON.parse(tc.function.arguments);
 
-          const { error } = await supabase.from('food_logs').insert({
-            user_id: user.id,
-            food_name: args.food_name,
-            meal_type: args.meal_type,
-            calories: args.calories,
-            protein: args.protein ?? null,
-            carbs: args.carbs ?? null,
-            fat: args.fat ?? null,
-          });
+          const today = new Date().toISOString().split('T')[0];
+          let insertError: unknown = null;
+          try {
+            await sql`
+              INSERT INTO food_logs (user_id, food_name, meal_type, calories, protein, carbs, fat, log_date)
+              VALUES (${user.id}, ${args.food_name}, ${args.meal_type}, ${args.calories},
+                      ${args.protein ?? null}, ${args.carbs ?? null}, ${args.fat ?? null}, ${today})
+            `;
+          } catch (e) {
+            insertError = e;
+          }
 
-          foodLogged = !error;
+          foodLogged = !insertError;
           toolResults.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: error ? 'Erro ao registrar' : `Registrado: ${args.food_name}, ${args.calories} kcal`,
+            content: insertError
+              ? 'Erro ao registrar'
+              : `Registrado: ${args.food_name}, ${args.calories} kcal`,
           });
         }
       }

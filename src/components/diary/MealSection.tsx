@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Plus, Trash2, ChevronDown } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { getMealLabel, getMealIcon } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -10,19 +9,18 @@ interface MealSectionProps {
   mealType: MealType;
   logs: FoodLog[];
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }
 
 export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSectionProps) {
   const [expanded, setExpanded] = useState(true);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const totalCal = logs.reduce((sum, l) => sum + l.calories, 0);
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     setDeletingId(id);
-    const supabase = createClient();
-    await supabase.from('food_logs').delete().eq('id', id);
+    await fetch(`/api/food?id=${id}`, { method: 'DELETE' });
     onDelete(id);
     setDeletingId(null);
   }

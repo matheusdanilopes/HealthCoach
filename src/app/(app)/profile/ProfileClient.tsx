@@ -2,17 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { LogOut, Save, Activity, User } from 'lucide-react';
-import {
-  calculateAge,
-  calculateTMB,
-  calculateTDEE,
-  calculateTargetCalories,
-  calculateWaterTarget,
-} from '@/lib/calculations';
 import type { Profile } from '@/types';
 
 interface ProfileClientProps {
@@ -26,7 +19,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [birthDate, setBirthDate] = useState(profile?.birth_date ?? '');
   const [weight, setWeight] = useState(String(profile?.current_weight ?? ''));
-  const [height, setHeight] = useState(String(profile?.height ?? ''));
+  const [height, setHeight] = useState(String(profile?.height_cm ?? ''));
   const [activityLevel, setActivityLevel] = useState(profile?.activity_level ?? 'sedentary');
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -35,27 +28,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     e.preventDefault();
     setLoading(true);
 
-    const supabase = createClient();
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
-    const age = calculateAge(birthDate);
-    const sex = (profile as any)?.sex ?? 'male';
-    const tmb = calculateTMB(w, h, age, sex);
-    const tdee = calculateTDEE(tmb, activityLevel as any);
-    const targetCal = calculateTargetCalories(tdee);
-    const targetWater = calculateWaterTarget(w);
-
-    await supabase.from('profiles').update({
-      full_name: fullName,
-      birth_date: birthDate,
-      current_weight: w,
-      height: h,
-      activity_level: activityLevel,
-      tdee,
-      target_calories: targetCal,
-      target_water_ml: targetWater,
-      updated_at: new Date().toISOString(),
-    }).eq('id', userId);
+    await fetch('/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName, birthDate, weight, height, activityLevel }),
+    });
 
     setLoading(false);
     setSaved(true);
@@ -64,9 +41,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   }
 
   async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push('/login');
+    await signOut({ callbackUrl: '/login' });
   }
 
   return (
