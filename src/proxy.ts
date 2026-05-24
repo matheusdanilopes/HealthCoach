@@ -1,7 +1,8 @@
 import { auth } from '@/auth';
 import { NextResponse } from 'next/server';
 
-export default auth((req) => {
+// Next.js 16: middleware renamed to proxy, runs on Node.js runtime (not Edge)
+export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
 
@@ -14,8 +15,7 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Only redirect authenticated users away from /login, not /register
-  // (/register is also used for profile completion after redirect from (app)/layout)
+  // Only redirect away from /login; /register stays accessible for profile completion
   if (isLoggedIn && isLoginRoute) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
