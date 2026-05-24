@@ -1,10 +1,8 @@
-import NextAuth from 'next-auth';
-import { authConfig } from '@/auth.config';
+import { auth } from '@/auth';
 import { NextResponse } from 'next/server';
 
-const { auth } = NextAuth(authConfig);
-
-export default auth((req) => {
+// Next.js 16: middleware renamed to proxy, runs on Node.js runtime (not Edge)
+export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
 
