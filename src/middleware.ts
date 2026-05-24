@@ -1,5 +1,8 @@
-import { auth } from '@/auth';
+import NextAuth from 'next-auth';
+import { authConfig } from '@/auth.config';
 import { NextResponse } from 'next/server';
+
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -14,8 +17,7 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Only redirect authenticated users away from /login, not /register
-  // (/register is also used for profile completion after redirect from (app)/layout)
+  // Only redirect away from /login; /register stays accessible for profile completion
   if (isLoggedIn && isLoginRoute) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
