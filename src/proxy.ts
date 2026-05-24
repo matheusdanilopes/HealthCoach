@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { decode } from 'next-auth/jwt';
 
-export default async function proxy(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isLoginRoute = pathname.startsWith('/login');
@@ -9,34 +8,19 @@ export default async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api/');
   const isPublicRoute = pathname === '/' || isLoginRoute || isRegisterRoute || isApiRoute;
 
-  // Read NextAuth v5 session cookie (name differs between HTTP and HTTPS)
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
+
+  // Check cookie presence only — JWT verification happens in each page via auth()
   const isSecure = request.url.startsWith('https://');
   const cookieName = isSecure
     ? '__Secure-authjs.session-token'
     : 'authjs.session-token';
-  const cookieValue = request.cookies.get(cookieName)?.value;
+  const hasSession = !!request.cookies.get(cookieName)?.value;
 
-  let isLoggedIn = false;
-  if (cookieValue && process.env.AUTH_SECRET) {
-    try {
-      const token = await decode({
-        token: cookieValue,
-        secret: process.env.AUTH_SECRET,
-        salt: cookieName,
-      });
-      isLoggedIn = !!token;
-    } catch {
-      // Invalid or expired token — treat as unauthenticated
-    }
-  }
-
-  if (!isLoggedIn && !isPublicRoute) {
+  if (!hasSession) {
     return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  // Only redirect /login away; /register stays accessible for profile completion
-  if (isLoggedIn && isLoginRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   return NextResponse.next();
