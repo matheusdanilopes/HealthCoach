@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!openai) {
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
+}
 
 const LOG_FOOD_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
@@ -69,7 +75,7 @@ INSTRUÇÕES:
 5. Seja conciso — respostas curtas e diretas, com emojis quando apropriado.
 6. Dê feedback sobre o progresso do dia baseado nas calorias restantes.`;
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -113,7 +119,7 @@ INSTRUÇÕES:
         }
       }
 
-      const followUp = await openai.chat.completions.create({
+      const followUp = await getOpenAI().chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
