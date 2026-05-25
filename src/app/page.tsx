@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { cookies } from 'next/headers';
 
 export default async function Home() {
-  const session = await auth();
-  redirect(session?.user ? '/dashboard' : '/login');
+  const jar = await cookies();
+  const hasSession =
+    jar.has('authjs.session-token') ||
+    jar.has('__Secure-authjs.session-token');
+  redirect(hasSession ? '/dashboard' : '/login');
 }
