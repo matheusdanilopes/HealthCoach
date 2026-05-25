@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI, FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -111,11 +111,17 @@ INSTRUÇÕES:
         const today = new Date().toISOString().split('T')[0];
         let insertError: unknown = null;
         try {
-          await sql`
-            INSERT INTO food_logs (user_id, food_name, meal_type, calories, protein, carbs, fat, log_date)
-            VALUES (${user.id}, ${args.food_name}, ${args.meal_type}, ${args.calories},
-                    ${args.protein ?? null}, ${args.carbs ?? null}, ${args.fat ?? null}, ${today})
-          `;
+          const { error } = await supabase.from('food_logs').insert({
+            user_id: user.id,
+            food_name: args.food_name,
+            meal_type: args.meal_type,
+            calories: args.calories,
+            protein: args.protein ?? null,
+            carbs: args.carbs ?? null,
+            fat: args.fat ?? null,
+            log_date: today,
+          });
+          if (error) insertError = error;
         } catch (e) {
           insertError = e;
         }

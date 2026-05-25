@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -9,16 +9,16 @@ export async function POST(req: Request) {
   const { weight_kg } = await req.json();
   const today = new Date().toISOString().split('T')[0];
 
-  await sql`
-    INSERT INTO weight_logs (user_id, weight_kg, log_date)
-    VALUES (${session.user.id}, ${weight_kg}, ${today})
-    ON CONFLICT (user_id, log_date) DO UPDATE SET weight_kg = EXCLUDED.weight_kg
-  `;
+  await supabase.from('weight_logs').upsert({
+    user_id: session.user.id,
+    weight_kg,
+    log_date: today,
+  });
 
-  await sql`
-    UPDATE users SET current_weight = ${weight_kg}, updated_at = NOW()
-    WHERE id = ${session.user.id}
-  `;
+  await supabase
+    .from('users')
+    .update({ current_weight: weight_kg, updated_at: new Date().toISOString() })
+    .eq('id', session.user.id);
 
   return NextResponse.json({ ok: true });
 }

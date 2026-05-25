@@ -1,19 +1,30 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { food_name, meal_type, calories, protein, carbs, fat } = await req.json();
-
   const today = new Date().toISOString().split('T')[0];
-  const [row] = await sql<{ id: string; food_name: string; meal_type: string; calories: number; protein: number | null; carbs: number | null; fat: number | null; created_at: string }>`
-    INSERT INTO food_logs (user_id, food_name, meal_type, calories, protein, carbs, fat, log_date)
-    VALUES (${session.user.id}, ${food_name}, ${meal_type}, ${calories}, ${protein ?? null}, ${carbs ?? null}, ${fat ?? null}, ${today})
-    RETURNING id, food_name, meal_type, calories, protein, carbs, fat, created_at
-  `;
+
+  const { data: row, error } = await supabase
+    .from('food_logs')
+    .insert({
+      user_id: session.user.id,
+      food_name,
+      meal_type,
+      calories,
+      protein: protein ?? null,
+      carbs: carbs ?? null,
+      fat: fat ?? null,
+      log_date: today,
+    })
+    .select('id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ...row, user_id: session.user.id });
 }
@@ -26,6 +37,11 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  await sql`DELETE FROM food_logs WHERE id = ${id} AND user_id = ${session.user.id}`;
+  await supabase
+    .from('food_logs')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', session.user.id);
+
   return NextResponse.json({ ok: true });
 }

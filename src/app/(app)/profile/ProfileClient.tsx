@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target } from 'lucide-react';
+import { LogOut, Save, Zap, Target, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 
@@ -148,10 +149,19 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       {/* Account */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
         <p className="text-xs font-medium text-zinc-500 mb-3">Conta</p>
-        <Button variant="danger" onClick={handleSignOut} className="w-full">
-          <LogOut size={15} />
-          Sair da conta
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/admin"
+            className="h-10 px-4 w-full inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-all duration-150"
+          >
+            <ShieldCheck size={16} />
+            Gerenciar usuários
+          </Link>
+          <Button variant="danger" onClick={handleSignOut} className="w-full">
+            <LogOut size={15} />
+            Sair da conta
+          </Button>
+        </div>
       </div>
     </div>
   );

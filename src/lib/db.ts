@@ -1,18 +1,7 @@
-import { neon } from '@neondatabase/serverless';
+import { createClient } from '@supabase/supabase-js';
 
-let _client: ReturnType<typeof neon> | undefined;
-
-function client() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not configured. Set it in your Vercel environment variables.');
-  }
-  return (_client ??= neon(process.env.DATABASE_URL));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function sql<T = any>(
-  strings: TemplateStringsArray,
-  ...values: unknown[]
-): Promise<T[]> {
-  return client()(strings, ...values) as unknown as Promise<T[]>;
-}
+export const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
