@@ -1,12 +1,13 @@
-import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 
-let _client: ReturnType<typeof neon> | undefined;
+let _client: ReturnType<typeof postgres> | undefined;
 
 function client() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not configured. Set it in your Vercel environment variables.');
-  }
-  return (_client ??= neon(process.env.DATABASE_URL));
+  return (_client ??= postgres(process.env.DATABASE_URL!, {
+    max: 1,
+    prepare: false,
+    ssl: 'require',
+  }));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
