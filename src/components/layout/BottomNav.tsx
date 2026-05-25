@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen, TrendingUp, User } from 'lucide-react';
+import { LayoutDashboard, BookOpen, TrendingUp, User, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Início' },
   { href: '/diary',     icon: BookOpen,         label: 'Diário' },
+  { href: '/meal-log',  icon: Utensils,         label: 'Refeição' },
   { href: '/history',   icon: TrendingUp,        label: 'Evolução' },
   { href: '/profile',   icon: User,              label: 'Perfil' },
 ];
@@ -28,7 +29,7 @@ export default function BottomNav() {
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 transition-all duration-200',
+                'flex flex-col items-center justify-center gap-0.5 px-1.5 py-1.5 transition-all duration-200',
                 active
                   ? 'text-blue-600 dark:text-blue-400'
                   : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
@@ -36,7 +37,7 @@ export default function BottomNav() {
             >
               <div
                 className={cn(
-                  'flex items-center justify-center h-8 w-14 rounded-full transition-all duration-200',
+                  'flex items-center justify-center h-8 w-12 rounded-full transition-all duration-200',
                   active ? 'bg-blue-50 dark:bg-blue-900/30' : ''
                 )}
               >

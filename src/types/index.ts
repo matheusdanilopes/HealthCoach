@@ -53,3 +53,34 @@ export interface ChatMessage {
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type ActivityLevel = 'sedentary' | 'moderate' | 'active';
+
+export interface FoodAnalysis {
+  name: string;
+  quantity: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface MealAnalysisResult {
+  foods: FoodAnalysis[];
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+}
+
+export interface MealHistoryItem {
+  id: string;
+  user_id?: string;
+  input_type: 'text' | 'image';
+  raw_text: string | null;
+  image_url: string | null;
+  parsed_json: MealAnalysisResult;
+  total_calories: number;
+  total_protein: number | null;
+  total_carbs: number | null;
+  total_fat: number | null;
+  created_at: string;
+}
