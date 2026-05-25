@@ -39,6 +39,26 @@ export async function GET() {
   }
 
   try {
+    const rows = await sql<{ schema: string; table: string }>`
+      SELECT table_schema AS schema, table_name AS table
+      FROM information_schema.tables
+      WHERE table_type = 'BASE TABLE'
+        AND table_schema NOT IN ('information_schema', 'pg_catalog')
+      ORDER BY table_schema, table_name
+    `;
+    checks.all_user_tables = rows.map(r => `${r.schema}.${r.table}`).join(', ') || '(nenhuma)';
+  } catch (err) {
+    checks.all_user_tables = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    const [v] = await sql<{ version: string }>`SELECT version()`;
+    checks.pg_version = v.version.substring(0, 50);
+  } catch (err) {
+    checks.pg_version = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
     await sql`SELECT COUNT(*) FROM users`;
     checks.table_users = 'OK';
   } catch (err) {
