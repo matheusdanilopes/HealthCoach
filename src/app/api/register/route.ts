@@ -59,14 +59,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('Register error:', err);
     const message = err instanceof Error ? err.message : String(err);
+    console.error('Register error:', message, err);
     if (message.includes('duplicate key') || message.includes('unique') || message.includes('already exists')) {
       return NextResponse.json({ error: 'Email já cadastrado.' }, { status: 409 });
     }
-    if (message.includes('DATABASE_URL') || message.includes('connection') || message.includes('database')) {
-      return NextResponse.json({ error: 'Serviço temporariamente indisponível. Tente novamente em instantes.' }, { status: 503 });
-    }
-    return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
+    // Temporary: expose error detail to help diagnose the issue
+    return NextResponse.json({ error: `Erro interno: ${message.substring(0, 200)}` }, { status: 500 });
   }
 }
