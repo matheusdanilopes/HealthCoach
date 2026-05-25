@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -9,10 +9,11 @@ export async function POST(req: Request) {
   const { amount_ml } = await req.json();
   const today = new Date().toISOString().split('T')[0];
 
-  await sql`
-    INSERT INTO water_logs (user_id, amount_ml, log_date)
-    VALUES (${session.user.id}, ${amount_ml}, ${today})
-  `;
+  await supabase.from('water_logs').insert({
+    user_id: session.user.id,
+    amount_ml,
+    log_date: today,
+  });
 
   return NextResponse.json({ ok: true });
 }

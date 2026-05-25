@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import {
   calculateAge,
@@ -38,8 +38,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Dados de perfil inválidos.' }, { status: 400 });
     }
 
-    const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
-    if (existing.length > 0) {
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existing) {
       return NextResponse.json({ error: 'Email já cadastrado.' }, { status: 409 });
     }
 
@@ -48,32 +53,37 @@ export async function POST(req: Request) {
     const tdee = calculateTDEE(tmb, activityLevel as 'sedentary' | 'moderate' | 'active');
     const targetCal = calculateTargetCalories(tdee);
     const targetWater = calculateWaterTarget(w);
-
     const today = new Date().toISOString().split('T')[0];
 
-    const rows = await sql<{ id: string }>`
-      INSERT INTO users (
-        email, password_hash, full_name, birth_date, sex,
-        current_weight, height_cm, activity_level,
-        tdee, target_calories, target_water_ml
-      ) VALUES (
-        ${email}, ${passwordHash}, ${fullName}, ${birthDate}, ${sex},
-        ${w}, ${h}, ${activityLevel},
-        ${tdee}, ${targetCal}, ${targetWater}
-      ) RETURNING id
-    `;
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert({
+        email,
+        password_hash: passwordHash,
+        full_name: fullName,
+        birth_date: birthDate,
+        sex,
+        current_weight: w,
+        height_cm: h,
+        activity_level: activityLevel,
+        tdee,
+        target_calories: targetCal,
+        target_water_ml: targetWater,
+      })
+      .select('id')
+      .single();
 
-    const newUser = rows[0];
+    if (insertError) throw insertError;
     if (!newUser?.id) {
       return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
     }
 
     try {
-      await sql`
-        INSERT INTO weight_logs (user_id, weight_kg, log_date)
-        VALUES (${newUser.id}, ${w}, ${today})
-        ON CONFLICT (user_id, log_date) DO NOTHING
-      `;
+      await supabase.from('weight_logs').upsert({
+        user_id: newUser.id,
+        weight_kg: w,
+        log_date: today,
+      });
     } catch (weightErr) {
       console.error('weight_log insert failed (non-fatal):', weightErr);
     }

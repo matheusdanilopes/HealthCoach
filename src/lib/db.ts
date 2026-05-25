@@ -1,20 +1,7 @@
-import postgres from 'postgres';
+import { createClient } from '@supabase/supabase-js';
 
-let _client: ReturnType<typeof postgres> | undefined;
-
-function client() {
-  return (_client ??= postgres(process.env.DATABASE_URL!, {
-    max: 1,
-    prepare: false,
-    ssl: 'require',
-  }));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function sql<T = any>(
-  strings: TemplateStringsArray,
-  ...values: unknown[]
-): Promise<T[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (client() as any)(strings, ...values) as Promise<T[]>;
-}
+export const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);

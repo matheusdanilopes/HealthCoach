@@ -1,49 +1,24 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 export async function GET() {
   const checks: Record<string, string> = {};
 
-  // Check environment variables
-  if (process.env.DATABASE_URL) {
-    try {
-      const u = new URL(process.env.DATABASE_URL);
-      checks.DATABASE_URL = 'set';
-      checks.db_host = u.hostname;
-    } catch {
-      checks.DATABASE_URL = 'set (unparseable URL)';
-    }
-  } else {
-    checks.DATABASE_URL = 'MISSING';
-  }
+  checks.SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? `set (${process.env.NEXT_PUBLIC_SUPABASE_URL})`
+    : 'MISSING';
+  checks.SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'MISSING';
   checks.AUTH_SECRET = process.env.AUTH_SECRET ? 'set' : 'MISSING';
 
-  // Check DB connection, current database/schema, and tables
   try {
-    const [meta] = await sql<{ db: string; schema: string }>`
-      SELECT current_database() AS db, current_schema() AS schema
-    `;
-    checks.db_connection = 'ok';
-    checks.db_name = meta.db;
-    checks.db_schema = meta.schema;
+    const { count, error } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true });
 
-    const tables = await sql<{ table_name: string }>`
-      SELECT table_name FROM information_schema.tables
-      WHERE table_schema = current_schema()
-      ORDER BY table_name
-    `;
-    checks.db_tables = tables.map((t) => t.table_name).join(', ') || 'none';
-
-    // Direct table test — bypasses information_schema
-    try {
-      const [r] = await sql<{ n: string }>`SELECT COUNT(*)::text AS n FROM users`;
-      checks.users_table = `ok (${r.n} rows)`;
-    } catch (e) {
-      checks.users_table = `error: ${e instanceof Error ? e.message : String(e)}`;
-    }
+    if (error) throw error;
+    checks.users_table = `ok (${count ?? 0} rows)`;
   } catch (err) {
-    checks.db_connection = `error: ${err instanceof Error ? err.message : String(err)}`;
-    checks.db_tables = 'unknown';
+    checks.users_table = `error: ${err instanceof Error ? err.message : String(err)}`;
   }
 
   const allOk = !Object.values(checks).some((v) => v.includes('MISSING') || v.includes('error'));
