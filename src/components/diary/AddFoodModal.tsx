@@ -82,8 +82,8 @@ export default function AddFoodModal({
               onClick={() => setMealType(opt.value)}
               className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-xs transition-all ${
                 mealType === opt.value
-                  ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                  : 'bg-zinc-800 border-transparent text-zinc-500'
+                  ? 'bg-blue-50 border-blue-300 text-blue-700'
+                  : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:border-zinc-300'
               }`}
             >
               <span>{opt.icon}</span>
