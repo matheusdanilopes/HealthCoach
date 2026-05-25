@@ -3,7 +3,8 @@ import { neon } from '@neondatabase/serverless';
 let _client: ReturnType<typeof neon> | undefined;
 
 function client() {
-  return (_client ??= neon(process.env.DATABASE_URL!));
+  const url = process.env.DATABASE_URL!.replace(/^postgresql:\/\//, 'postgres://');
+  return (_client ??= neon(url));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
