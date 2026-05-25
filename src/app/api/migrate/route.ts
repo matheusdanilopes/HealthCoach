@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-export async function POST() {
+async function runMigration() {
   const results: string[] = [];
 
   try {
@@ -94,3 +94,6 @@ export async function POST() {
   const hasError = results.some(r => r.includes('ERRO'));
   return NextResponse.json({ ok: !hasError, results }, { status: hasError ? 500 : 200 });
 }
+
+export async function GET() { return runMigration(); }
+export async function POST() { return runMigration(); }
