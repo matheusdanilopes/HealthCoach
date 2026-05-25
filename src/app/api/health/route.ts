@@ -33,6 +33,14 @@ export async function GET() {
       ORDER BY table_name
     `;
     checks.db_tables = tables.map((t) => t.table_name).join(', ') || 'none';
+
+    // Direct table test — bypasses information_schema
+    try {
+      const [r] = await sql<{ n: string }>`SELECT COUNT(*)::text AS n FROM users`;
+      checks.users_table = `ok (${r.n} rows)`;
+    } catch (e) {
+      checks.users_table = `error: ${e instanceof Error ? e.message : String(e)}`;
+    }
   } catch (err) {
     checks.db_connection = `error: ${err instanceof Error ? err.message : String(err)}`;
     checks.db_tables = 'unknown';
