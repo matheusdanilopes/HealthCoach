@@ -59,24 +59,25 @@ export default function DashboardClient({
     return 'Boa noite';
   };
 
+  const firstName = profile?.full_name?.split(' ')[0];
   const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
-    <div className="flex flex-col gap-4 pt-5">
+    <div className="flex flex-col gap-4 pt-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-zinc-100">
-            {greeting()}{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''} 👋
+            {greeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
           <p className="text-sm text-zinc-500 capitalize">{dateStr}</p>
         </div>
         <button
           onClick={() => setWeightModalOpen(true)}
-          className="flex items-center gap-2 h-9 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-sm text-zinc-300 transition-colors"
+          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-sm text-zinc-300 transition-colors active:scale-95"
         >
-          <Scale size={14} />
-          {latestWeight}kg
+          <Scale size={13} className="text-zinc-500" />
+          <span className="font-medium tabular-nums">{latestWeight}kg</span>
         </button>
       </div>
 
@@ -107,29 +108,35 @@ export default function DashboardClient({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setAddFoodOpen(true)}
-          className="flex items-center gap-2 h-12 px-4 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-sm font-medium transition-all active:scale-95"
         >
-          <Plus size={18} /> Adicionar refeição
+          <Plus size={17} />
+          Refeição
         </button>
         <button
           onClick={() => setAddWorkoutOpen(true)}
-          className="flex items-center gap-2 h-12 px-4 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-400 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-400 text-sm font-medium transition-all active:scale-95"
         >
-          <Dumbbell size={18} /> Registrar treino
+          <Dumbbell size={17} />
+          Treino
         </button>
       </div>
 
-      {/* TDEE info */}
+      {/* TDEE strip — compact, informational only */}
       {profile?.tdee && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-wide">Gasto diário (TDEE)</p>
-            <p className="text-xl font-bold text-zinc-200">{profile.tdee.toLocaleString('pt-BR')} kcal</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-zinc-500 uppercase tracking-wide">Meta (déficit)</p>
-            <p className="text-xl font-bold text-emerald-400">{profile.target_calories?.toLocaleString('pt-BR')} kcal</p>
-          </div>
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs text-zinc-600">
+            TDEE{' '}
+            <span className="text-zinc-500 font-medium tabular-nums">
+              {profile.tdee.toLocaleString('pt-BR')} kcal
+            </span>
+          </span>
+          <span className="text-xs text-zinc-600">
+            Déficit{' '}
+            <span className="text-emerald-600 font-medium tabular-nums">
+              {(profile.tdee - (profile.target_calories ?? 0)).toLocaleString('pt-BR')} kcal
+            </span>
+          </span>
         </div>
       )}
 
@@ -151,7 +158,7 @@ export default function DashboardClient({
               id: `local-${Date.now()}`,
               user_id: userId,
               created_at: new Date().toISOString(),
-              food_name: `🏃 Treino`,
+              food_name: 'Treino',
               meal_type: 'snack',
               calories: -cal,
               protein: null,

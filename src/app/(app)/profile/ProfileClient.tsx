@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Activity, User } from 'lucide-react';
+import { LogOut, Save, Zap, Target } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 
 interface ProfileClientProps {
@@ -44,8 +45,14 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     await signOut({ callbackUrl: '/login' });
   }
 
+  const ACTIVITY_OPTIONS = [
+    { value: 'sedentary', emoji: '🛋️', label: 'Sedentário' },
+    { value: 'moderate', emoji: '🚶', label: 'Moderado' },
+    { value: 'active',   emoji: '🏃', label: 'Ativo' },
+  ];
+
   return (
-    <div className="flex flex-col gap-5 pt-5">
+    <div className="flex flex-col gap-4 pt-6">
       <div>
         <h1 className="text-xl font-bold text-zinc-100">Perfil</h1>
         <p className="text-sm text-zinc-500">{email}</p>
@@ -53,29 +60,29 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Stats summary */}
       {profile?.tdee && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2.5">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Activity size={14} className="text-emerald-400" />
-              <p className="text-xs text-zinc-500 uppercase tracking-wide">TDEE</p>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Zap size={13} className="text-amber-400" />
+              <p className="text-xs text-zinc-500">TDEE</p>
             </div>
-            <p className="text-2xl font-bold text-zinc-100">{profile.tdee}</p>
-            <p className="text-xs text-zinc-500">kcal/dia</p>
+            <p className="text-2xl font-bold tabular-nums text-zinc-100">{profile.tdee.toLocaleString('pt-BR')}</p>
+            <p className="text-xs text-zinc-600 mt-0.5">kcal/dia</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <User size={14} className="text-blue-400" />
-              <p className="text-xs text-zinc-500 uppercase tracking-wide">Meta</p>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Target size={13} className="text-emerald-400" />
+              <p className="text-xs text-zinc-500">Meta</p>
             </div>
-            <p className="text-2xl font-bold text-emerald-400">{profile.target_calories}</p>
-            <p className="text-xs text-zinc-500">kcal/dia</p>
+            <p className="text-2xl font-bold tabular-nums text-emerald-400">{profile.target_calories?.toLocaleString('pt-BR')}</p>
+            <p className="text-xs text-zinc-600 mt-0.5">kcal/dia</p>
           </div>
         </div>
       )}
 
       {/* Edit form */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-        <p className="text-sm font-medium text-zinc-300 mb-4">Editar dados pessoais</p>
+        <p className="text-xs font-medium text-zinc-500 mb-4">Dados pessoais</p>
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <Input
             label="Nome completo"
@@ -104,24 +111,22 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-zinc-300">Nível de atividade</label>
             <div className="grid grid-cols-3 gap-2">
-              {[
-                { value: 'sedentary', label: '🛋️ Sedentário' },
-                { value: 'moderate', label: '🚶 Moderado' },
-                { value: 'active', label: '🏃 Ativo' },
-              ].map((opt) => (
+              {ACTIVITY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => setActivityLevel(opt.value as any)}
-                  className={`py-2 px-1 rounded-xl border text-xs transition-all text-center ${
+                  className={cn(
+                    'py-2.5 px-2 rounded-xl border text-xs font-medium transition-all text-center active:scale-95',
                     activityLevel === opt.value
-                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-500'
-                  }`}
+                      ? 'bg-emerald-500/10 border-emerald-500/60 text-emerald-400'
+                      : 'bg-zinc-800 border-zinc-700/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
+                  )}
                 >
+                  <span className="block text-base mb-0.5">{opt.emoji}</span>
                   {opt.label}
                 </button>
               ))}
@@ -134,17 +139,17 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             variant={saved ? 'secondary' : 'primary'}
             className="w-full"
           >
-            <Save size={16} />
-            {saved ? 'Salvo! ✓' : 'Salvar alterações'}
+            <Save size={15} />
+            {saved ? 'Salvo!' : 'Salvar alterações'}
           </Button>
         </form>
       </div>
 
-      {/* Danger zone */}
+      {/* Account */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-        <p className="text-sm font-medium text-zinc-400 mb-3">Conta</p>
+        <p className="text-xs font-medium text-zinc-500 mb-3">Conta</p>
         <Button variant="danger" onClick={handleSignOut} className="w-full">
-          <LogOut size={16} />
+          <LogOut size={15} />
           Sair da conta
         </Button>
       </div>
