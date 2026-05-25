@@ -15,5 +15,6 @@ export function sql<T = any>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<T[]> {
-  return client()(strings, ...values) as unknown as Promise<T[]>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (client() as any)(strings, ...values) as Promise<T[]>;
 }
