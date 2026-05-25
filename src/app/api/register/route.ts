@@ -14,15 +14,24 @@ export async function POST(req: Request) {
     const { email, password, fullName, birthDate, sex, weight, height, activityLevel } =
       await req.json();
 
+    if (!email || !password || !fullName || !birthDate || !sex || !weight || !height || !activityLevel) {
+      return NextResponse.json({ error: 'Todos os campos são obrigatórios.' }, { status: 400 });
+    }
+
+    const w = parseFloat(weight);
+    const h = parseFloat(height);
+    const age = calculateAge(birthDate);
+
+    if (isNaN(w) || isNaN(h) || isNaN(age) || w <= 0 || h <= 0 || age <= 0) {
+      return NextResponse.json({ error: 'Dados de saúde inválidos.' }, { status: 400 });
+    }
+
     const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
     if (existing.length > 0) {
       return NextResponse.json({ error: 'Email já cadastrado.' }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const age = calculateAge(birthDate);
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
     const tmb = calculateTMB(w, h, age, sex);
     const tdee = calculateTDEE(tmb, activityLevel);
     const targetCal = calculateTargetCalories(tdee);
@@ -45,11 +54,19 @@ export async function POST(req: Request) {
     await sql`
       INSERT INTO weight_logs (user_id, weight_kg, log_date)
       VALUES (${newUser.id}, ${w}, ${today})
+      ON CONFLICT (user_id, log_date) DO NOTHING
     `;
 
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Register error:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('duplicate key') || message.includes('unique') || message.includes('already exists')) {
+      return NextResponse.json({ error: 'Email já cadastrado.' }, { status: 409 });
+    }
+    if (message.includes('DATABASE_URL') || message.includes('connection') || message.includes('database')) {
+      return NextResponse.json({ error: 'Serviço temporariamente indisponível. Tente novamente em instantes.' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
   }
 }
