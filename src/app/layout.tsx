@@ -29,6 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             var p = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             if ((t || p) === 'dark') document.documentElement.classList.add('dark');
           } catch(e) {}
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js');
+            });
+          }
         `}} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
