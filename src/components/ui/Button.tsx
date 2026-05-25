@@ -22,10 +22,10 @@ export default function Button({
     'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
 
   const variants = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
-    secondary: 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800',
-    ghost: 'bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800',
-    danger: 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200',
+    primary:   'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+    secondary: 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200',
+    ghost:     'bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100',
+    danger:    'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 dark:border-red-800',
   };
 
   const sizes = {
@@ -40,9 +40,9 @@ export default function Button({
       disabled={disabled || loading}
       {...props}
     >
-      {loading ? (
+      {loading && (
         <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
-      ) : null}
+      )}
       {children}
     </button>
   );

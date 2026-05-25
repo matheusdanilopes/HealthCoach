@@ -43,9 +43,9 @@ export default function DashboardClient({
 
   const stats = {
     calories: positiveLogs.reduce((s, l) => s + l.calories, 0),
-    protein: positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0),
-    carbs: positiveLogs.reduce((s, l) => s + (l.carbs ?? 0), 0),
-    fat: positiveLogs.reduce((s, l) => s + (l.fat ?? 0), 0),
+    protein:  positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0),
+    carbs:    positiveLogs.reduce((s, l) => s + (l.carbs ?? 0), 0),
+    fat:      positiveLogs.reduce((s, l) => s + (l.fat ?? 0), 0),
   };
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
@@ -63,20 +63,20 @@ export default function DashboardClient({
   const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
-    <div className="flex flex-col gap-4 pt-6">
+    <div className="flex flex-col gap-5 pt-8 pb-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-zinc-900">
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
             {greeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
-          <p className="text-sm text-zinc-400 capitalize">{dateStr}</p>
+          <p className="text-sm text-zinc-400 dark:text-zinc-500 capitalize">{dateStr}</p>
         </div>
         <button
           onClick={() => setWeightModalOpen(true)}
-          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-sm text-zinc-600 transition-colors active:scale-95"
+          className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 transition-colors active:scale-95"
         >
-          <Scale size={13} className="text-zinc-400" />
+          <Scale size={13} className="text-zinc-400 dark:text-zinc-500" />
           <span className="font-medium tabular-nums">{latestWeight}kg</span>
         </button>
       </div>
@@ -105,14 +105,14 @@ export default function DashboardClient({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setAddFoodOpen(true)}
-          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-sm font-medium transition-all active:scale-95"
         >
           <Plus size={17} />
           Refeição
         </button>
         <button
           onClick={() => setAddWorkoutOpen(true)}
-          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:hover:bg-orange-900/30 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400 text-sm font-medium transition-all active:scale-95"
         >
           <Dumbbell size={17} />
           Treino
@@ -121,15 +121,15 @@ export default function DashboardClient({
 
       {profile?.tdee && (
         <div className="flex items-center justify-between px-1">
-          <span className="text-xs text-zinc-400">
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
             TDEE{' '}
-            <span className="text-zinc-500 font-medium tabular-nums">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium tabular-nums">
               {profile.tdee.toLocaleString('pt-BR')} kcal
             </span>
           </span>
-          <span className="text-xs text-zinc-400">
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
             Déficit{' '}
-            <span className="text-emerald-600 font-medium tabular-nums">
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
               {(profile.tdee - (profile.target_calories ?? 0)).toLocaleString('pt-BR')} kcal
             </span>
           </span>

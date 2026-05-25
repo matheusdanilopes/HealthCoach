@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, Trash2, ChevronDown } from 'lucide-react';
-import { getMealLabel, getMealIcon } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { getMealLabel, getMealIcon, cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
 interface MealSectionProps {
@@ -35,55 +34,52 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
   }
 
   return (
-    <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-zinc-50 transition-colors"
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
       >
         <span className="text-base">{getMealIcon(mealType)}</span>
         <div className="flex-1 text-left">
-          <p className="text-sm font-medium text-zinc-800">{getMealLabel(mealType)}</p>
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{getMealLabel(mealType)}</p>
           {logs.length > 0 && (
-            <p className="text-xs text-zinc-400 mt-0.5">{logs.length} item{logs.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{logs.length} item{logs.length !== 1 ? 's' : ''}</p>
           )}
         </div>
-        <span className={cn('text-sm font-semibold tabular-nums mr-2', totalCal > 0 ? 'text-zinc-700' : 'text-zinc-300')}>
+        <span className={cn('text-sm font-semibold tabular-nums mr-2', totalCal > 0 ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-300 dark:text-zinc-600')}>
           {totalCal > 0 ? `${totalCal.toLocaleString('pt-BR')} kcal` : '—'}
         </span>
         <ChevronDown
           size={15}
-          className={cn('text-zinc-400 transition-transform duration-200', expanded ? 'rotate-180' : '')}
+          className={cn('text-zinc-400 dark:text-zinc-500 transition-transform duration-200', expanded ? 'rotate-180' : '')}
         />
       </button>
 
       {expanded && (
-        <div className="border-t border-zinc-100">
+        <div className="border-t border-zinc-100 dark:border-zinc-800">
           {logs.length === 0 ? (
-            <p className="text-xs text-zinc-400 text-center py-5">Nenhum alimento registrado</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center py-5">Nenhum alimento registrado</p>
           ) : (
             <ul>
               {logs.map((log) => (
-                <li
-                  key={log.id}
-                  className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 last:border-0"
-                >
+                <li key={log.id} className="flex items-center gap-3 px-5 py-3 border-b border-zinc-100 dark:border-zinc-800/60 last:border-0">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-zinc-800 truncate">{log.food_name}</p>
+                    <p className="text-sm text-zinc-800 dark:text-zinc-200 truncate">{log.food_name}</p>
                     {(log.protein || log.carbs || log.fat) && (
-                      <p className="text-xs text-zinc-400 mt-0.5">
+                      <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
                         {log.protein != null && `P: ${log.protein}g`}
-                        {log.carbs != null && ` · C: ${log.carbs}g`}
-                        {log.fat != null && ` · G: ${log.fat}g`}
+                        {log.carbs  != null && ` · C: ${log.carbs}g`}
+                        {log.fat    != null && ` · G: ${log.fat}g`}
                       </p>
                     )}
                   </div>
-                  <span className="text-sm font-medium tabular-nums text-zinc-500 flex-shrink-0">
+                  <span className="text-sm font-medium tabular-nums text-zinc-500 dark:text-zinc-400 flex-shrink-0">
                     {log.calories.toLocaleString('pt-BR')} kcal
                   </span>
                   <button
                     onClick={() => handleDelete(log.id)}
                     disabled={deletingId === log.id}
-                    className="flex-shrink-0 h-7 w-7 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center text-red-400 hover:text-red-500 transition-all disabled:opacity-40"
+                    className="flex-shrink-0 h-7 w-7 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 flex items-center justify-center text-red-400 hover:text-red-500 transition-all disabled:opacity-40"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -94,7 +90,7 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
 
           <button
             onClick={onAdd}
-            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+            className="w-full flex items-center gap-2 px-5 py-3 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
           >
             <Plus size={15} />
             Adicionar alimento
