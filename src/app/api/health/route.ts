@@ -20,6 +20,25 @@ export async function GET() {
   }
 
   try {
+    const [info] = await sql<{ db: string; schema: string }>`
+      SELECT current_database() AS db, current_schema() AS schema
+    `;
+    checks.current_database = info.db;
+    checks.current_schema = info.schema;
+  } catch (err) {
+    checks.current_database = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    const rows = await sql<{ tablename: string }>`
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename
+    `;
+    checks.tables_in_public = rows.map(r => r.tablename).join(', ') || '(nenhuma)';
+  } catch (err) {
+    checks.tables_in_public = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
     await sql`SELECT COUNT(*) FROM users`;
     checks.table_users = 'OK';
   } catch (err) {
