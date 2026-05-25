@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const rows = await sql<{ target_calories: number | null }>`
     SELECT target_calories FROM users WHERE id = ${session.user.id}
   `;
-  if (!rows[0]?.target_calories) redirect('/register');
+  if (rows[0]?.target_calories == null) redirect('/register');
 
   return (
     <div className="min-h-screen bg-zinc-950">
