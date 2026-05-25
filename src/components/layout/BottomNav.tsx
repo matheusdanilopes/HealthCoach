@@ -17,7 +17,7 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-200"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="flex items-center justify-around max-w-lg mx-auto h-16">
@@ -29,18 +29,18 @@ export default function BottomNav() {
               href={href}
               className={cn(
                 'flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 transition-all duration-200',
-                active ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+                active ? 'text-blue-600' : 'text-zinc-400 hover:text-zinc-600'
               )}
             >
               <div
                 className={cn(
                   'flex items-center justify-center h-8 w-14 rounded-full transition-all duration-200',
-                  active ? 'bg-emerald-500/15' : ''
+                  active ? 'bg-blue-50' : ''
                 )}
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
               </div>
-              <span className={cn('text-[10px] font-medium transition-all duration-200', active ? 'text-emerald-400' : '')}>
+              <span className={cn('text-[10px] font-medium transition-all duration-200', active ? 'text-blue-600' : '')}>
                 {label}
               </span>
             </Link>

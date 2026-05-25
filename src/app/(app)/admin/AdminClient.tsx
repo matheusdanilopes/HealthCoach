@@ -64,12 +64,12 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
   return (
     <div className="pt-6 pb-4">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-          <ShieldCheck className="text-emerald-400" size={20} />
+        <div className="h-10 w-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center">
+          <ShieldCheck className="text-blue-600" size={20} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-zinc-100">Gerenciar Usuários</h1>
-          <p className="text-sm text-zinc-500">
+          <h1 className="text-xl font-bold text-zinc-900">Gerenciar Usuários</h1>
+          <p className="text-sm text-zinc-400">
             {users.length} conta{users.length !== 1 ? 's' : ''} cadastrada{users.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -77,38 +77,38 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
 
       {users.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Users size={40} className="text-zinc-700 mb-3" />
-          <p className="text-zinc-500 text-sm">Nenhum usuário cadastrado.</p>
+          <Users size={40} className="text-zinc-300 mb-3" />
+          <p className="text-zinc-400 text-sm">Nenhum usuário cadastrado.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((user) => (
             <div
               key={user.id}
-              className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl p-4"
+              className="flex items-center gap-3 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm"
             >
-              <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-semibold text-emerald-400">
+              <div className="h-10 w-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-semibold text-blue-600">
                   {getInitials(user.full_name || user.email)}
                 </span>
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-100 truncate">
+                <p className="text-sm font-medium text-zinc-900 truncate">
                   {user.full_name || '—'}
                 </p>
-                <p className="text-xs text-zinc-500 truncate">{user.email}</p>
-                <p className="text-xs text-zinc-600 mt-0.5">{formatDate(user.created_at)}</p>
+                <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                <p className="text-xs text-zinc-300 mt-0.5">{formatDate(user.created_at)}</p>
               </div>
 
               {user.id === currentUserId ? (
-                <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-lg flex-shrink-0">
+                <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded-lg flex-shrink-0">
                   Você
                 </span>
               ) : (
                 <button
                   onClick={() => setToDelete(user)}
-                  className="h-9 w-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 hover:bg-red-500/20 transition-colors flex-shrink-0"
+                  className="h-9 w-9 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors flex-shrink-0"
                   aria-label={`Excluir ${user.full_name}`}
                 >
                   <Trash2 size={15} />
@@ -128,18 +128,18 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
         title="Excluir usuário"
       >
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-600">
             Tem certeza que deseja excluir{' '}
-            <span className="font-medium text-zinc-100">{toDelete?.full_name}</span>?
+            <span className="font-medium text-zinc-900">{toDelete?.full_name}</span>?
             <br />
-            <span className="text-zinc-600">{toDelete?.email}</span>
+            <span className="text-zinc-400">{toDelete?.email}</span>
           </p>
-          <p className="text-xs text-zinc-500 bg-zinc-800 rounded-xl px-3 py-2">
+          <p className="text-xs text-zinc-500 bg-zinc-50 rounded-xl px-3 py-2">
             Todos os dados serão removidos permanentemente — refeições, peso, água e histórico.
           </p>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+            <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
               {error}
             </p>
           )}

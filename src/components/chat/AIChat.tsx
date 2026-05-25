@@ -20,19 +20,19 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div
         className={cn(
           'h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0',
-          isUser ? 'bg-emerald-500/20' : 'bg-zinc-700/80'
+          isUser ? 'bg-blue-100' : 'bg-zinc-100'
         )}
       >
         {isUser
-          ? <User size={12} className="text-emerald-400" />
-          : <Bot size={12} className="text-zinc-400" />}
+          ? <User size={12} className="text-blue-600" />
+          : <Bot size={12} className="text-zinc-500" />}
       </div>
       <div
         className={cn(
           'max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
           isUser
-            ? 'bg-emerald-500 text-white rounded-br-sm'
-            : 'bg-zinc-800 text-zinc-200 rounded-bl-sm'
+            ? 'bg-blue-600 text-white rounded-br-sm'
+            : 'bg-zinc-100 text-zinc-800 rounded-bl-sm'
         )}
       >
         {msg.content.split('\n').map((line, i, arr) => (
@@ -116,11 +116,10 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
 
   return (
     <>
-      {/* Floating button */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-24 right-4 z-40 h-13 w-13 rounded-full shadow-lg shadow-emerald-900/30 bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center transition-all duration-200 active:scale-95"
+          className="fixed bottom-24 right-4 z-40 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all duration-200 active:scale-95"
           style={{ height: 52, width: 52 }}
           aria-label="Abrir chat com IA"
         >
@@ -128,42 +127,41 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         </button>
       )}
 
-      {/* Chat panel */}
       {open && (
         <div className="fixed bottom-20 right-0 left-0 sm:left-auto sm:right-4 z-50 sm:w-96 animate-slide-up">
           <div
-            className="mx-3 sm:mx-0 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden"
+            className="mx-3 sm:mx-0 bg-white border border-zinc-200 rounded-2xl shadow-xl flex flex-col overflow-hidden"
             style={{ maxHeight: '70vh', height: 460 }}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
-              <div className="h-8 w-8 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
-                <Bot size={15} className="text-emerald-400" />
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 flex-shrink-0">
+              <div className="h-8 w-8 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center">
+                <Bot size={15} className="text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-zinc-100">Coach IA</p>
-                <p className="text-[11px] text-emerald-400">Online</p>
+                <p className="text-sm font-semibold text-zinc-900">Coach IA</p>
+                <p className="text-[11px] text-emerald-600">Online</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="ml-auto h-7 w-7 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors"
+                className="ml-auto h-7 w-7 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors"
               >
                 <X size={14} />
               </button>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-zinc-50">
               {messages.map((msg, i) => (
                 <MessageBubble key={i} msg={msg} />
               ))}
               {loading && (
                 <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-zinc-700/80 flex items-center justify-center">
-                    <Bot size={12} className="text-zinc-400" />
+                  <div className="h-6 w-6 rounded-full bg-zinc-100 flex items-center justify-center">
+                    <Bot size={12} className="text-zinc-500" />
                   </div>
-                  <div className="bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-2.5">
-                    <Loader2 size={13} className="animate-spin text-zinc-500" />
+                  <div className="bg-zinc-100 rounded-2xl rounded-bl-sm px-4 py-2.5">
+                    <Loader2 size={13} className="animate-spin text-zinc-400" />
                   </div>
                 </div>
               )}
@@ -173,7 +171,7 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
             {/* Input */}
             <form
               onSubmit={sendMessage}
-              className="flex items-center gap-2 p-3 border-t border-zinc-800 flex-shrink-0"
+              className="flex items-center gap-2 p-3 border-t border-zinc-100 flex-shrink-0 bg-white"
             >
               <input
                 ref={inputRef}
@@ -182,12 +180,12 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Comi 2 ovos e um suco..."
                 disabled={loading}
-                className="flex-1 h-10 bg-zinc-800 rounded-xl px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+                className="flex-1 h-10 bg-zinc-50 border border-zinc-200 rounded-xl px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-50"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
-                className="h-10 w-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 flex items-center justify-center text-white transition-all active:scale-95"
+                className="h-10 w-10 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-30 flex items-center justify-center text-white transition-all active:scale-95"
               >
                 <Send size={15} />
               </button>

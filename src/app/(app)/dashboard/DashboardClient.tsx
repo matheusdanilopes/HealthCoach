@@ -67,28 +67,26 @@ export default function DashboardClient({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100">
+          <h1 className="text-xl font-bold text-zinc-900">
             {greeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
-          <p className="text-sm text-zinc-500 capitalize">{dateStr}</p>
+          <p className="text-sm text-zinc-400 capitalize">{dateStr}</p>
         </div>
         <button
           onClick={() => setWeightModalOpen(true)}
-          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-sm text-zinc-300 transition-colors active:scale-95"
+          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-sm text-zinc-600 transition-colors active:scale-95"
         >
-          <Scale size={13} className="text-zinc-500" />
+          <Scale size={13} className="text-zinc-400" />
           <span className="font-medium tabular-nums">{latestWeight}kg</span>
         </button>
       </div>
 
-      {/* Calorie card */}
       <CalorieCard
         consumed={stats.calories}
         burned={workoutBurned}
         target={profile?.target_calories ?? 2000}
       />
 
-      {/* Macro progress */}
       <MacroProgress
         protein={stats.protein}
         carbs={stats.carbs}
@@ -96,7 +94,6 @@ export default function DashboardClient({
         targetCalories={profile?.target_calories ?? 2000}
       />
 
-      {/* Water tracker */}
       <WaterTracker
         current={water}
         target={profile?.target_water_ml ?? 2500}
@@ -108,30 +105,29 @@ export default function DashboardClient({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setAddFoodOpen(true)}
-          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-sm font-medium transition-all active:scale-95"
         >
           <Plus size={17} />
           Refeição
         </button>
         <button
           onClick={() => setAddWorkoutOpen(true)}
-          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-400 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 text-sm font-medium transition-all active:scale-95"
         >
           <Dumbbell size={17} />
           Treino
         </button>
       </div>
 
-      {/* TDEE strip — compact, informational only */}
       {profile?.tdee && (
         <div className="flex items-center justify-between px-1">
-          <span className="text-xs text-zinc-600">
+          <span className="text-xs text-zinc-400">
             TDEE{' '}
             <span className="text-zinc-500 font-medium tabular-nums">
               {profile.tdee.toLocaleString('pt-BR')} kcal
             </span>
           </span>
-          <span className="text-xs text-zinc-600">
+          <span className="text-xs text-zinc-400">
             Déficit{' '}
             <span className="text-emerald-600 font-medium tabular-nums">
               {(profile.tdee - (profile.target_calories ?? 0)).toLocaleString('pt-BR')} kcal
@@ -140,7 +136,6 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* Modals */}
       <AddFoodModal
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
@@ -176,7 +171,6 @@ export default function DashboardClient({
         onLogged={() => router.refresh()}
       />
 
-      {/* AI Chat */}
       {profile && (
         <AIChat
           profile={profile}

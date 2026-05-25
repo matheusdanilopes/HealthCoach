@@ -55,34 +55,34 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   return (
     <div className="flex flex-col gap-4 pt-6">
       <div>
-        <h1 className="text-xl font-bold text-zinc-100">Perfil</h1>
-        <p className="text-sm text-zinc-500">{email}</p>
+        <h1 className="text-xl font-bold text-zinc-900">Perfil</h1>
+        <p className="text-sm text-zinc-400">{email}</p>
       </div>
 
       {/* Stats summary */}
       {profile?.tdee && (
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center gap-1.5 mb-2">
-              <Zap size={13} className="text-amber-400" />
-              <p className="text-xs text-zinc-500">TDEE</p>
+              <Zap size={13} className="text-amber-500" />
+              <p className="text-xs text-zinc-400">TDEE</p>
             </div>
-            <p className="text-2xl font-bold tabular-nums text-zinc-100">{profile.tdee.toLocaleString('pt-BR')}</p>
-            <p className="text-xs text-zinc-600 mt-0.5">kcal/dia</p>
+            <p className="text-2xl font-bold tabular-nums text-zinc-900">{profile.tdee.toLocaleString('pt-BR')}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">kcal/dia</p>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center gap-1.5 mb-2">
-              <Target size={13} className="text-emerald-400" />
-              <p className="text-xs text-zinc-500">Meta</p>
+              <Target size={13} className="text-blue-600" />
+              <p className="text-xs text-zinc-400">Meta</p>
             </div>
-            <p className="text-2xl font-bold tabular-nums text-emerald-400">{profile.target_calories?.toLocaleString('pt-BR')}</p>
-            <p className="text-xs text-zinc-600 mt-0.5">kcal/dia</p>
+            <p className="text-2xl font-bold tabular-nums text-blue-600">{profile.target_calories?.toLocaleString('pt-BR')}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">kcal/dia</p>
           </div>
         </div>
       )}
 
       {/* Edit form */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
         <p className="text-xs font-medium text-zinc-500 mb-4">Dados pessoais</p>
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <Input
@@ -113,7 +113,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-300">Nível de atividade</label>
+            <label className="text-sm font-medium text-zinc-700">Nível de atividade</label>
             <div className="grid grid-cols-3 gap-2">
               {ACTIVITY_OPTIONS.map((opt) => (
                 <button
@@ -123,8 +123,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                   className={cn(
                     'py-2.5 px-2 rounded-xl border text-xs font-medium transition-all text-center active:scale-95',
                     activityLevel === opt.value
-                      ? 'bg-emerald-500/10 border-emerald-500/60 text-emerald-400'
-                      : 'bg-zinc-800 border-zinc-700/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
                   )}
                 >
                   <span className="block text-base mb-0.5">{opt.emoji}</span>
@@ -147,12 +147,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       </div>
 
       {/* Account */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
         <p className="text-xs font-medium text-zinc-500 mb-3">Conta</p>
         <div className="flex flex-col gap-2">
           <Link
             href="/admin"
-            className="h-10 px-4 w-full inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-all duration-150"
+            className="h-10 px-4 w-full inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-800 transition-all duration-150"
           >
             <ShieldCheck size={16} />
             Gerenciar usuários

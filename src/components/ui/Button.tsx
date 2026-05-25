@@ -19,13 +19,13 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const base =
-    'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500';
+    'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
 
   const variants = {
-    primary: 'bg-emerald-500 hover:bg-emerald-400 text-white',
-    secondary: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100',
-    ghost: 'bg-transparent hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100',
-    danger: 'bg-red-500/10 hover:bg-red-500/20 text-red-400',
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+    secondary: 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800',
+    ghost: 'bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800',
+    danger: 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200',
   };
 
   const sizes = {

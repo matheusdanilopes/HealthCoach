@@ -28,11 +28,11 @@ interface HistoryClientProps {
 function CustomTooltipWeight({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm shadow-xl">
-      <p className="text-zinc-500 text-xs mb-1">
+    <div className="bg-white border border-zinc-200 rounded-xl px-3 py-2 text-sm shadow-lg">
+      <p className="text-zinc-400 text-xs mb-1">
         {format(parseISO(label), "d 'de' MMM", { locale: ptBR })}
       </p>
-      <p className="text-zinc-100 font-semibold tabular-nums">{payload[0].value} kg</p>
+      <p className="text-zinc-900 font-semibold tabular-nums">{payload[0].value} kg</p>
     </div>
   );
 }
@@ -42,12 +42,12 @@ function CustomTooltipCal({ active, payload, label, target }: any) {
   const cal = payload[0].value;
   const deficit = target - cal;
   return (
-    <div className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm shadow-xl">
-      <p className="text-zinc-500 text-xs mb-1">
+    <div className="bg-white border border-zinc-200 rounded-xl px-3 py-2 text-sm shadow-lg">
+      <p className="text-zinc-400 text-xs mb-1">
         {format(parseISO(label), "d 'de' MMM", { locale: ptBR })}
       </p>
-      <p className="text-zinc-100 font-semibold tabular-nums">{cal.toLocaleString('pt-BR')} kcal</p>
-      <p className={cn('text-xs mt-0.5 tabular-nums', deficit >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+      <p className="text-zinc-900 font-semibold tabular-nums">{cal.toLocaleString('pt-BR')} kcal</p>
+      <p className={cn('text-xs mt-0.5 tabular-nums', deficit >= 0 ? 'text-emerald-600' : 'text-red-500')}>
         {deficit >= 0
           ? `${deficit.toLocaleString('pt-BR')} abaixo da meta`
           : `${Math.abs(deficit).toLocaleString('pt-BR')} acima da meta`}
@@ -64,10 +64,10 @@ interface StatCardProps {
 
 function StatCard({ value, label, icon }: StatCardProps) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-center">
+    <div className="bg-white border border-zinc-200 rounded-2xl p-3 text-center shadow-sm">
       {icon && <div className="flex items-center justify-center mb-1.5">{icon}</div>}
       <p className="text-lg font-bold tabular-nums">{value}</p>
-      <p className="text-[11px] text-zinc-500 mt-0.5">{label}</p>
+      <p className="text-[11px] text-zinc-400 mt-0.5">{label}</p>
     </div>
   );
 }
@@ -86,18 +86,18 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
     ? Math.round((consistentDays / dailyCalData.length) * 100)
     : 0;
 
-  const trendColor = weightTrend < 0 ? 'text-emerald-400' : weightTrend > 0 ? 'text-rose-400' : 'text-zinc-500';
+  const trendColor = weightTrend < 0 ? 'text-emerald-600' : weightTrend > 0 ? 'text-red-500' : 'text-zinc-400';
   const trendIcon = weightTrend < 0
-    ? <TrendingDown size={15} className="text-emerald-400" />
+    ? <TrendingDown size={15} className="text-emerald-600" />
     : weightTrend > 0
-      ? <TrendingUp size={15} className="text-rose-400" />
-      : <Minus size={15} className="text-zinc-500" />;
+      ? <TrendingUp size={15} className="text-red-500" />
+      : <Minus size={15} className="text-zinc-400" />;
 
   return (
     <div className="flex flex-col gap-5 pt-6">
       <div>
-        <h1 className="text-xl font-bold text-zinc-100">Evolução</h1>
-        <p className="text-sm text-zinc-500">Últimos 30 dias</p>
+        <h1 className="text-xl font-bold text-zinc-900">Evolução</h1>
+        <p className="text-sm text-zinc-400">Últimos 30 dias</p>
       </div>
 
       {/* Summary stats */}
@@ -112,50 +112,50 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           label="Variação"
         />
         <StatCard
-          value={<span className="text-emerald-400">{consistencyPct}%</span>}
+          value={<span className="text-emerald-600">{consistencyPct}%</span>}
           label="Consistência"
         />
         <StatCard
-          value={<span className="text-zinc-200">{dailyCalData.length}</span>}
+          value={<span className="text-zinc-800">{dailyCalData.length}</span>}
           label="Dias registrados"
         />
       </div>
 
       {/* Weight chart */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
         <p className="text-xs font-medium text-zinc-500 mb-4">Tendência de peso</p>
         {weightLogs.length < 2 ? (
           <div className="h-40 flex items-center justify-center">
-            <p className="text-xs text-zinc-600 text-center max-w-[180px] leading-relaxed">
+            <p className="text-xs text-zinc-400 text-center max-w-[180px] leading-relaxed">
               Registre seu peso por pelo menos 2 dias para ver o gráfico
             </p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={weightLogs} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => format(parseISO(d), 'd/M')}
-                tick={{ fontSize: 10, fill: '#52525b' }}
+                tick={{ fontSize: 10, fill: '#a1a1aa' }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
                 domain={['dataMin - 0.5', 'dataMax + 0.5']}
-                tick={{ fontSize: 10, fill: '#52525b' }}
+                tick={{ fontSize: 10, fill: '#a1a1aa' }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => `${v}kg`}
               />
-              <Tooltip content={<CustomTooltipWeight />} cursor={{ stroke: '#3f3f46', strokeWidth: 1 }} />
+              <Tooltip content={<CustomTooltipWeight />} cursor={{ stroke: '#e4e4e7', strokeWidth: 1 }} />
               <Line
                 type="monotone"
                 dataKey="weight"
-                stroke="#10b981"
+                stroke="#2563eb"
                 strokeWidth={2}
-                dot={{ fill: '#10b981', r: 3, strokeWidth: 0 }}
-                activeDot={{ r: 4, strokeWidth: 0, fill: '#34d399' }}
+                dot={{ fill: '#2563eb', r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 4, strokeWidth: 0, fill: '#3b82f6' }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -163,10 +163,10 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
       </div>
 
       {/* Calorie chart */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <p className="text-xs font-medium text-zinc-500">Histórico de calorias</p>
-          <div className="flex gap-1 bg-zinc-800 rounded-lg p-0.5">
+          <div className="flex gap-1 bg-zinc-100 rounded-lg p-0.5">
             {([7, 30] as const).map((n) => (
               <button
                 key={n}
@@ -174,8 +174,8 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
                 className={cn(
                   'px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150',
                   calRange === n
-                    ? 'bg-zinc-700 text-zinc-200 shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-400'
+                    ? 'bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-600'
                 )}
               >
                 {n}d
@@ -185,38 +185,38 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
         </div>
         {filteredCalData.length === 0 ? (
           <div className="h-40 flex items-center justify-center">
-            <p className="text-xs text-zinc-600">Nenhum registro encontrado</p>
+            <p className="text-xs text-zinc-400">Nenhum registro encontrado</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={filteredCalData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => format(parseISO(d), 'd/M')}
-                tick={{ fontSize: 10, fill: '#52525b' }}
+                tick={{ fontSize: 10, fill: '#a1a1aa' }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: '#52525b' }}
+                tick={{ fontSize: 10, fill: '#a1a1aa' }}
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip content={<CustomTooltipCal target={targetCalories} />} cursor={{ fill: '#27272a' }} />
+              <Tooltip content={<CustomTooltipCal target={targetCalories} />} cursor={{ fill: '#f4f4f5' }} />
               <ReferenceLine
                 y={targetCalories}
-                stroke="#10b981"
+                stroke="#2563eb"
                 strokeDasharray="4 4"
                 strokeWidth={1}
-                strokeOpacity={0.6}
+                strokeOpacity={0.5}
               />
               <Bar dataKey="calories" radius={[3, 3, 0, 0]}>
                 {filteredCalData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={entry.calories <= targetCalories ? '#10b981' : '#f43f5e'}
-                    fillOpacity={0.75}
+                    fill={entry.calories <= targetCalories ? '#10b981' : '#ef4444'}
+                    fillOpacity={0.8}
                   />
                 ))}
               </Bar>
@@ -224,12 +224,12 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           </ResponsiveContainer>
         )}
         <div className="flex items-center justify-center gap-4 mt-3">
-          <span className="flex items-center gap-1.5 text-[11px] text-zinc-600">
-            <span className="h-2 w-2 rounded-sm bg-emerald-500 opacity-75" />
+          <span className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+            <span className="h-2 w-2 rounded-sm bg-emerald-500 opacity-80" />
             Abaixo da meta
           </span>
-          <span className="flex items-center gap-1.5 text-[11px] text-zinc-600">
-            <span className="h-2 w-2 rounded-sm bg-rose-500 opacity-75" />
+          <span className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+            <span className="h-2 w-2 rounded-sm bg-red-500 opacity-80" />
             Acima da meta
           </span>
         </div>

@@ -31,32 +31,30 @@ export default function WaterTracker({ current, target, userId, onUpdate }: Wate
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+    <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Droplets size={15} className={isComplete ? 'text-emerald-400' : 'text-sky-400'} />
+          <Droplets size={15} className={isComplete ? 'text-emerald-500' : 'text-sky-500'} />
           <p className="text-xs font-medium text-zinc-500">Hidratação</p>
         </div>
-        <span className="text-xs text-zinc-600">{cups} copos</span>
+        <span className="text-xs text-zinc-400">{cups} copos</span>
       </div>
 
       <div className="flex items-end gap-2 mb-3">
-        <span className={cn('text-2xl font-bold tabular-nums', isComplete ? 'text-emerald-400' : 'text-sky-400')}>
+        <span className={cn('text-2xl font-bold tabular-nums', isComplete ? 'text-emerald-500' : 'text-sky-600')}>
           {current >= 1000 ? `${(current / 1000).toFixed(1)}L` : `${current}ml`}
         </span>
-        <span className="text-sm text-zinc-600 mb-0.5">de {(target / 1000).toFixed(1)}L</span>
-        <span className={cn('ml-auto text-sm font-semibold tabular-nums mb-0.5', isComplete ? 'text-emerald-400' : 'text-zinc-400')}>
+        <span className="text-sm text-zinc-400 mb-0.5">de {(target / 1000).toFixed(1)}L</span>
+        <span className={cn('ml-auto text-sm font-semibold tabular-nums mb-0.5', isComplete ? 'text-emerald-500' : 'text-zinc-500')}>
           {Math.round(pct)}%
         </span>
       </div>
 
-      <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden mb-4">
+      <div className="h-2 w-full rounded-full bg-zinc-100 overflow-hidden mb-4">
         <div
           className={cn(
             'h-full rounded-full transition-all duration-500',
-            isComplete
-              ? 'bg-emerald-500'
-              : 'bg-gradient-to-r from-sky-600 to-sky-400'
+            isComplete ? 'bg-emerald-500' : 'bg-sky-500'
           )}
           style={{ width: `${pct}%` }}
         />
@@ -71,8 +69,8 @@ export default function WaterTracker({ current, target, userId, onUpdate }: Wate
             className={cn(
               'flex flex-col items-center gap-0.5 py-2.5 rounded-xl border text-xs font-medium transition-all duration-150 active:scale-95',
               loading === ml
-                ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
-                : 'bg-zinc-800 border-transparent text-zinc-400 hover:bg-sky-500/10 hover:border-sky-500/30 hover:text-sky-400',
+                ? 'bg-sky-50 border-sky-200 text-sky-600'
+                : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-600',
               'disabled:opacity-60 disabled:pointer-events-none'
             )}
           >

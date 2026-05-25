@@ -16,8 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (data?.target_calories == null) redirect('/register');
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <main className="max-w-lg mx-auto px-4" style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}>{children}</main>
+    <div className="min-h-screen bg-zinc-50">
+      <main className="max-w-lg mx-auto px-4" style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}>
+        {children}
+      </main>
       <BottomNav />
     </div>
   );
