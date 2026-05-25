@@ -5,7 +5,11 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 export const metadata: Metadata = {
   title: 'HealthCoach AI',
   description: 'Seu coach de saúde com inteligência artificial',
-  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'HealthCoach AI',
+  },
 };
 
 export const viewport: Viewport = {
@@ -31,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           } catch(e) {}
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
-              navigator.serviceWorker.register('/sw.js');
+              navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
             });
           }
         `}} />
