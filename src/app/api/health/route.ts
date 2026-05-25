@@ -10,14 +10,20 @@ export async function GET() {
     : 'MISSING';
   checks.AUTH_SECRET = process.env.AUTH_SECRET ? 'set' : 'MISSING';
 
-  // Check DB connection and tables
+  // Check DB connection, current database/schema, and tables
   try {
-    const tables = await sql<{ table_name: string }>`
-      SELECT table_name FROM information_schema.tables
-      WHERE table_schema = 'public'
-      ORDER BY table_name
+    const [meta] = await sql<{ db: string; schema: string }>`
+      SELECT current_database() AS db, current_schema() AS schema
     `;
     checks.db_connection = 'ok';
+    checks.db_name = meta.db;
+    checks.db_schema = meta.schema;
+
+    const tables = await sql<{ table_name: string }>`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = current_schema()
+      ORDER BY table_name
+    `;
     checks.db_tables = tables.map((t) => t.table_name).join(', ') || 'none';
   } catch (err) {
     checks.db_connection = `error: ${err instanceof Error ? err.message : String(err)}`;
