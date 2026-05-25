@@ -5,9 +5,17 @@ export async function GET() {
   const checks: Record<string, string> = {};
 
   // Check environment variables
-  checks.DATABASE_URL = process.env.DATABASE_URL
-    ? `set (starts with: ${process.env.DATABASE_URL.slice(0, 30)}...)`
-    : 'MISSING';
+  if (process.env.DATABASE_URL) {
+    try {
+      const u = new URL(process.env.DATABASE_URL);
+      checks.DATABASE_URL = 'set';
+      checks.db_host = u.hostname;
+    } catch {
+      checks.DATABASE_URL = 'set (unparseable URL)';
+    }
+  } else {
+    checks.DATABASE_URL = 'MISSING';
+  }
   checks.AUTH_SECRET = process.env.AUTH_SECRET ? 'set' : 'MISSING';
 
   // Check DB connection, current database/schema, and tables
