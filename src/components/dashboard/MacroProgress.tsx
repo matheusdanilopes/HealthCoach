@@ -16,18 +16,16 @@ function getTargetMacros(targetCalories: number) {
 }
 
 interface MacroRowProps {
-  label: string;
   shortLabel: string;
   value: number;
   target: number;
-  color: string;
   barColor: string;
   trackColor: string;
   dotColor: string;
   accentText: string;
 }
 
-function MacroRow({ label, shortLabel, value, target, barColor, trackColor, dotColor, accentText }: MacroRowProps) {
+function MacroRow({ shortLabel, value, target, barColor, trackColor, dotColor, accentText }: MacroRowProps) {
   const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0;
   const isOver = value > target && target > 0;
 
@@ -64,53 +62,50 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
   const targets = getTargetMacros(targetCalories);
 
   return (
-    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-      {/* Tricolor top accent */}
-      <div className="flex h-[3px]">
-        <div className="flex-1 bg-blue-500" />
-        <div className="flex-1 bg-amber-400" />
-        <div className="flex-1 bg-rose-400" />
-      </div>
+    <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-2.5 shadow-[0_1px_3px_0_rgb(0,0,0,0.06)] dark:shadow-none">
+      {/* Inner bordered content area */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-700/60 rounded-xl overflow-hidden">
+        {/* Tricolor top accent */}
+        <div className="flex h-[3px]">
+          <div className="flex-1 bg-blue-500" />
+          <div className="flex-1 bg-amber-400" />
+          <div className="flex-1 bg-rose-400" />
+        </div>
 
-      <div className="px-6 py-5">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
-          Macronutrientes
-        </p>
+        <div className="px-5 py-4">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
+            Macronutrientes
+          </p>
 
-        <div className="flex flex-col gap-3.5">
-          <MacroRow
-            label="Proteínas"
-            shortLabel="Prot."
-            value={protein}
-            target={targets.protein}
-            color="blue"
-            barColor="bg-blue-500"
-            trackColor="bg-blue-100 dark:bg-blue-900/30"
-            dotColor="bg-blue-500"
-            accentText="text-blue-600 dark:text-blue-400"
-          />
-          <MacroRow
-            label="Carboidratos"
-            shortLabel="Carb."
-            value={carbs}
-            target={targets.carbs}
-            color="amber"
-            barColor="bg-amber-400"
-            trackColor="bg-amber-100 dark:bg-amber-900/30"
-            dotColor="bg-amber-400"
-            accentText="text-amber-600 dark:text-amber-400"
-          />
-          <MacroRow
-            label="Gorduras"
-            shortLabel="Gord."
-            value={fat}
-            target={targets.fat}
-            color="rose"
-            barColor="bg-rose-400"
-            trackColor="bg-rose-100 dark:bg-rose-900/30"
-            dotColor="bg-rose-400"
-            accentText="text-rose-600 dark:text-rose-400"
-          />
+          <div className="flex flex-col gap-3.5">
+            <MacroRow
+              shortLabel="Prot."
+              value={protein}
+              target={targets.protein}
+              barColor="bg-blue-500"
+              trackColor="bg-blue-100 dark:bg-blue-900/30"
+              dotColor="bg-blue-500"
+              accentText="text-blue-600 dark:text-blue-400"
+            />
+            <MacroRow
+              shortLabel="Carb."
+              value={carbs}
+              target={targets.carbs}
+              barColor="bg-amber-400"
+              trackColor="bg-amber-100 dark:bg-amber-900/30"
+              dotColor="bg-amber-400"
+              accentText="text-amber-600 dark:text-amber-400"
+            />
+            <MacroRow
+              shortLabel="Gord."
+              value={fat}
+              target={targets.fat}
+              barColor="bg-rose-400"
+              trackColor="bg-rose-100 dark:bg-rose-900/30"
+              dotColor="bg-rose-400"
+              accentText="text-rose-600 dark:text-rose-400"
+            />
+          </div>
         </div>
       </div>
     </div>
