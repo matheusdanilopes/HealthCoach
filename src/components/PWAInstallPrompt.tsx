@@ -21,9 +21,13 @@ declare global {
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
-  // iPadOS 13+ pretends to be desktop — detect via touch points
   return /iphone|ipad|ipod/i.test(ua) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isAndroid(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /android/i.test(navigator.userAgent);
 }
 
 function isStandalone(): boolean {
@@ -41,22 +45,33 @@ export default function PWAInstallPrompt() {
 
   const dismiss = useCallback(() => {
     setShow(false);
-    try { localStorage.setItem('pwa-prompt-dismissed', '1'); } catch {}
+    try {
+      const until = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('pwa-prompt-dismissed-until', String(until));
+    } catch {}
   }, []);
 
   useEffect(() => {
     if (isStandalone()) return;
-    try { if (localStorage.getItem('pwa-prompt-dismissed')) return; } catch {}
+    try {
+      localStorage.removeItem('pwa-prompt-dismissed');
+      const until = Number(localStorage.getItem('pwa-prompt-dismissed-until') ?? 0);
+      if (until && Date.now() < until) return;
+    } catch {}
 
     const onIOS = isIOS();
     setIos(onIOS);
 
     if (onIOS) {
-      const t = setTimeout(() => setShow(true), 2500);
+      const t = setTimeout(() => setShow(true), 2000);
       return () => clearTimeout(t);
     }
 
-    // Check if the event was already captured before React mounted
+    // Android: show banner regardless of whether beforeinstallprompt fires.
+    // If the event is already captured, use it for one-tap install.
+    // Otherwise show after a short delay with manual instructions as fallback.
+    if (!isAndroid()) return;
+
     const stored = window.__pwaInstallEvent;
     if (stored) {
       setPrompt(stored);
@@ -64,16 +79,31 @@ export default function PWAInstallPrompt() {
       return;
     }
 
-    // Otherwise wait for it (fires on first eligible visit or after previous dismiss expires)
+    let shown = false;
+
     function onReady() {
       const e = window.__pwaInstallEvent;
-      if (e) {
+      if (e && !shown) {
+        shown = true;
         setPrompt(e);
         setShow(true);
       }
     }
     window.addEventListener('pwa-install-ready', onReady);
-    return () => window.removeEventListener('pwa-install-ready', onReady);
+
+    // Fallback: if beforeinstallprompt doesn't fire within 3 s, show
+    // the banner anyway with manual "Add to Home Screen" instructions.
+    const fallback = setTimeout(() => {
+      if (!shown) {
+        shown = true;
+        setShow(true);
+      }
+    }, 3000);
+
+    return () => {
+      window.removeEventListener('pwa-install-ready', onReady);
+      clearTimeout(fallback);
+    };
   }, []);
 
   async function install() {
@@ -138,10 +168,10 @@ export default function PWAInstallPrompt() {
                 Entendido
               </button>
             </div>
-          ) : (
+          ) : prompt ? (
             <div className="flex flex-col gap-3">
               <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Instale para acesso rápido, notificações e experiência nativa.
+                Instale para acesso rápido e experiência nativa.
               </p>
               <button
                 onClick={install}
@@ -150,6 +180,30 @@ export default function PWAInstallPrompt() {
               >
                 <Download size={15} />
                 {installing ? 'Instalando…' : 'Instalar app'}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-0.5">
+                Para instalar no Android:
+              </p>
+              <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3.5 py-2.5">
+                <span className="text-base leading-none flex-shrink-0 mt-px">⋮</span>
+                <span className="text-[12px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                  Toque no menu <strong>⋮</strong> do Chrome
+                </span>
+              </div>
+              <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3.5 py-2.5">
+                <Download size={15} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <span className="text-[12px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                  Selecione <strong>Adicionar à tela inicial</strong>
+                </span>
+              </div>
+              <button
+                onClick={dismiss}
+                className="mt-1 w-full h-9 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[12px] font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Entendido
               </button>
             </div>
           )}
