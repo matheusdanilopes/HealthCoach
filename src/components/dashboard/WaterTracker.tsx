@@ -42,7 +42,7 @@ export default function WaterTracker({ current, target, userId, onUpdate }: Wate
       {/* Status accent bar */}
       <div className={cn('h-[3px] w-full transition-all duration-500', accentBar)} />
 
-      <div className="p-5">
+      <div className="px-6 py-5">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

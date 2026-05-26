@@ -72,7 +72,7 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
         <div className="flex-1 bg-rose-400" />
       </div>
 
-      <div className="p-5">
+      <div className="px-6 py-5">
         <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
           Macronutrientes
         </p>
