@@ -134,10 +134,11 @@ export default function AIFoodLogger({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('analysis failed');
-      setResult(await res.json() as AnalysisResult);
-    } catch {
-      setError('Não foi possível analisar. Tente novamente.');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Erro desconhecido');
+      setResult(json as AnalysisResult);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
     } finally {
       setAnalyzing(false);
     }
