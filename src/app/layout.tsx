@@ -4,6 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 import SplashScreen from '@/components/SplashScreen';
+import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'HealthCoach AI',
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Script src="/theme-init.js" strategy="beforeInteractive" />
         <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
+        <InstallPrompt />
         <ServiceWorkerRegistration />
       </body>
     </html>
