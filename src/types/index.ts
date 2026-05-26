@@ -51,5 +51,35 @@ export interface ChatMessage {
   timestamp?: string;
 }
 
+export interface BodyMetrics {
+  id: string;
+  user_id: string;
+  date: string;
+  weight: number;
+  muscle_mass: number | null;
+  body_fat: number | null;
+  visceral_fat: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BodyMeasurements {
+  id: string;
+  user_id: string;
+  date: string;
+  waist: number | null;
+  abdomen: number | null;
+  hips: number | null;
+  chest: number | null;
+  right_arm: number | null;
+  left_arm: number | null;
+  right_thigh: number | null;
+  left_thigh: number | null;
+  right_calf: number | null;
+  left_calf: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type ActivityLevel = 'sedentary' | 'moderate' | 'active';
