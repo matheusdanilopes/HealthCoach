@@ -63,8 +63,8 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
         <div className="flex flex-col gap-2">
           {users.map((user) => (
             <div key={user.id} className="flex items-center gap-3 bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-              <div className="h-10 w-10 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+              <div className="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   {getInitials(user.full_name || user.email)}
                 </span>
               </div>
@@ -74,7 +74,7 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
                 <p className="text-xs text-zinc-300 dark:text-zinc-600 mt-0.5">{formatDate(user.created_at)}</p>
               </div>
               {user.id === currentUserId ? (
-                <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-lg flex-shrink-0">
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-lg flex-shrink-0">
                   Você
                 </span>
               ) : (

@@ -7,7 +7,8 @@ import { signIn } from 'next-auth/react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import ThemeToggle from '@/components/ui/ThemeToggle';
-import { Activity, ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
 
 const ACTIVITY_OPTIONS = [
@@ -75,8 +76,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-[380px] animate-fade-in">
         {/* Brand */}
         <div className="flex flex-col items-center gap-3 mb-7">
-          <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
-            <Activity className="text-white" size={26} />
+          <div className="h-[60px] w-[60px] rounded-[20px] bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-xl shadow-emerald-600/25">
+            <LogoIcon size={30} />
           </div>
           <div className="text-center">
             <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
@@ -95,9 +96,9 @@ export default function RegisterPage() {
                 className={cn(
                   'h-1 rounded-full transition-all duration-300',
                   i === currentStepIndex
-                    ? 'w-8 bg-blue-600'
+                    ? 'w-8 bg-emerald-600'
                     : i < currentStepIndex
-                      ? 'w-5 bg-blue-400 dark:bg-blue-600'
+                      ? 'w-5 bg-emerald-400 dark:bg-emerald-600'
                       : 'w-5 bg-zinc-200 dark:bg-zinc-700'
                 )}
               />
@@ -190,7 +191,7 @@ export default function RegisterPage() {
                         className={cn(
                           'h-12 rounded-xl border text-[13px] font-medium transition-all duration-150',
                           sex === opt.value
-                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700/60 text-blue-700 dark:text-blue-400'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-400'
                             : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
                         )}
                       >
@@ -237,7 +238,7 @@ export default function RegisterPage() {
                         className={cn(
                           'flex items-center justify-between px-5 py-4 rounded-xl border text-left transition-all duration-150',
                           activityLevel === opt.value
-                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
                             : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
                         )}
                       >
@@ -245,7 +246,7 @@ export default function RegisterPage() {
                           <p className={cn(
                             'text-[13px] font-medium leading-none mb-1',
                             activityLevel === opt.value
-                              ? 'text-blue-700 dark:text-blue-400'
+                              ? 'text-emerald-700 dark:text-emerald-400'
                               : 'text-zinc-700 dark:text-zinc-300'
                           )}>
                             {opt.label}
@@ -253,7 +254,7 @@ export default function RegisterPage() {
                           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{opt.desc}</p>
                         </div>
                         {activityLevel === opt.value && (
-                          <div className="h-4 w-4 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center flex-shrink-0">
+                          <div className="h-4 w-4 rounded-full bg-emerald-600 dark:bg-emerald-500 flex items-center justify-center flex-shrink-0">
                             <Check size={8} className="text-white" strokeWidth={3} />
                           </div>
                         )}
@@ -281,7 +282,7 @@ export default function RegisterPage() {
           Já tem conta?{' '}
           <Link
             href="/login"
-            className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors"
+            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-medium transition-colors"
           >
             Entrar
           </Link>

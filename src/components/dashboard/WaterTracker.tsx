@@ -33,7 +33,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Droplets size={14} className={isComplete ? 'text-emerald-500' : 'text-sky-500'} />
+          <Droplets size={14} className={isComplete ? 'text-emerald-500' : 'text-teal-500'} />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Hidratação
           </p>
@@ -42,7 +42,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
           'text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full',
           isComplete
             ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
-            : 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400'
+            : 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400'
         )}>
           {Math.round(pct)}%
         </span>
@@ -51,7 +51,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
       <div className="flex items-baseline gap-1.5 mb-3">
         <span className={cn(
           'text-2xl font-bold tabular-nums leading-none tracking-tight',
-          isComplete ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
+          isComplete ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'
         )}>
           {current >= 1000 ? `${(current / 1000).toFixed(1)}L` : `${current}ml`}
         </span>
@@ -66,7 +66,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
             'h-full rounded-full transition-all duration-700',
             isComplete
               ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
-              : 'bg-gradient-to-r from-sky-500 to-sky-400'
+              : 'bg-gradient-to-r from-teal-500 to-teal-400'
           )}
           style={{ width: `${pct}%` }}
         />
@@ -83,10 +83,10 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
               className={cn(
                 'py-2 rounded-lg text-[11px] font-semibold tabular-nums transition-all duration-150 active:scale-95',
                 isLoading
-                  ? isComplete ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'
+                  ? isComplete ? 'bg-emerald-500 text-white' : 'bg-teal-500 text-white'
                   : isComplete
                     ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
-                    : 'bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/30',
+                    : 'bg-teal-50 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/30',
                 'disabled:pointer-events-none disabled:opacity-50'
               )}
             >

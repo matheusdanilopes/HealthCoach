@@ -33,9 +33,9 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
       badgeDot: 'bg-amber-500',
     };
     return {
-      ringColor: '#2563eb',
-      badgeClass: 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40',
-      badgeDot: 'bg-blue-500',
+      ringColor: '#059669',
+      badgeClass: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40',
+      badgeDot: 'bg-emerald-500',
     };
   }, [isOver, isWarning]);
 
