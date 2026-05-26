@@ -16,19 +16,21 @@ export default function DashboardLoading() {
         <Skeleton className="h-9 w-20 rounded-xl" />
       </div>
 
-      {/* Calorie card */}
-      <Skeleton className="h-[180px] rounded-2xl" />
-
-      {/* Macros */}
-      <Skeleton className="h-[148px] rounded-2xl" />
-
-      {/* Water */}
-      <Skeleton className="h-[148px] rounded-2xl" />
-
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-12 rounded-xl" />
-        <Skeleton className="h-12 rounded-xl" />
+      {/* 2-column layout */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start">
+        {/* Left */}
+        <div className="flex flex-col gap-3 flex-1 w-full">
+          <Skeleton className="h-[180px] rounded-2xl" />
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-12 rounded-xl" />
+            <Skeleton className="h-12 rounded-xl" />
+          </div>
+        </div>
+        {/* Right */}
+        <div className="flex flex-col gap-3 w-full sm:w-56 flex-shrink-0">
+          <Skeleton className="h-[148px] rounded-2xl" />
+          <Skeleton className="h-[148px] rounded-2xl" />
+        </div>
       </div>
     </div>
   );
