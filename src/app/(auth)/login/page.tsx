@@ -31,39 +31,39 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 bg-[#f8f8f8] dark:bg-[#0a0a0b]">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#f8f8f8] dark:bg-[#0a0a0b]">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
-      <div className="w-full max-w-[360px] animate-fade-in">
+      <div className="w-full max-w-[380px] animate-fade-in">
         {/* Brand */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="h-[52px] w-[52px] rounded-[18px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
-            <Activity className="text-white" size={22} />
+        <div className="flex flex-col items-center gap-4 mb-10">
+          <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
+            <Activity className="text-white" size={26} />
           </div>
           <div className="text-center">
-            <h1 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               HealthCoach AI
             </h1>
-            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
               Seu coach de saúde personalizado
             </p>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
-          <div className="mb-5">
-            <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-[0_2px_12px_0_rgb(0,0,0,0.06)] dark:shadow-none p-10">
+          <div className="mb-8">
+            <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Entrar na conta
             </h2>
-            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
               Bem-vindo de volta
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
             <Input
               label="Email"
               type="email"
@@ -84,19 +84,19 @@ export default function LoginPage() {
             />
 
             {error && (
-              <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-xl px-3.5 py-2.5">
+              <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-xl px-4 py-3">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />
                 <p className="text-[13px] text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}
 
-            <Button type="submit" loading={loading} className="w-full mt-1">
+            <Button type="submit" loading={loading} className="w-full mt-2">
               Entrar
             </Button>
           </form>
         </div>
 
-        <p className="text-center text-[13px] text-zinc-400 dark:text-zinc-500 mt-4">
+        <p className="text-center text-[13px] text-zinc-400 dark:text-zinc-500 mt-6">
           Não tem conta?{' '}
           <Link
             href="/register"

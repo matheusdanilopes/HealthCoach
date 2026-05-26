@@ -67,28 +67,28 @@ export default function RegisterPage() {
   const currentStepIndex = steps.indexOf(step);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 bg-[#f8f8f8] dark:bg-[#0a0a0b] py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#f8f8f8] dark:bg-[#0a0a0b] py-10">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
-      <div className="w-full max-w-[360px] animate-fade-in">
+      <div className="w-full max-w-[380px] animate-fade-in">
         {/* Brand */}
-        <div className="flex flex-col items-center gap-3 mb-7">
-          <div className="h-[52px] w-[52px] rounded-[18px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
-            <Activity className="text-white" size={22} />
+        <div className="flex flex-col items-center gap-4 mb-9">
+          <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
+            <Activity className="text-white" size={26} />
           </div>
           <div className="text-center">
-            <h1 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               HealthCoach AI
             </h1>
-            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
               Crie sua conta em 2 passos
             </p>
           </div>
 
           {/* Step indicator */}
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-1">
             {steps.map((s, i) => (
               <div
                 key={s}
@@ -106,18 +106,18 @@ export default function RegisterPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-[0_2px_12px_0_rgb(0,0,0,0.06)] dark:shadow-none p-10">
           {step === 'account' ? (
             <>
-              <div className="mb-5">
-                <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              <div className="mb-8">
+                <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
                   Criar conta
                 </h2>
-                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
                   Passo 1 de 2 — Acesso
                 </p>
               </div>
-              <form onSubmit={handleAccountStep} className="flex flex-col gap-4">
+              <form onSubmit={handleAccountStep} className="flex flex-col gap-6">
                 <Input
                   label="Nome completo"
                   placeholder="Seu nome"
@@ -144,7 +144,7 @@ export default function RegisterPage() {
                   error={error}
                   autoComplete="new-password"
                 />
-                <Button type="submit" className="w-full mt-1 gap-1.5">
+                <Button type="submit" className="w-full mt-2 gap-1.5">
                   Continuar
                   <ChevronRight size={14} />
                 </Button>
@@ -154,21 +154,21 @@ export default function RegisterPage() {
             <>
               <button
                 onClick={() => setStep('account')}
-                className="flex items-center gap-1 text-[12px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-4 transition-colors"
+                className="flex items-center gap-1 text-[12px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-6 transition-colors"
               >
                 <ChevronLeft size={13} />
                 Voltar
               </button>
-              <div className="mb-5">
-                <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              <div className="mb-8">
+                <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
                   Perfil de saúde
                 </h2>
-                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
                   Passo 2 de 2 — Anamnese
                 </p>
               </div>
 
-              <form onSubmit={handleProfileStep} className="flex flex-col gap-4">
+              <form onSubmit={handleProfileStep} className="flex flex-col gap-6">
                 <Input
                   label="Data de nascimento"
                   type="date"
@@ -177,18 +177,18 @@ export default function RegisterPage() {
                   required
                 />
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                     Sexo biológico
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     {[{ value: 'male', label: 'Masculino' }, { value: 'female', label: 'Feminino' }].map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setSex(opt.value as 'male' | 'female')}
                         className={cn(
-                          'h-10 rounded-xl border text-[13px] font-medium transition-all duration-150',
+                          'h-12 rounded-xl border text-[13px] font-medium transition-all duration-150',
                           sex === opt.value
                             ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700/60 text-blue-700 dark:text-blue-400'
                             : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
@@ -224,18 +224,18 @@ export default function RegisterPage() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                     Nível de atividade
                   </label>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2.5">
                     {ACTIVITY_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
                         className={cn(
-                          'flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all duration-150',
+                          'flex items-center justify-between px-5 py-4 rounded-xl border text-left transition-all duration-150',
                           activityLevel === opt.value
                             ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60'
                             : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
@@ -243,7 +243,7 @@ export default function RegisterPage() {
                       >
                         <div>
                           <p className={cn(
-                            'text-[13px] font-medium leading-none mb-0.5',
+                            'text-[13px] font-medium leading-none mb-1',
                             activityLevel === opt.value
                               ? 'text-blue-700 dark:text-blue-400'
                               : 'text-zinc-700 dark:text-zinc-300'
@@ -263,13 +263,13 @@ export default function RegisterPage() {
                 </div>
 
                 {error && (
-                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-xl px-3.5 py-2.5">
+                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-xl px-4 py-3">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />
                     <p className="text-[13px] text-red-600 dark:text-red-400">{error}</p>
                   </div>
                 )}
 
-                <Button type="submit" loading={loading} className="w-full mt-1">
+                <Button type="submit" loading={loading} className="w-full mt-2">
                   Começar jornada
                 </Button>
               </form>
@@ -277,7 +277,7 @@ export default function RegisterPage() {
           )}
         </div>
 
-        <p className="text-center text-[13px] text-zinc-400 dark:text-zinc-500 mt-4">
+        <p className="text-center text-[13px] text-zinc-400 dark:text-zinc-500 mt-6">
           Já tem conta?{' '}
           <Link
             href="/login"
