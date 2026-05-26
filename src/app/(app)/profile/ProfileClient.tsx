@@ -1,14 +1,54 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check } from 'lucide-react';
+import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download, Share2, Smartphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+declare global {
+  interface Window {
+    __pwaInstallEvent: BeforeInstallPromptEvent | null;
+  }
+  interface WindowEventMap {
+    'pwa-install-ready': Event;
+  }
+}
+
+function useInstallState() {
+  const [canInstall, setCanInstall] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      ('standalone' in navigator && (navigator as { standalone?: boolean }).standalone === true);
+    if (standalone) { setIsInstalled(true); return; }
+
+    const ua = navigator.userAgent;
+    const ios =
+      /iphone|ipad|ipod/i.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios) { setIsIos(true); setCanInstall(true); return; }
+
+    if (window.__pwaInstallEvent) { setCanInstall(true); return; }
+    const handler = () => { if (window.__pwaInstallEvent) setCanInstall(true); };
+    window.addEventListener('pwa-install-ready', handler);
+    return () => window.removeEventListener('pwa-install-ready', handler);
+  }, []);
+
+  return { canInstall, isIos, isInstalled };
+}
 
 interface ProfileClientProps {
   profile: Profile | null;
@@ -31,6 +71,18 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [activityLevel, setActivityLevel] = useState(profile?.activity_level ?? 'sedentary');
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const { canInstall, isIos, isInstalled } = useInstallState();
+
+  async function handleInstall() {
+    const e = window.__pwaInstallEvent;
+    if (!e) return;
+    setInstalling(true);
+    e.prompt();
+    await e.userChoice;
+    window.__pwaInstallEvent = null;
+    setInstalling(false);
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -188,6 +240,61 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           </Button>
         </form>
       </div>
+
+      {/* Install app */}
+      {(canInstall || isInstalled) && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+          <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+              Aplicativo
+            </p>
+          </div>
+          <div className="p-3">
+            {isInstalled ? (
+              <div className="flex items-center gap-3 px-4 py-3.5">
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0">
+                  <Smartphone size={14} className="text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span className="text-[13px] font-medium text-emerald-600 dark:text-emerald-400 flex-1">
+                  App instalado
+                </span>
+                <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+            ) : isIos ? (
+              <div className="px-4 py-3.5 flex flex-col gap-2.5">
+                <div className="flex items-center gap-3 mb-0.5">
+                  <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <Smartphone size={14} className="text-zinc-500 dark:text-zinc-400" />
+                  </div>
+                  <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
+                    Instalar no iPhone / iPad
+                  </span>
+                </div>
+                <div className="flex items-start gap-2.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl px-3.5 py-2.5">
+                  <Share2 size={13} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-[12px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Toque em <strong className="text-zinc-800 dark:text-zinc-200">Compartilhar</strong> e depois em <strong className="text-zinc-800 dark:text-zinc-200">Adicionar à Tela de Início</strong>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleInstall}
+                disabled={installing}
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors group disabled:opacity-50"
+              >
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0">
+                  <Download size={14} className="text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300 flex-1 text-left">
+                  {installing ? 'Instalando…' : 'Instalar app'}
+                </span>
+                <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Account */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">

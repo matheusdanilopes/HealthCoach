@@ -41,12 +41,18 @@ export default function PWAInstallPrompt() {
 
   const dismiss = useCallback(() => {
     setShow(false);
-    try { localStorage.setItem('pwa-prompt-dismissed', '1'); } catch {}
+    try {
+      const until = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('pwa-prompt-dismissed-until', String(until));
+    } catch {}
   }, []);
 
   useEffect(() => {
     if (isStandalone()) return;
-    try { if (localStorage.getItem('pwa-prompt-dismissed')) return; } catch {}
+    try {
+      const until = Number(localStorage.getItem('pwa-prompt-dismissed-until') ?? 0);
+      if (until && Date.now() < until) return;
+    } catch {}
 
     const onIOS = isIOS();
     setIos(onIOS);
