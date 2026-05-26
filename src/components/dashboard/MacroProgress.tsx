@@ -56,7 +56,7 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
   const targets = getTargetMacros(targetCalories);
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-8 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
       {/* Tricolor accent strip */}
       <div className="flex gap-0.5 mb-5">
         <div className="h-[3px] flex-1 rounded-full bg-blue-500" />
