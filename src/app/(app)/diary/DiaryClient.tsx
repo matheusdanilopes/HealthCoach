@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
-import AddFoodModal from '@/components/diary/AddFoodModal';
+import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import { Dumbbell, Plus, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -165,7 +165,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         Adicionar treino
       </button>
 
-      <AddFoodModal
+      <AIFoodLogger
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
         userId={userId}
