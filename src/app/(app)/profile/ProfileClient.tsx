@@ -57,7 +57,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     .join('');
 
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4 animate-fade-in">
+    <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Identity */}
       <div className="flex items-center gap-4">
         <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-600/20">
@@ -73,9 +73,9 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Stats */}
       {profile?.tdee && (
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-3">
           <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-5">
-            <div className="flex items-center gap-1.5 mb-2.5">
+            <div className="flex items-center gap-1.5 mb-3">
               <Zap size={12} className="text-amber-500" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 TDEE
@@ -87,7 +87,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
           <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-2xl p-5">
-            <div className="flex items-center gap-1.5 mb-2.5">
+            <div className="flex items-center gap-1.5 mb-3">
               <Target size={12} className="text-blue-600 dark:text-blue-400" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 Meta
@@ -108,7 +108,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             Dados pessoais
           </p>
         </div>
-        <form onSubmit={handleSave} className="p-6 flex flex-col gap-4">
+        <form onSubmit={handleSave} className="p-6 flex flex-col gap-5">
           <Input
             label="Nome completo"
             value={fullName}
@@ -199,7 +199,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         <div className="p-3">
           <Link
             href="/admin"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
+            className="flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
           >
             <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
               <ShieldCheck size={14} className="text-zinc-500 dark:text-zinc-400" />
@@ -211,7 +211,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           </Link>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors group"
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors group"
           >
             <div className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-center justify-center flex-shrink-0">
               <LogOut size={14} className="text-red-500" />

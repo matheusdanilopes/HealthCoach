@@ -47,7 +47,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
   const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
 
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4 animate-fade-in">
+    <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Header */}
       <div>
         <p className="text-[11px] text-zinc-400 dark:text-zinc-500 capitalize mb-0.5 font-medium tracking-wide">
@@ -60,18 +60,18 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
 
       {/* Daily summary */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-4">
           Total do dia
         </p>
 
-        <div className="flex items-baseline gap-1.5 mb-3">
+        <div className="flex items-baseline gap-1.5 mb-4">
           <span className="text-[38px] font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none tracking-tight">
             {totalCalories.toLocaleString('pt-BR')}
           </span>
           <span className="text-base font-medium text-zinc-400 dark:text-zinc-500">kcal</span>
         </div>
 
-        <div className="flex items-center gap-4 mb-3.5">
+        <div className="flex items-center gap-4 mb-4">
           <div className="flex items-center gap-1.5">
             <Flame size={12} className="text-zinc-300 dark:text-zinc-600" />
             <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -116,7 +116,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
       </div>
 
       {/* Meal sections */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         {MEAL_TYPES.map((meal) => (
           <MealSection
             key={meal}

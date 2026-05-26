@@ -6,7 +6,7 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4">
+    <div className="flex flex-col gap-6 pt-8 pb-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-2">

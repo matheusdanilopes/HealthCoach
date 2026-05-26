@@ -41,7 +41,7 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-4">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-5">
         Calorias hoje
       </p>
 
@@ -61,7 +61,7 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
             kcal
           </p>
 
-          <div className="flex flex-wrap gap-2 mt-3.5">
+          <div className="flex flex-wrap gap-2 mt-4">
             <span className={cn(
               'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold tabular-nums',
               badgeClass

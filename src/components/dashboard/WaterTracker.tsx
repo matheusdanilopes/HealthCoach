@@ -32,7 +32,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3.5">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Droplets
             size={14}
@@ -53,7 +53,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
       </div>
 
       {/* Amount display */}
-      <div className="flex items-baseline gap-1.5 mb-3">
+      <div className="flex items-baseline gap-1.5 mb-4">
         <span className={cn(
           'text-2xl font-bold tabular-nums leading-none tracking-tight',
           isComplete ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
@@ -66,7 +66,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
       </div>
 
       {/* Progress bar */}
-      <div className="h-2 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden mb-3.5">
+      <div className="h-2 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden mb-4">
         <div
           className={cn(
             'h-full rounded-full transition-all duration-700',
@@ -79,7 +79,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
       </div>
 
       {/* Quick-add buttons */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-4 gap-2">
         {QUICK_AMOUNTS.map((ml) => {
           const isLoading = loading === ml;
           return (

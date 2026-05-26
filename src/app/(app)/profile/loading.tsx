@@ -6,7 +6,7 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function ProfileLoading() {
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4">
+    <div className="flex flex-col gap-6 pt-8 pb-6">
       {/* Avatar + name */}
       <div className="flex items-center gap-4 mb-2">
         <Skeleton className="h-14 w-14 rounded-2xl flex-shrink-0" />

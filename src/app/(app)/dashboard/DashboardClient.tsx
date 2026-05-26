@@ -63,7 +63,7 @@ export default function DashboardClient({
   const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
-    <div className="flex flex-col gap-5 pt-6 pb-4 animate-fade-in">
+    <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -84,7 +84,7 @@ export default function DashboardClient({
       </div>
 
       {/* Layout: calorie card full-width, then 2-col for macros/water */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         <CalorieCard
           consumed={stats.calories}
           burned={workoutBurned}
@@ -92,7 +92,7 @@ export default function DashboardClient({
         />
 
         {/* Action buttons */}
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setAddFoodOpen(true)}
             className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-sm shadow-blue-600/25 transition-all active:scale-[0.97]"
@@ -134,7 +134,7 @@ export default function DashboardClient({
         )}
 
         {/* Macros + Water — side by side on sm+ */}
-        <div className="flex flex-col sm:flex-row gap-2.5">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <MacroProgress
               protein={stats.protein}

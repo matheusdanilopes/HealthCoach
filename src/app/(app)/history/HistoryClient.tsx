@@ -103,7 +103,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
   const lineColor   = isDark ? '#60a5fa' : '#2563eb';
 
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4 animate-fade-in">
+    <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -135,7 +135,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-3">
         {/* Weight variation */}
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">{trendIcon}</div>
@@ -176,7 +176,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
       {/* Weight chart */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-5">
           <Scale size={13} className="text-blue-500" />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Tendência de peso
@@ -222,7 +222,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
       {/* Calorie chart */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-5">
           <BarChart2 size={13} className="text-emerald-500" />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Histórico calórico

@@ -58,17 +58,17 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
       {/* Tricolor accent strip */}
-      <div className="flex gap-0.5 mb-4">
+      <div className="flex gap-0.5 mb-5">
         <div className="h-[3px] flex-1 rounded-full bg-blue-500" />
         <div className="h-[3px] flex-1 rounded-full bg-amber-400" />
         <div className="h-[3px] flex-1 rounded-full bg-rose-400" />
       </div>
 
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-3.5">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-4">
         Macros
       </p>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         <MacroBar
           label="Prot."
           value={protein}
