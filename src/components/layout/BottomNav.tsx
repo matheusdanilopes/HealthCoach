@@ -17,10 +17,10 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-t border-zinc-100 dark:border-zinc-900"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="flex items-center justify-around max-w-lg mx-auto h-16">
+      <div className="flex items-center justify-around max-w-2xl mx-auto h-[60px] px-2">
         {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
           const active = pathname === href;
           return (
@@ -28,21 +28,22 @@ export default function BottomNav() {
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 transition-all duration-200',
+                'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200',
                 active
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
+                  ? 'text-zinc-900 dark:text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-400'
               )}
             >
-              <div
-                className={cn(
-                  'flex items-center justify-center h-8 w-14 rounded-full transition-all duration-200',
-                  active ? 'bg-blue-50 dark:bg-blue-900/30' : ''
-                )}
-              >
-                <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
-              </div>
-              <span className="text-[10px] font-medium">{label}</span>
+              {active && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-blue-600 dark:bg-blue-500" />
+              )}
+              <Icon size={20} strokeWidth={active ? 2 : 1.75} />
+              <span className={cn(
+                'text-[10px] font-medium transition-all duration-200',
+                active ? 'opacity-100' : 'opacity-70'
+              )}>
+                {label}
+              </span>
             </Link>
           );
         })}

@@ -41,10 +41,10 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
     new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <div className="pt-8 pb-4">
+    <div className="pt-6 pb-4">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
-          <ShieldCheck className="text-blue-600 dark:text-blue-400" size={20} />
+        <div className="h-10 w-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+          <ShieldCheck className="text-zinc-600 dark:text-zinc-400" size={18} />
         </div>
         <div>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Gerenciar Usuários</h1>
@@ -62,7 +62,7 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((user) => (
-            <div key={user.id} className="flex items-center gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm dark:shadow-none">
+            <div key={user.id} className="flex items-center gap-3 bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
               <div className="h-10 w-10 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
                   {getInitials(user.full_name || user.email)}
@@ -80,7 +80,7 @@ export default function AdminClient({ users: initial, currentUserId }: Props) {
               ) : (
                 <button
                   onClick={() => setToDelete(user)}
-                  className="h-9 w-9 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex-shrink-0"
+                  className="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0"
                 >
                   <Trash2 size={15} />
                 </button>

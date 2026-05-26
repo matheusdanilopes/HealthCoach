@@ -10,9 +10,9 @@ import ThemeToggle from '@/components/ui/ThemeToggle';
 import { Activity, ChevronRight, ChevronLeft } from 'lucide-react';
 
 const ACTIVITY_OPTIONS = [
-  { value: 'sedentary', label: 'Sedentário', desc: 'Pouco ou nenhum exercício',       icon: '🛋️' },
-  { value: 'moderate',  label: 'Moderado',   desc: 'Exercício 3-5x por semana',        icon: '🚶' },
-  { value: 'active',    label: 'Ativo',       desc: 'Exercício intenso 6-7x por semana', icon: '🏃' },
+  { value: 'sedentary', label: 'Sedentário', desc: 'Pouco ou nenhum exercício' },
+  { value: 'moderate',  label: 'Moderado',   desc: 'Exercício 3–5x por semana' },
+  { value: 'active',    label: 'Ativo',       desc: 'Exercício intenso 6–7x por semana' },
 ];
 
 export default function RegisterPage() {
@@ -62,58 +62,124 @@ export default function RegisterPage() {
     router.refresh();
   }
 
+  const steps = ['account', 'profile'] as const;
+  const currentStepIndex = steps.indexOf(step);
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 bg-zinc-50 dark:bg-zinc-950 py-8">
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 bg-zinc-50 dark:bg-zinc-950 py-10">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
       <div className="w-full max-w-sm animate-fade-in">
-        <div className="flex flex-col items-center gap-2 mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center justify-center shadow-sm">
-            <Activity className="text-blue-600 dark:text-blue-400" size={28} />
+        {/* Brand */}
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <div className="h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20">
+            <Activity className="text-white" size={22} />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">HealthCoach AI</h1>
+          <div className="text-center">
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              HealthCoach AI
+            </h1>
+            <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">
+              Crie sua conta em 2 passos
+            </p>
+          </div>
+          {/* Step indicator */}
           <div className="flex items-center gap-2 mt-1">
-            {(['account', 'profile'] as const).map((s, i) => (
-              <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${
-                s === step ? 'w-6 bg-blue-600' : i < ['account', 'profile'].indexOf(step) ? 'w-3 bg-blue-300 dark:bg-blue-700' : 'w-3 bg-zinc-200 dark:bg-zinc-700'
-              }`} />
+            {steps.map((s, i) => (
+              <div
+                key={s}
+                className={`h-1 rounded-full transition-all duration-300 ${
+                  i === currentStepIndex
+                    ? 'w-8 bg-blue-600'
+                    : i < currentStepIndex
+                      ? 'w-4 bg-blue-300 dark:bg-blue-700'
+                      : 'w-4 bg-zinc-200 dark:bg-zinc-700'
+                }`}
+              />
             ))}
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm dark:shadow-none">
+        {/* Card */}
+        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
           {step === 'account' ? (
             <>
-              <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Criar conta</h2>
-              <p className="text-sm text-zinc-400 dark:text-zinc-500 mb-5">Passo 1 de 2</p>
+              <div className="mb-5">
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Criar conta</h2>
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">Passo 1 de 2 — Acesso</p>
+              </div>
               <form onSubmit={handleAccountStep} className="flex flex-col gap-4">
-                <Input label="Nome completo" placeholder="Seu nome" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-                <Input label="Email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-                <Input label="Senha" type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} required error={error} autoComplete="new-password" />
-                <Button type="submit" size="lg" className="w-full mt-1">
-                  Continuar <ChevronRight size={16} />
+                <Input
+                  label="Nome completo"
+                  placeholder="Seu nome"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+                <Input
+                  label="Senha"
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  error={error}
+                  autoComplete="new-password"
+                />
+                <Button type="submit" className="w-full mt-1">
+                  Continuar <ChevronRight size={15} />
                 </Button>
               </form>
             </>
           ) : (
             <>
-              <button onClick={() => setStep('account')} className="flex items-center gap-1 text-sm text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-3 -ml-1 transition-colors">
-                <ChevronLeft size={16} /> Voltar
+              <button
+                onClick={() => setStep('account')}
+                className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-4 transition-colors"
+              >
+                <ChevronLeft size={14} /> Voltar
               </button>
-              <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Seu perfil de saúde</h2>
-              <p className="text-sm text-zinc-400 dark:text-zinc-500 mb-5">Passo 2 de 2 — Anamnese</p>
+              <div className="mb-5">
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Perfil de saúde</h2>
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">Passo 2 de 2 — Anamnese</p>
+              </div>
 
               <form onSubmit={handleProfileStep} className="flex flex-col gap-4">
-                <Input label="Data de nascimento" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} required />
+                <Input
+                  label="Data de nascimento"
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  required
+                />
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Sexo biológico</label>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                    Sexo biológico
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
-                    {[{ value: 'male', label: '♂ Masculino' }, { value: 'female', label: '♀ Feminino' }].map((opt) => (
-                      <button key={opt.value} type="button" onClick={() => setSex(opt.value as 'male' | 'female')}
-                        className={`h-11 rounded-xl border text-sm font-medium transition-all ${sex === opt.value ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-400' : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600'}`}>
+                    {[{ value: 'male', label: 'Masculino' }, { value: 'female', label: 'Feminino' }].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setSex(opt.value as 'male' | 'female')}
+                        className={`h-10 rounded-xl border text-sm font-medium transition-all ${
+                          sex === opt.value
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400'
+                            : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        }`}
+                      >
                         {opt.label}
                       </button>
                     ))}
@@ -121,32 +187,76 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="Peso (kg)" type="number" step="0.1" placeholder="70" value={weight} onChange={(e) => setWeight(e.target.value)} required min="30" max="300" />
-                  <Input label="Altura (cm)" type="number" placeholder="170" value={height} onChange={(e) => setHeight(e.target.value)} required min="100" max="250" />
+                  <Input
+                    label="Peso (kg)"
+                    type="number"
+                    step="0.1"
+                    placeholder="70"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    required
+                    min="30"
+                    max="300"
+                  />
+                  <Input
+                    label="Altura (cm)"
+                    type="number"
+                    placeholder="170"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    required
+                    min="100"
+                    max="250"
+                  />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nível de atividade física</label>
-                  <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                    Nível de atividade
+                  </label>
+                  <div className="flex flex-col gap-1.5">
                     {ACTIVITY_OPTIONS.map((opt) => (
-                      <button key={opt.value} type="button" onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${activityLevel === opt.value ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'}`}>
-                        <span className="text-xl">{opt.icon}</span>
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${
+                          activityLevel === opt.value
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                            : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        }`}
+                      >
                         <div>
-                          <p className={`text-sm font-medium ${activityLevel === opt.value ? 'text-blue-700 dark:text-blue-400' : 'text-zinc-700 dark:text-zinc-300'}`}>{opt.label}</p>
-                          <p className="text-xs text-zinc-400 dark:text-zinc-500">{opt.desc}</p>
+                          <p className={`text-sm font-medium leading-none mb-0.5 ${
+                            activityLevel === opt.value
+                              ? 'text-blue-700 dark:text-blue-400'
+                              : 'text-zinc-700 dark:text-zinc-300'
+                          }`}>
+                            {opt.label}
+                          </p>
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{opt.desc}</p>
                         </div>
+                        {activityLevel === opt.value && (
+                          <div className="h-4 w-4 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center flex-shrink-0">
+                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                              <path d="M1.5 4l2 2 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2">{error}</p>
+                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl px-3 py-2.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                  </div>
                 )}
 
-                <Button type="submit" loading={loading} size="lg" className="w-full mt-1">
-                  Começar jornada 🚀
+                <Button type="submit" loading={loading} className="w-full mt-1">
+                  Começar jornada
                 </Button>
               </form>
             </>
@@ -155,7 +265,9 @@ export default function RegisterPage() {
 
         <p className="text-center text-sm text-zinc-400 dark:text-zinc-500 mt-4">
           Já tem conta?{' '}
-          <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">Entrar</Link>
+          <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors">
+            Entrar
+          </Link>
         </p>
       </div>
     </div>

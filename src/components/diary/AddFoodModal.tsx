@@ -4,13 +4,14 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
 const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
-  { value: 'breakfast', label: 'Café da Manhã', icon: '☀️' },
-  { value: 'lunch', label: 'Almoço', icon: '🍽️' },
-  { value: 'dinner', label: 'Jantar', icon: '🌙' },
-  { value: 'snack', label: 'Lanche', icon: '🍎' },
+  { value: 'breakfast', label: 'Café',   icon: '☀️' },
+  { value: 'lunch',     label: 'Almoço', icon: '🍽️' },
+  { value: 'dinner',    label: 'Jantar',  icon: '🌙' },
+  { value: 'snack',     label: 'Lanche',  icon: '🍎' },
 ];
 
 interface AddFoodModalProps {
@@ -74,20 +75,22 @@ export default function AddFoodModal({
   return (
     <Modal open={open} onClose={onClose} title="Adicionar alimento">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="grid grid-cols-4 gap-1.5">
+        {/* Meal type selector */}
+        <div className="flex gap-2">
           {MEAL_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
               onClick={() => setMealType(opt.value)}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-xs transition-all ${
+              className={cn(
+                'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-medium transition-all',
                 mealType === opt.value
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:border-zinc-300'
-              }`}
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
+                  : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+              )}
             >
-              <span>{opt.icon}</span>
-              <span className="text-[10px] leading-tight text-center">{opt.label.split(' ')[0]}</span>
+              <span className="text-base leading-none">{opt.icon}</span>
+              <span>{opt.label}</span>
             </button>
           ))}
         </div>
