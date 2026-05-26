@@ -11,8 +11,9 @@ import { ptBR } from 'date-fns/locale';
 import {
   Plus, Pencil, Trash2, Scale, Dumbbell,
   Flame, Activity, TrendingDown, TrendingUp,
-  Minus, ChevronDown,
+  Minus, ChevronDown, Ruler, ChevronRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 import Modal from '@/components/ui/Modal';
@@ -635,6 +636,27 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
           </div>
         </>
       )}
+
+      {/* Link to body measurements */}
+      <Link
+        href="/body-measurements"
+        className="flex items-center justify-between px-5 py-4 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors duration-150 group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-[11px] bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+            <Ruler size={16} className="text-amber-500" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
+              Medidas Corporais
+            </p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+              Cintura, quadril, braços, coxas e mais
+            </p>
+          </div>
+        </div>
+        <ChevronRight size={15} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 dark:group-hover:text-zinc-400 transition-colors" />
+      </Link>
 
       {/* Form modal */}
       <Modal
