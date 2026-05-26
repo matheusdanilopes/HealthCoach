@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Scale, Plus, Dumbbell } from 'lucide-react';
+import { Scale, Plus, Dumbbell, Flame } from 'lucide-react';
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
@@ -63,21 +63,21 @@ export default function DashboardClient({
   const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
-    <div className="flex flex-col gap-5 pt-8 pb-4">
+    <div className="flex flex-col gap-4 pt-6 pb-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 capitalize mb-0.5">{dateStr}</p>
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
             {greeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
-          <p className="text-sm text-zinc-400 dark:text-zinc-500 capitalize">{dateStr}</p>
         </div>
         <button
           onClick={() => setWeightModalOpen(true)}
-          className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 transition-colors active:scale-95"
+          className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95"
         >
-          <Scale size={13} className="text-zinc-400 dark:text-zinc-500" />
-          <span className="font-medium tabular-nums">{latestWeight}kg</span>
+          <Scale size={12} className="text-zinc-400" />
+          <span className="font-semibold tabular-nums">{latestWeight}kg</span>
         </button>
       </div>
 
@@ -105,28 +105,31 @@ export default function DashboardClient({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setAddFoodOpen(true)}
-          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-sm shadow-blue-600/20 transition-all active:scale-[0.97]"
         >
-          <Plus size={17} />
-          Refeição
+          <Plus size={16} strokeWidth={2.5} />
+          Registrar refeição
         </button>
         <button
           onClick={() => setAddWorkoutOpen(true)}
-          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:hover:bg-orange-900/30 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400 text-sm font-medium transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm font-medium shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-[0.97]"
         >
-          <Dumbbell size={17} />
-          Treino
+          <Dumbbell size={16} />
+          Registrar treino
         </button>
       </div>
 
       {profile?.tdee && (
         <div className="flex items-center justify-between px-1">
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            TDEE{' '}
-            <span className="text-zinc-500 dark:text-zinc-400 font-medium tabular-nums">
-              {profile.tdee.toLocaleString('pt-BR')} kcal
+          <div className="flex items-center gap-1.5">
+            <Flame size={12} className="text-zinc-300 dark:text-zinc-600" />
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">
+              TDEE{' '}
+              <span className="text-zinc-600 dark:text-zinc-400 font-medium tabular-nums">
+                {profile.tdee.toLocaleString('pt-BR')} kcal
+              </span>
             </span>
-          </span>
+          </div>
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
             Déficit{' '}
             <span className="text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
