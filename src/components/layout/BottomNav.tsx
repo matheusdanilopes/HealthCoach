@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen, TrendingUp, User } from 'lucide-react';
+import { LayoutDashboard, BookOpen, TrendingUp, Scale, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Início' },
-  { href: '/diary',     icon: BookOpen,         label: 'Diário' },
-  { href: '/history',   icon: TrendingUp,        label: 'Evolução' },
-  { href: '/profile',   icon: User,              label: 'Perfil' },
+  { href: '/dashboard',    icon: LayoutDashboard, label: 'Início'  },
+  { href: '/diary',        icon: BookOpen,         label: 'Diário'  },
+  { href: '/body-metrics', icon: Scale,            label: 'Corpo'   },
+  { href: '/history',      icon: TrendingUp,       label: 'Evolução'},
+  { href: '/profile',      icon: User,             label: 'Perfil'  },
 ];
 
 export default function BottomNav() {
