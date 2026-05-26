@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Loader2, Bot, User } from 'lucide-react';
+import { X, Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatMessage, Profile } from '@/types';
 
@@ -17,27 +17,25 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === 'user';
   return (
     <div className={cn('flex gap-2 items-end', isUser ? 'flex-row-reverse' : 'flex-row')}>
-      <div
-        className={cn(
-          'h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0',
-          isUser ? 'bg-emerald-500/20' : 'bg-zinc-700'
-        )}
-      >
-        {isUser ? <User size={14} className="text-emerald-400" /> : <Bot size={14} className="text-zinc-300" />}
+      <div className={cn(
+        'h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0',
+        isUser
+          ? 'bg-blue-100 dark:bg-blue-900/40'
+          : 'bg-zinc-100 dark:bg-zinc-800'
+      )}>
+        {isUser
+          ? <User size={10} className="text-blue-600 dark:text-blue-400" />
+          : <Bot size={10} className="text-zinc-500 dark:text-zinc-400" />
+        }
       </div>
-      <div
-        className={cn(
-          'max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
-          isUser
-            ? 'bg-emerald-500 text-white rounded-br-sm'
-            : 'bg-zinc-800 text-zinc-200 rounded-bl-sm'
-        )}
-      >
-        {msg.content.split('\n').map((line, i) => (
-          <span key={i}>
-            {line}
-            {i < msg.content.split('\n').length - 1 && <br />}
-          </span>
+      <div className={cn(
+        'max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed',
+        isUser
+          ? 'bg-blue-600 text-white rounded-br-sm'
+          : 'bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-bl-sm border border-zinc-100 dark:border-zinc-700/60'
+      )}>
+        {msg.content.split('\n').map((line, i, arr) => (
+          <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
         ))}
       </div>
     </div>
@@ -46,12 +44,10 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
 export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: 'assistant',
-      content: `Olá${profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 👋 Sou seu coach de saúde. Pode me dizer o que comeu hoje ou fazer perguntas sobre sua dieta!`,
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{
+    role: 'assistant',
+    content: `Olá${profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! Sou seu coach de saúde. Diga o que comeu ou faça perguntas sobre sua dieta.`,
+  }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -79,10 +75,7 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMsg].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })),
           userContext: {
             userId,
             name: profile.full_name,
@@ -95,21 +88,14 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
           },
         }),
       });
-
       const data = await res.json();
-
-      if (data.message) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
-      }
-
-      if (data.foodLogged && onFoodLogged) {
-        onFoodLogged();
-      }
+      if (data.message) setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
+      if (data.foodLogged && onFoodLogged) onFoodLogged();
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Desculpe, tive um problema. Tente novamente.' },
-      ]);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: 'Desculpe, tive um problema. Tente novamente.',
+      }]);
     } finally {
       setLoading(false);
     }
@@ -117,54 +103,57 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
 
   return (
     <>
-      {/* Floating button */}
-      <button
-        onClick={() => setOpen(true)}
-        className={cn(
-          'fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full shadow-xl',
-          'bg-emerald-500 hover:bg-emerald-400 text-white',
-          'flex items-center justify-center transition-all duration-200 active:scale-95',
-          open && 'hidden'
-        )}
-        aria-label="Abrir chat com IA"
-      >
-        <MessageCircle size={24} />
-      </button>
+      {/* FAB */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="fixed bottom-[68px] right-4 z-40 h-12 w-12 rounded-2xl shadow-lg shadow-blue-600/25 bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-all duration-200 active:scale-95"
+          aria-label="Abrir coach IA"
+        >
+          <Sparkles size={17} />
+        </button>
+      )}
 
-      {/* Chat panel */}
+      {/* Chat window */}
       {open && (
-        <div className="fixed bottom-20 right-0 left-0 sm:left-auto sm:right-4 z-50 sm:w-96 animate-slide-up">
-          <div className="mx-4 sm:mx-0 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-            style={{ maxHeight: '70vh', height: '480px' }}>
+        <div className="fixed bottom-[64px] right-0 left-0 sm:left-auto sm:right-4 z-50 sm:w-[380px] animate-slide-up">
+          <div
+            className="mx-3 sm:mx-0 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 flex flex-col overflow-hidden"
+            style={{ maxHeight: '70vh', height: 450 }}
+          >
             {/* Header */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
-              <div className="h-8 w-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                <Bot size={16} className="text-emerald-400" />
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/60 flex-shrink-0">
+              <div className="h-8 w-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100/80 dark:border-blue-900/50 flex items-center justify-center">
+                <Sparkles size={13} className="text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-zinc-100">Coach IA</p>
-                <p className="text-xs text-emerald-400">Online</p>
+                <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
+                  Coach IA
+                </p>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                  Online
+                </p>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="ml-auto h-7 w-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 transition-colors"
+                className="ml-auto h-7 w-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-400 dark:text-zinc-500 transition-colors"
               >
-                <X size={14} />
+                <X size={12} />
               </button>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-zinc-50/40 dark:bg-zinc-950/40">
               {messages.map((msg, i) => (
                 <MessageBubble key={i} msg={msg} />
               ))}
               {loading && (
-                <div className="flex items-center gap-2 text-zinc-500">
-                  <div className="h-7 w-7 rounded-full bg-zinc-700 flex items-center justify-center">
-                    <Bot size={14} className="text-zinc-400" />
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                    <Bot size={10} className="text-zinc-500 dark:text-zinc-400" />
                   </div>
-                  <div className="bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-2.5">
-                    <Loader2 size={14} className="animate-spin text-zinc-400" />
+                  <div className="bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700/60 rounded-2xl rounded-bl-sm px-4 py-2.5">
+                    <Loader2 size={11} className="animate-spin text-zinc-400" />
                   </div>
                 </div>
               )}
@@ -174,23 +163,23 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
             {/* Input */}
             <form
               onSubmit={sendMessage}
-              className="flex items-center gap-2 p-3 border-t border-zinc-800 flex-shrink-0"
+              className="flex items-center gap-2 p-3 border-t border-zinc-100 dark:border-zinc-800/60 flex-shrink-0 bg-white dark:bg-zinc-900"
             >
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ex: Comi 2 ovos e um suco..."
+                placeholder="Comi 2 ovos e um suco..."
                 disabled={loading}
-                className="flex-1 h-10 bg-zinc-800 rounded-xl px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50"
+                className="flex-1 h-10 bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 rounded-xl px-3.5 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400/80 disabled:opacity-50 transition-all"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
-                className="h-10 w-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 flex items-center justify-center text-white transition-all active:scale-95"
+                className="h-10 w-10 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-30 flex items-center justify-center text-white transition-all active:scale-95"
               >
-                <Send size={16} />
+                <Send size={13} />
               </button>
             </form>
           </div>

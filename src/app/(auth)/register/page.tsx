@@ -6,27 +6,14 @@ import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Activity, ChevronRight, ChevronLeft } from 'lucide-react';
+import ThemeToggle from '@/components/ui/ThemeToggle';
+import { Activity, ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const ACTIVITY_OPTIONS = [
-  {
-    value: 'sedentary',
-    label: 'Sedentário',
-    desc: 'Pouco ou nenhum exercício',
-    icon: '🛋️',
-  },
-  {
-    value: 'moderate',
-    label: 'Moderado',
-    desc: 'Exercício 3-5x por semana',
-    icon: '🚶',
-  },
-  {
-    value: 'active',
-    label: 'Ativo',
-    desc: 'Exercício intenso 6-7x por semana',
-    icon: '🏃',
-  },
+  { value: 'sedentary', label: 'Sedentário', desc: 'Pouco ou nenhum exercício' },
+  { value: 'moderate',  label: 'Moderado',   desc: 'Exercício 3–5x por semana' },
+  { value: 'active',    label: 'Ativo',       desc: 'Exercício intenso 6–7x por semana' },
 ];
 
 export default function RegisterPage() {
@@ -38,7 +25,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-
   const [birthDate, setBirthDate] = useState('');
   const [sex, setSex] = useState<'male' | 'female'>('male');
   const [weight, setWeight] = useState('');
@@ -47,10 +33,7 @@ export default function RegisterPage() {
 
   async function handleAccountStep(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 6) {
-      setError('Senha deve ter pelo menos 6 caracteres.');
-      return;
-    }
+    if (password.length < 6) { setError('Senha deve ter pelo menos 6 caracteres.'); return; }
     setError('');
     setStep('profile');
   }
@@ -59,56 +42,81 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, fullName, birthDate, sex, weight, height, activityLevel }),
     });
-
     if (!res.ok) {
       const data = await res.json();
       setError(data.error ?? 'Erro ao criar conta.');
       setLoading(false);
       return;
     }
-
     const result = await signIn('credentials', { email, password, redirect: false });
     if (result?.error) {
       setError('Conta criada, mas erro ao entrar. Tente fazer login.');
       setLoading(false);
       return;
     }
-
     router.push('/dashboard');
     router.refresh();
   }
 
+  const steps = ['account', 'profile'] as const;
+  const currentStepIndex = steps.indexOf(step);
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-zinc-950 py-8">
-      <div className="w-full max-w-sm animate-fade-in">
-        <div className="flex flex-col items-center gap-2 mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <Activity className="text-emerald-400" size={28} />
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#f8f8f8] dark:bg-[#0a0a0b] py-10">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      <div className="w-full max-w-[380px] animate-fade-in">
+        {/* Brand */}
+        <div className="flex flex-col items-center gap-3 mb-7">
+          <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
+            <Activity className="text-white" size={26} />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-100">HealthCoach AI</h1>
+          <div className="text-center">
+            <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              HealthCoach AI
+            </h1>
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
+              Crie sua conta em 2 passos
+            </p>
+          </div>
+
+          {/* Step indicator */}
           <div className="flex items-center gap-2 mt-1">
-            {(['account', 'profile'] as const).map((s, i) => (
+            {steps.map((s, i) => (
               <div
                 key={s}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  s === step ? 'w-6 bg-emerald-500' : i < ['account', 'profile'].indexOf(step) ? 'w-3 bg-emerald-700' : 'w-3 bg-zinc-700'
-                }`}
+                className={cn(
+                  'h-1 rounded-full transition-all duration-300',
+                  i === currentStepIndex
+                    ? 'w-8 bg-blue-600'
+                    : i < currentStepIndex
+                      ? 'w-5 bg-blue-400 dark:bg-blue-600'
+                      : 'w-5 bg-zinc-200 dark:bg-zinc-700'
+                )}
               />
             ))}
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+        {/* Card */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
           {step === 'account' ? (
             <>
-              <h2 className="font-semibold text-zinc-100 mb-1">Criar conta</h2>
-              <p className="text-sm text-zinc-500 mb-5">Passo 1 de 2</p>
+              <div className="mb-5">
+                <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  Criar conta
+                </h2>
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
+                  Passo 1 de 2 — Acesso
+                </p>
+              </div>
               <form onSubmit={handleAccountStep} className="flex flex-col gap-4">
                 <Input
                   label="Nome completo"
@@ -136,8 +144,9 @@ export default function RegisterPage() {
                   error={error}
                   autoComplete="new-password"
                 />
-                <Button type="submit" size="lg" className="w-full mt-1">
-                  Continuar <ChevronRight size={16} />
+                <Button type="submit" className="w-full mt-1 gap-1.5">
+                  Continuar
+                  <ChevronRight size={14} />
                 </Button>
               </form>
             </>
@@ -145,12 +154,19 @@ export default function RegisterPage() {
             <>
               <button
                 onClick={() => setStep('account')}
-                className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300 mb-3 -ml-1 transition-colors"
+                className="flex items-center gap-1 text-[12px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-6 transition-colors"
               >
-                <ChevronLeft size={16} /> Voltar
+                <ChevronLeft size={13} />
+                Voltar
               </button>
-              <h2 className="font-semibold text-zinc-100 mb-1">Seu perfil de saúde</h2>
-              <p className="text-sm text-zinc-500 mb-5">Passo 2 de 2 — Anamnese</p>
+              <div className="mb-5">
+                <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  Perfil de saúde
+                </h2>
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
+                  Passo 2 de 2 — Anamnese
+                </p>
+              </div>
 
               <form onSubmit={handleProfileStep} className="flex flex-col gap-4">
                 <Input
@@ -161,22 +177,22 @@ export default function RegisterPage() {
                   required
                 />
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-zinc-300">Sexo biológico</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { value: 'male', label: '♂ Masculino' },
-                      { value: 'female', label: '♀ Feminino' },
-                    ].map((opt) => (
+                <div className="flex flex-col gap-3">
+                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                    Sexo biológico
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[{ value: 'male', label: 'Masculino' }, { value: 'female', label: 'Feminino' }].map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setSex(opt.value as 'male' | 'female')}
-                        className={`h-11 rounded-xl border text-sm font-medium transition-all ${
+                        className={cn(
+                          'h-12 rounded-xl border text-[13px] font-medium transition-all duration-150',
                           sex === opt.value
-                            ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
-                        }`}
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700/60 text-blue-700 dark:text-blue-400'
+                            : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        )}
                       >
                         {opt.label}
                       </button>
@@ -208,49 +224,65 @@ export default function RegisterPage() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-zinc-300">Nível de atividade física</label>
-                  <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
+                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                    Nível de atividade
+                  </label>
+                  <div className="flex flex-col gap-2.5">
                     {ACTIVITY_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                        className={cn(
+                          'flex items-center justify-between px-5 py-4 rounded-xl border text-left transition-all duration-150',
                           activityLevel === opt.value
-                            ? 'bg-emerald-500/10 border-emerald-500'
-                            : 'bg-zinc-800 border-zinc-700 hover:border-zinc-600'
-                        }`}
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60'
+                            : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        )}
                       >
-                        <span className="text-xl">{opt.icon}</span>
                         <div>
-                          <p className={`text-sm font-medium ${activityLevel === opt.value ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                          <p className={cn(
+                            'text-[13px] font-medium leading-none mb-1',
+                            activityLevel === opt.value
+                              ? 'text-blue-700 dark:text-blue-400'
+                              : 'text-zinc-700 dark:text-zinc-300'
+                          )}>
                             {opt.label}
                           </p>
-                          <p className="text-xs text-zinc-500">{opt.desc}</p>
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{opt.desc}</p>
                         </div>
+                        {activityLevel === opt.value && (
+                          <div className="h-4 w-4 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center flex-shrink-0">
+                            <Check size={8} className="text-white" strokeWidth={3} />
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
-                    {error}
-                  </p>
+                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-xl px-4 py-3">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                    <p className="text-[13px] text-red-600 dark:text-red-400">{error}</p>
+                  </div>
                 )}
 
-                <Button type="submit" loading={loading} size="lg" className="w-full mt-1">
-                  Começar jornada 🚀
+                <Button type="submit" loading={loading} className="w-full mt-1">
+                  Começar jornada
                 </Button>
               </form>
             </>
           )}
         </div>
 
-        <p className="text-center text-sm text-zinc-500 mt-4">
+        <p className="text-center text-[13px] text-zinc-400 dark:text-zinc-500 mt-6">
           Já tem conta?{' '}
-          <Link href="/login" className="text-emerald-400 hover:text-emerald-300 font-medium">
+          <Link
+            href="/login"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors"
+          >
             Entrar
           </Link>
         </p>

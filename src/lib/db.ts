@@ -1,15 +1,20 @@
-import { neon } from '@neondatabase/serverless';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-let _client: ReturnType<typeof neon> | undefined;
+let _client: SupabaseClient | null = null;
 
-function client() {
-  return (_client ??= neon(process.env.DATABASE_URL!));
+function client(): SupabaseClient {
+  if (!_client) {
+    _client = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
+  }
+  return _client;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function sql<T = any>(
-  strings: TemplateStringsArray,
-  ...values: unknown[]
-): Promise<T[]> {
-  return client()(strings, ...values) as unknown as Promise<T[]>;
-}
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop: string | symbol) {
+    return (client() as any)[prop];
+  },
+});

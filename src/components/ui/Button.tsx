@@ -19,19 +19,23 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const base =
-    'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500';
+    'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none';
 
   const variants = {
-    primary: 'bg-emerald-500 hover:bg-emerald-400 text-white',
-    secondary: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100',
-    ghost: 'bg-transparent hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100',
-    danger: 'bg-red-500/10 hover:bg-red-500/20 text-red-400',
+    primary:
+      'bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-600/25 hover:shadow-blue-500/30',
+    secondary:
+      'bg-zinc-100 hover:bg-zinc-150 text-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/80 dark:text-zinc-200',
+    ghost:
+      'bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 dark:hover:bg-zinc-800/80 dark:text-zinc-400 dark:hover:text-zinc-100',
+    danger:
+      'bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50 dark:text-red-400 dark:border-red-900/50',
   };
 
   const sizes = {
-    sm: 'h-8 px-3 text-sm gap-1.5',
+    sm: 'h-8 px-3 text-[13px] gap-1.5',
     md: 'h-10 px-4 text-sm gap-2',
-    lg: 'h-12 px-6 text-base gap-2',
+    lg: 'h-11 px-5 text-sm gap-2',
   };
 
   return (
@@ -40,9 +44,9 @@ export default function Button({
       disabled={disabled || loading}
       {...props}
     >
-      {loading ? (
-        <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
-      ) : null}
+      {loading && (
+        <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+      )}
       {children}
     </button>
   );

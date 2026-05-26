@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,39 +13,80 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, className }: ModalProps) {
+  const [rendered, setRendered] = useState(open);
+
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (open) setRendered(true);
   }, [open]);
 
-  if (!open) return null;
+  const isClosing = !open && rendered;
+
+  useEffect(() => {
+    if (isClosing) {
+      const t = setTimeout(() => setRendered(false), 200);
+      return () => clearTimeout(t);
+    }
+  }, [isClosing]);
+
+  useEffect(() => {
+    document.body.style.overflow = rendered ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [rendered]);
+
+  if (!rendered) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      {/* Backdrop */}
       <div
         className={cn(
-          'relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 animate-slide-up',
+          'absolute inset-0 bg-black/25 dark:bg-black/50 backdrop-blur-[2px]',
+          isClosing ? 'animate-fade-out' : 'animate-fade-in'
+        )}
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div
+        className={cn(
+          'relative w-full max-w-md',
+          'bg-white dark:bg-zinc-900',
+          'border border-zinc-100 dark:border-zinc-800/80',
+          'rounded-t-[24px] sm:rounded-2xl',
+          'shadow-2xl shadow-black/10 dark:shadow-black/60',
+          isClosing ? 'animate-slide-down' : 'animate-slide-up',
           className
         )}
       >
-        <div className="flex items-center justify-between mb-4">
-          {title && <h3 className="font-semibold text-zinc-100">{title}</h3>}
+        {/* Drag handle — mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+        </div>
+
+        <div className={cn('flex items-center justify-between px-6', title ? 'pb-4 pt-4 sm:pt-5' : 'pb-2 pt-4 sm:pt-5')}>
+          {title && (
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              {title}
+            </h3>
+          )}
           <button
             onClick={onClose}
-            className="ml-auto h-7 w-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors"
+            className={cn(
+              'h-7 w-7 rounded-lg flex items-center justify-center transition-colors',
+              'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700',
+              'text-zinc-400 dark:text-zinc-500',
+              !title && 'ml-auto'
+            )}
           >
-            <X size={14} />
+            <X size={13} />
           </button>
         </div>
-        {children}
+
+        {title && (
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 mx-6" />
+        )}
+
+        <div className="px-6 pb-6 pt-4">{children}</div>
       </div>
     </div>
   );

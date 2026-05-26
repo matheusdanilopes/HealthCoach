@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Droplets, Plus } from 'lucide-react';
+import { Droplets } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface WaterTrackerProps {
   current: number;
@@ -12,61 +13,87 @@ interface WaterTrackerProps {
 
 const QUICK_AMOUNTS = [150, 250, 350, 500];
 
-export default function WaterTracker({ current, target, userId, onUpdate }: WaterTrackerProps) {
-  const [loading, setLoading] = useState(false);
+export default function WaterTracker({ current, target, onUpdate }: WaterTrackerProps) {
+  const [loading, setLoading] = useState<number | null>(null);
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
-  const cups = Math.floor(current / 250);
+  const isComplete = pct >= 100;
 
   async function addWater(ml: number) {
-    setLoading(true);
+    setLoading(ml);
     await fetch('/api/water', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount_ml: ml }),
     });
     onUpdate(current + ml);
-    setLoading(false);
+    setLoading(null);
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Droplets size={16} className="text-sky-400" />
-          <p className="text-sm font-medium text-zinc-400">Hidratação</p>
+          <Droplets size={14} className={isComplete ? 'text-emerald-500' : 'text-sky-500'} />
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            Hidratação
+          </p>
         </div>
-        <span className="text-xs text-zinc-500">{cups} 🥛 copos</span>
-      </div>
-
-      <div className="flex items-end gap-3 mb-4">
-        <span className="text-2xl font-bold text-sky-400">
-          {current >= 1000 ? `${(current / 1000).toFixed(1)}L` : `${current}ml`}
-        </span>
-        <span className="text-sm text-zinc-500 mb-1">de {(target / 1000).toFixed(1)}L</span>
-        <span className={`ml-auto text-sm font-medium ${pct >= 100 ? 'text-emerald-400' : 'text-zinc-400'}`}>
+        <span className={cn(
+          'text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full',
+          isComplete
+            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+            : 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400'
+        )}>
           {Math.round(pct)}%
         </span>
       </div>
 
-      <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden mb-4">
+      <div className="flex items-baseline gap-1.5 mb-3">
+        <span className={cn(
+          'text-2xl font-bold tabular-nums leading-none tracking-tight',
+          isComplete ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
+        )}>
+          {current >= 1000 ? `${(current / 1000).toFixed(1)}L` : `${current}ml`}
+        </span>
+        <span className="text-sm text-zinc-400 dark:text-zinc-500">
+          / {(target / 1000).toFixed(1)}L
+        </span>
+      </div>
+
+      <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden mb-3">
         <div
-          className="h-full rounded-full bg-sky-500 transition-all duration-500"
+          className={cn(
+            'h-full rounded-full transition-all duration-700',
+            isComplete
+              ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+              : 'bg-gradient-to-r from-sky-500 to-sky-400'
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        {QUICK_AMOUNTS.map((ml) => (
-          <button
-            key={ml}
-            onClick={() => addWater(ml)}
-            disabled={loading}
-            className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-zinc-800 hover:bg-sky-500/10 hover:border-sky-500/30 border border-transparent text-zinc-400 hover:text-sky-400 transition-all text-xs font-medium disabled:opacity-50"
-          >
-            <Plus size={12} />
-            {ml}ml
-          </button>
-        ))}
+        {QUICK_AMOUNTS.map((ml) => {
+          const isLoading = loading === ml;
+          return (
+            <button
+              key={ml}
+              onClick={() => addWater(ml)}
+              disabled={loading !== null}
+              className={cn(
+                'py-2 rounded-lg text-[11px] font-semibold tabular-nums transition-all duration-150 active:scale-95',
+                isLoading
+                  ? isComplete ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'
+                  : isComplete
+                    ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+                    : 'bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/30',
+                'disabled:pointer-events-none disabled:opacity-50'
+              )}
+            >
+              +{ml}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -39,8 +39,8 @@ export default function WeightLogModal({
   return (
     <Modal open={open} onClose={onClose} title="Registrar peso">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <p className="text-sm text-zinc-500">
-          Registre seu peso diariamente para acompanhar sua evolução.
+        <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+          Registre seu peso diariamente para acompanhar sua evolução ao longo do tempo.
         </p>
         <Input
           label="Peso atual (kg)"

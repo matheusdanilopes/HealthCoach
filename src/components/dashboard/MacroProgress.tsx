@@ -1,4 +1,4 @@
-import ProgressBar from '@/components/ui/ProgressBar';
+import { cn } from '@/lib/utils';
 
 interface MacroProgressProps {
   protein: number;
@@ -10,34 +10,88 @@ interface MacroProgressProps {
 function getTargetMacros(targetCalories: number) {
   return {
     protein: Math.round((targetCalories * 0.3) / 4),
-    carbs: Math.round((targetCalories * 0.4) / 4),
-    fat: Math.round((targetCalories * 0.3) / 9),
+    carbs:   Math.round((targetCalories * 0.4) / 4),
+    fat:     Math.round((targetCalories * 0.3) / 9),
   };
+}
+
+interface MacroBarProps {
+  label: string;
+  value: number;
+  target: number;
+  color: string;
+  trackColor: string;
+  textColor: string;
+}
+
+function MacroBar({ label, value, target, color, trackColor, textColor }: MacroBarProps) {
+  const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0;
+  const isOver = value > target && target > 0;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+          {label}
+        </span>
+        <div className="flex items-baseline gap-0.5 tabular-nums">
+          <span className={cn('text-[13px] font-bold', isOver ? 'text-red-500' : textColor)}>
+            {Math.round(value)}
+          </span>
+          <span className="text-[11px] text-zinc-300 dark:text-zinc-600">/</span>
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">{target}g</span>
+        </div>
+      </div>
+      <div className={cn('h-1.5 w-full rounded-full overflow-hidden', trackColor)}>
+        <div
+          className={cn('h-full rounded-full transition-all duration-700', isOver ? 'bg-red-500' : color)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function MacroProgress({ protein, carbs, fat, targetCalories }: MacroProgressProps) {
   const targets = getTargetMacros(targetCalories);
 
-  const macros = [
-    { label: 'Proteínas', value: protein, target: targets.protein, color: 'bg-blue-500', unit: 'g' },
-    { label: 'Carboidratos', value: carbs, target: targets.carbs, color: 'bg-amber-500', unit: 'g' },
-    { label: 'Gorduras', value: fat, target: targets.fat, color: 'bg-rose-500', unit: 'g' },
-  ];
-
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-      <p className="text-sm font-medium text-zinc-400 mb-4">Macronutrientes</p>
-      <div className="flex flex-col gap-3">
-        {macros.map((m) => (
-          <ProgressBar
-            key={m.label}
-            value={m.value}
-            max={m.target}
-            label={m.label}
-            sublabel={`${Math.round(m.value)}g / ${m.target}g`}
-            color={m.color}
-          />
-        ))}
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
+      <div className="flex gap-0.5 mb-4">
+        <div className="h-[3px] flex-1 rounded-full bg-blue-500" />
+        <div className="h-[3px] flex-1 rounded-full bg-amber-400" />
+        <div className="h-[3px] flex-1 rounded-full bg-rose-400" />
+      </div>
+
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-4">
+        Macros
+      </p>
+
+      <div className="flex flex-col gap-4">
+        <MacroBar
+          label="Prot."
+          value={protein}
+          target={targets.protein}
+          color="bg-blue-500"
+          trackColor="bg-blue-100 dark:bg-blue-900/25"
+          textColor="text-blue-600 dark:text-blue-400"
+        />
+        <MacroBar
+          label="Carb."
+          value={carbs}
+          target={targets.carbs}
+          color="bg-amber-400"
+          trackColor="bg-amber-100 dark:bg-amber-900/25"
+          textColor="text-amber-600 dark:text-amber-400"
+        />
+        <MacroBar
+          label="Gord."
+          value={fat}
+          target={targets.fat}
+          color="bg-rose-400"
+          trackColor="bg-rose-100 dark:bg-rose-900/25"
+          textColor="text-rose-600 dark:text-rose-400"
+        />
       </div>
     </div>
   );

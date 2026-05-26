@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 import { todayISO } from '@/lib/utils';
 import DiaryClient from './DiaryClient';
 import type { FoodLog } from '@/types';
@@ -12,20 +12,21 @@ export default async function DiaryPage() {
   const today = todayISO();
   const userId = session.user.id;
 
-  const [profileRows, foodRows] = await Promise.all([
-    sql<{ target_calories: number }>`SELECT target_calories FROM users WHERE id = ${userId}`,
-    sql<FoodLog>`
-      SELECT id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at
-      FROM food_logs WHERE user_id = ${userId} AND log_date = ${today}
-      ORDER BY created_at
-    `,
+  const [{ data: profileData }, { data: foodData }] = await Promise.all([
+    supabase.from('users').select('target_calories').eq('id', userId).single(),
+    supabase
+      .from('food_logs')
+      .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+      .eq('user_id', userId)
+      .eq('log_date', today)
+      .order('created_at'),
   ]);
 
   return (
     <DiaryClient
       userId={userId}
-      initialLogs={foodRows}
-      targetCalories={profileRows[0]?.target_calories ?? 2000}
+      initialLogs={(foodData as FoodLog[]) ?? []}
+      targetCalories={profileData?.target_calories ?? 2000}
     />
   );
 }
