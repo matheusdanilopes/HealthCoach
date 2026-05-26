@@ -74,7 +74,7 @@ export default function RegisterPage() {
 
       <div className="w-full max-w-[380px] animate-fade-in">
         {/* Brand */}
-        <div className="flex flex-col items-center gap-4 mb-9">
+        <div className="flex flex-col items-center gap-3 mb-7">
           <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
             <Activity className="text-white" size={26} />
           </div>
@@ -82,7 +82,7 @@ export default function RegisterPage() {
             <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               HealthCoach AI
             </h1>
-            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
               Crie sua conta em 2 passos
             </p>
           </div>
@@ -106,18 +106,18 @@ export default function RegisterPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-[0_2px_12px_0_rgb(0,0,0,0.06)] dark:shadow-none p-10">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
           {step === 'account' ? (
             <>
-              <div className="mb-8">
+              <div className="mb-5">
                 <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
                   Criar conta
                 </h2>
-                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
                   Passo 1 de 2 — Acesso
                 </p>
               </div>
-              <form onSubmit={handleAccountStep} className="flex flex-col gap-6">
+              <form onSubmit={handleAccountStep} className="flex flex-col gap-4">
                 <Input
                   label="Nome completo"
                   placeholder="Seu nome"
@@ -144,7 +144,7 @@ export default function RegisterPage() {
                   error={error}
                   autoComplete="new-password"
                 />
-                <Button type="submit" className="w-full mt-2 gap-1.5">
+                <Button type="submit" className="w-full mt-1 gap-1.5">
                   Continuar
                   <ChevronRight size={14} />
                 </Button>
@@ -159,16 +159,16 @@ export default function RegisterPage() {
                 <ChevronLeft size={13} />
                 Voltar
               </button>
-              <div className="mb-8">
+              <div className="mb-5">
                 <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
                   Perfil de saúde
                 </h2>
-                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
                   Passo 2 de 2 — Anamnese
                 </p>
               </div>
 
-              <form onSubmit={handleProfileStep} className="flex flex-col gap-6">
+              <form onSubmit={handleProfileStep} className="flex flex-col gap-4">
                 <Input
                   label="Data de nascimento"
                   type="date"
@@ -269,7 +269,7 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <Button type="submit" loading={loading} className="w-full mt-2">
+                <Button type="submit" loading={loading} className="w-full mt-1">
                   Começar jornada
                 </Button>
               </form>

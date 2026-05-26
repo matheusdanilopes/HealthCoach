@@ -57,7 +57,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     .join('');
 
   return (
-    <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
+    <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
       {/* Identity */}
       <div className="flex items-center gap-4">
         <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-600/20">
@@ -74,7 +74,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       {/* Stats */}
       {profile?.tdee && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-3xl p-8">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-5">
             <div className="flex items-center gap-1.5 mb-3">
               <Zap size={12} className="text-amber-500" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -86,7 +86,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-3xl p-8">
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-2xl p-5">
             <div className="flex items-center gap-1.5 mb-3">
               <Target size={12} className="text-blue-600 dark:text-blue-400" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -103,12 +103,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Personal data form */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-8 py-5 border-b border-zinc-50 dark:border-zinc-800/60">
+        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Dados pessoais
           </p>
         </div>
-        <form onSubmit={handleSave} className="p-8 flex flex-col gap-7">
+        <form onSubmit={handleSave} className="p-5 flex flex-col gap-5">
           <Input
             label="Nome completo"
             value={fullName}
@@ -191,7 +191,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Account */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-8 py-5 border-b border-zinc-50 dark:border-zinc-800/60">
+        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Conta
           </p>

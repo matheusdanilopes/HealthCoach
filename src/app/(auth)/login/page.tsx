@@ -38,7 +38,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-[380px] animate-fade-in">
         {/* Brand */}
-        <div className="flex flex-col items-center gap-4 mb-10">
+        <div className="flex flex-col items-center gap-3 mb-7">
           <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
             <Activity className="text-white" size={26} />
           </div>
@@ -46,24 +46,24 @@ export default function LoginPage() {
             <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               HealthCoach AI
             </h1>
-            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
               Seu coach de saúde personalizado
             </p>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-[0_2px_12px_0_rgb(0,0,0,0.06)] dark:shadow-none p-10">
-          <div className="mb-8">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
+          <div className="mb-5">
             <h2 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Entrar na conta
             </h2>
-            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
               Bem-vindo de volta
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Input
               label="Email"
               type="email"
@@ -90,7 +90,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" loading={loading} className="w-full mt-2">
+            <Button type="submit" loading={loading} className="w-full mt-1">
               Entrar
             </Button>
           </form>

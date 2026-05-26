@@ -29,7 +29,7 @@ function MacroBar({ label, value, target, color, trackColor, textColor }: MacroB
   const isOver = value > target && target > 0;
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
           {label}
@@ -42,7 +42,7 @@ function MacroBar({ label, value, target, color, trackColor, textColor }: MacroB
           <span className="text-[11px] text-zinc-400 dark:text-zinc-500">{target}g</span>
         </div>
       </div>
-      <div className={cn('h-2 w-full rounded-full overflow-hidden', trackColor)}>
+      <div className={cn('h-1.5 w-full rounded-full overflow-hidden', trackColor)}>
         <div
           className={cn('h-full rounded-full transition-all duration-700', isOver ? 'bg-red-500' : color)}
           style={{ width: `${pct}%` }}
@@ -56,19 +56,18 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
   const targets = getTargetMacros(targetCalories);
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
-      {/* Tricolor accent strip */}
-      <div className="flex gap-0.5 mb-7">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
+      <div className="flex gap-0.5 mb-4">
         <div className="h-[3px] flex-1 rounded-full bg-blue-500" />
         <div className="h-[3px] flex-1 rounded-full bg-amber-400" />
         <div className="h-[3px] flex-1 rounded-full bg-rose-400" />
       </div>
 
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-6">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-4">
         Macros
       </p>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <MacroBar
           label="Prot."
           value={protein}
