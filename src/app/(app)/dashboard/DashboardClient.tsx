@@ -8,7 +8,7 @@ import { Scale, Plus, Dumbbell, Flame, TrendingDown } from 'lucide-react';
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
-import AddFoodModal from '@/components/diary/AddFoodModal';
+import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
@@ -154,7 +154,7 @@ export default function DashboardClient({
         </div>
       </div>
 
-      <AddFoodModal
+      <AIFoodLogger
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
         userId={userId}
