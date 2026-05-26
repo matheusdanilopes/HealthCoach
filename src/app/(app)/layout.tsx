@@ -36,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main
-        className="max-w-2xl mx-auto px-2"
+        className="max-w-2xl mx-auto px-5"
         style={{ paddingBottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }}
       >
         {children}
