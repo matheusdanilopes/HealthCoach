@@ -4,6 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 import SplashScreen from '@/components/SplashScreen';
+import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 export const metadata: Metadata = {
   title: 'HealthCoach AI',
@@ -12,6 +13,13 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'default',
     title: 'HealthCoach AI',
+  },
+  icons: {
+    apple: [
+      { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    shortcut: '/icons/icon-192x192.png',
   },
 };
 
@@ -38,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Script src="/theme-init.js" strategy="beforeInteractive" />
         <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
+        <PWAInstallPrompt />
         <ServiceWorkerRegistration />
       </body>
     </html>
