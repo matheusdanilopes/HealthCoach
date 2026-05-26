@@ -54,6 +54,7 @@ export default function Modal({ open, onClose, title, children, className }: Mod
           'border border-zinc-100 dark:border-zinc-800/80',
           'rounded-t-[24px] sm:rounded-2xl',
           'shadow-2xl shadow-black/10 dark:shadow-black/60',
+          'max-h-[calc(100dvh-56px)] sm:max-h-[calc(100dvh-2rem)] flex flex-col',
           isClosing ? 'animate-slide-down' : 'animate-slide-up',
           className
         )}
@@ -86,7 +87,7 @@ export default function Modal({ open, onClose, title, children, className }: Mod
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 mx-6" />
         )}
 
-        <div className="px-6 pb-6 pt-4">{children}</div>
+        <div className="px-6 pb-6 pt-4 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
