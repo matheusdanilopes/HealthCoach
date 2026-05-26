@@ -58,12 +58,13 @@ export async function POST(req: Request) {
     }
 
     const response = await getGemini().models.generateContent({
-      model: 'gemini-2.0-flash-lite',
+      model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts }],
       config: {
         systemInstruction: SYSTEM,
         maxOutputTokens: 1200,
         temperature: 0.2,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 
