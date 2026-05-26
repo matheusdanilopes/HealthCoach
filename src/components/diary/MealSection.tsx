@@ -34,7 +34,7 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 px-6 py-4 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/20 transition-colors"
