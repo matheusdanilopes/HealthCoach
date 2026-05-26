@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     }
 
     const response = await getGemini().models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       contents: [{ role: 'user', parts }],
       config: {
         systemInstruction: SYSTEM,
@@ -88,6 +88,13 @@ export async function POST(req: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Analyze API error:', msg);
+    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
+    if (is429) {
+      return NextResponse.json(
+        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
+        { status: 429 }
+      );
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
