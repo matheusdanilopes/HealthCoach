@@ -60,18 +60,18 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
 
       {/* Daily summary */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-7">
           Total do dia
         </p>
 
-        <div className="flex items-baseline gap-1.5 mb-4">
+        <div className="flex items-baseline gap-1.5 mb-5">
           <span className="text-[38px] font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none tracking-tight">
             {totalCalories.toLocaleString('pt-BR')}
           </span>
           <span className="text-base font-medium text-zinc-400 dark:text-zinc-500">kcal</span>
         </div>
 
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-4 mb-6">
           <div className="flex items-center gap-1.5">
             <Flame size={12} className="text-zinc-300 dark:text-zinc-600" />
             <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -104,7 +104,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
           )}
         </div>
 
-        <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+        <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
           <div
             className={cn(
               'h-full rounded-full transition-all duration-700',

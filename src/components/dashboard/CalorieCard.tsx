@@ -41,11 +41,11 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-5">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-7">
         Calorias hoje
       </p>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-6">
         {/* Numbers */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-1.5">
@@ -53,7 +53,7 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
               {consumed.toLocaleString('pt-BR')}
             </span>
           </div>
-          <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">
+          <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-3 font-medium">
             de{' '}
             <span className="text-zinc-600 dark:text-zinc-300 font-semibold">
               {target.toLocaleString('pt-BR')}
@@ -61,7 +61,7 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
             kcal
           </p>
 
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap gap-2 mt-6">
             <span className={cn(
               'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold tabular-nums',
               badgeClass

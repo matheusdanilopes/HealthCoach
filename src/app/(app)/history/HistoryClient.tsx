@@ -176,7 +176,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
       {/* Weight chart */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-7">
           <Scale size={13} className="text-blue-500" />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Tendência de peso
@@ -222,7 +222,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
       {/* Calorie chart */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl p-10 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-7">
           <BarChart2 size={13} className="text-emerald-500" />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Histórico calórico
@@ -270,12 +270,12 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           </ResponsiveContainer>
         )}
         <div className="flex items-center justify-center gap-5 mt-3 pt-3 border-t border-zinc-50 dark:border-zinc-800/60">
-          <span className="flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-            <span className="h-2 w-2 rounded-sm bg-emerald-500 opacity-80" />
+          <span className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+            <span className="h-2.5 w-2.5 rounded bg-emerald-500 opacity-80" />
             Abaixo da meta
           </span>
-          <span className="flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-            <span className="h-2 w-2 rounded-sm bg-red-500 opacity-80" />
+          <span className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+            <span className="h-2.5 w-2.5 rounded bg-red-500 opacity-80" />
             Acima da meta
           </span>
         </div>

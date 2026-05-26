@@ -108,7 +108,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             Dados pessoais
           </p>
         </div>
-        <form onSubmit={handleSave} className="p-8 flex flex-col gap-5">
+        <form onSubmit={handleSave} className="p-8 flex flex-col gap-7">
           <Input
             label="Nome completo"
             value={fullName}
@@ -137,11 +137,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           </div>
 
           {/* Activity level */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
               Nível de atividade
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {ACTIVITY_OPTIONS.map((opt) => {
                 const isSelected = activityLevel === opt.value;
                 return (
