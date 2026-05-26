@@ -3,6 +3,7 @@ import Script from 'next/script';
 import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
+import SplashScreen from '@/components/SplashScreen';
 
 export const metadata: Metadata = {
   title: 'HealthCoach AI',
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full antialiased">
         {/* Injected into server HTML before hydration — prevents dark-mode flash */}
         <Script src="/theme-init.js" strategy="beforeInteractive" />
+        <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
         <ServiceWorkerRegistration />
       </body>

@@ -31,7 +31,7 @@ const METRIC_CONFIGS: Record<MetricKey, {
   icon: React.ElementType;
   goodDown: boolean;
 }> = {
-  weight:       { label: 'Peso',        unit: 'kg',     color: '#2563eb', icon: Scale,    goodDown: true  },
+  weight:       { label: 'Peso',        unit: 'kg',     color: '#059669', icon: Scale,    goodDown: true  },
   muscle_mass:  { label: 'Músculos',    unit: 'kg',     color: '#10b981', icon: Dumbbell, goodDown: false },
   body_fat:     { label: 'Gordura',     unit: '%',      color: '#f59e0b', icon: Flame,    goodDown: true  },
   visceral_fat: { label: 'V. Visceral', unit: '',       color: '#ef4444', icon: Activity, goodDown: true  },
@@ -83,8 +83,8 @@ function CustomTooltip({
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 gap-5 animate-fade-in">
-      <div className="h-16 w-16 rounded-3xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
-        <Scale size={28} className="text-blue-500" />
+      <div className="h-16 w-16 rounded-3xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+        <Scale size={28} className="text-emerald-500" />
       </div>
       <div className="text-center">
         <p className="text-[15px] font-semibold text-zinc-800 dark:text-zinc-200">
@@ -389,7 +389,7 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
         {metrics.length > 0 && (
           <button
             onClick={openAdd}
-            className="h-9 w-9 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 flex items-center justify-center shadow-sm shadow-blue-600/30 transition-all duration-150"
+            className="h-9 w-9 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 flex items-center justify-center shadow-sm shadow-emerald-600/30 transition-all duration-150"
           >
             <Plus size={17} className="text-white" />
           </button>

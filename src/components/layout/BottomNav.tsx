@@ -34,12 +34,12 @@ function NavItem({
       className={cn(
         'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200',
         active
-          ? 'text-blue-600 dark:text-blue-400'
+          ? 'text-emerald-600 dark:text-emerald-400'
           : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
       )}
     >
       {active && (
-        <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-blue-600 dark:bg-blue-400" />
+        <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
       )}
       <Icon size={19} strokeWidth={active ? 2.25 : 1.75} className="transition-all duration-200" />
       <span className={cn(
@@ -99,14 +99,14 @@ export default function BottomNav() {
                       className={cn(
                         'flex items-center gap-3 px-4 py-3 transition-colors duration-150',
                         active
-                          ? 'bg-blue-50 dark:bg-blue-950/20'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/20'
                           : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
                       )}
                     >
                       <div className={cn(
                         'h-8 w-8 rounded-[10px] flex items-center justify-center flex-shrink-0',
                         active
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-emerald-600 text-white'
                           : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
                       )}>
                         <Icon size={14} />
@@ -114,7 +114,7 @@ export default function BottomNav() {
                       <div>
                         <p className={cn(
                           'text-[13px] font-semibold leading-none',
-                          active ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-800 dark:text-zinc-200'
+                          active ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-zinc-200'
                         )}>
                           {label}
                         </p>
@@ -136,12 +136,12 @@ export default function BottomNav() {
             className={cn(
               'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200',
               isBodyActive || open
-                ? 'text-blue-600 dark:text-blue-400'
+                ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
             )}
           >
             {(isBodyActive || open) && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-blue-600 dark:bg-blue-400" />
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             )}
             <Scale
               size={19}

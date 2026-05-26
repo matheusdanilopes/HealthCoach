@@ -7,7 +7,7 @@ import { signIn } from 'next-auth/react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import ThemeToggle from '@/components/ui/ThemeToggle';
-import { Activity } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,8 +39,8 @@ export default function LoginPage() {
       <div className="w-full max-w-[380px] animate-fade-in">
         {/* Brand */}
         <div className="flex flex-col items-center gap-3 mb-7">
-          <div className="h-[60px] w-[60px] rounded-[20px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
-            <Activity className="text-white" size={26} />
+          <div className="h-[60px] w-[60px] rounded-[20px] bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-xl shadow-emerald-600/25">
+            <LogoIcon size={30} />
           </div>
           <div className="text-center">
             <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
@@ -100,7 +100,7 @@ export default function LoginPage() {
           Não tem conta?{' '}
           <Link
             href="/register"
-            className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors"
+            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-medium transition-colors"
           >
             Criar conta
           </Link>

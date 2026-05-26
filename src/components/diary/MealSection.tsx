@@ -110,7 +110,7 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
 
           <button
             onClick={onAdd}
-            className="w-full flex items-center gap-2 px-5 py-3.5 text-[13px] text-blue-600 dark:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors font-medium"
+            className="w-full flex items-center gap-2 px-5 py-3.5 text-[13px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-colors font-medium"
           >
             <Plus size={13} strokeWidth={2.5} />
             Adicionar alimento

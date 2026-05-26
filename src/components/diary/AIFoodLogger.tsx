@@ -187,7 +187,7 @@ export default function AIFoodLogger({
               className={cn(
                 'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-[11px] font-semibold transition-all duration-150',
                 mealType === opt.value
-                  ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-400'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400'
                   : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
               )}
             >
@@ -233,7 +233,7 @@ export default function AIFoodLogger({
                   'border-zinc-200 dark:border-zinc-700/60',
                   'text-[14px] leading-relaxed text-zinc-800 dark:text-zinc-100',
                   'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
-                  'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400/60',
+                  'focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400/60',
                   'transition-all'
                 )}
               />
@@ -263,7 +263,7 @@ export default function AIFoodLogger({
                   className={cn(
                     'flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed h-44 cursor-pointer transition-all',
                     isDragging
-                      ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                      ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
                       : 'border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/80 dark:bg-zinc-800/40 hover:border-zinc-300 dark:hover:border-zinc-600'
                   )}
                 >
@@ -380,7 +380,7 @@ export default function AIFoodLogger({
                         </span>
                       )}
                     </p>
-                    <span className="text-[13px] font-bold tabular-nums text-blue-600 dark:text-blue-400 flex-shrink-0">
+                    <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                       {food.calories} kcal
                     </span>
                   </div>
@@ -400,12 +400,12 @@ export default function AIFoodLogger({
             </div>
 
             {/* Totals card */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/30 rounded-xl px-4 py-3.5 border border-blue-100 dark:border-blue-900/40">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 rounded-xl px-4 py-3.5 border border-emerald-100 dark:border-emerald-900/40">
               <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500 dark:text-blue-400">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
                   Total da refeição
                 </span>
-                <span className="text-[20px] font-bold tabular-nums text-blue-700 dark:text-blue-300 leading-none">
+                <span className="text-[20px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none">
                   {result.totalCalories} <span className="text-[13px] font-medium">kcal</span>
                 </span>
               </div>
@@ -415,7 +415,7 @@ export default function AIFoodLogger({
                   { label: 'Carboidratos', value: result.totalCarbs, unit: 'g', color: 'text-amber-600 dark:text-amber-400' },
                   { label: 'Gorduras', value: result.totalFat, unit: 'g', color: 'text-rose-500 dark:text-rose-400' },
                 ].map((macro, i, arr) => (
-                  <div key={macro.label} className={cn('flex-1 flex flex-col items-center', i < arr.length - 1 && 'border-r border-blue-100 dark:border-blue-900/40')}>
+                  <div key={macro.label} className={cn('flex-1 flex flex-col items-center', i < arr.length - 1 && 'border-r border-emerald-100 dark:border-emerald-900/40')}>
                     <span className={cn('text-[15px] font-bold tabular-nums', macro.color)}>
                       {macro.value}{macro.unit}
                     </span>

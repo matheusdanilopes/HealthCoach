@@ -108,7 +108,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
           <div
             className={cn(
               'h-full rounded-full transition-all duration-700',
-              isOver ? 'bg-red-500' : 'bg-blue-600'
+              isOver ? 'bg-red-500' : 'bg-emerald-600'
             )}
             style={{ width: `${pct}%` }}
           />
