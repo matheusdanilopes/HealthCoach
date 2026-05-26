@@ -50,6 +50,8 @@ export default function PWAInstallPrompt() {
   useEffect(() => {
     if (isStandalone()) return;
     try {
+      // Migrate old permanent key → remove it so it no longer blocks
+      localStorage.removeItem('pwa-prompt-dismissed');
       const until = Number(localStorage.getItem('pwa-prompt-dismissed-until') ?? 0);
       if (until && Date.now() < until) return;
     } catch {}
