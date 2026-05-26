@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     }
 
     const response = await getGemini().models.generateContent({
-      model: 'gemini-3.0-flash',
+      model: 'gemini-2.0-flash',
       contents: [{ role: 'user', parts }],
       config: {
         systemInstruction: SYSTEM,
