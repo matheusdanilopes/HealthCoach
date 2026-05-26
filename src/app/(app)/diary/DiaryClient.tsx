@@ -6,7 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
 import AddFoodModal from '@/components/diary/AddFoodModal';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
-import { Dumbbell, Plus } from 'lucide-react';
+import { Dumbbell, Plus, Flame, Leaf } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -55,41 +55,56 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Diário</h1>
       </div>
 
-      {/* Daily summary */}
+      {/* Daily summary — calorie breakdown */}
       <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="flex items-end justify-between mb-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
-              Total do dia
-            </p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
+          Total do dia
+        </p>
+
+        {/* Primary number */}
+        <p className="text-4xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none mb-1">
+          {totalCalories.toLocaleString('pt-BR')}
+          <span className="text-base font-medium text-zinc-400 dark:text-zinc-500 ml-2">kcal</span>
+        </p>
+
+        {/* Breakdown row */}
+        <div className="flex items-center gap-3 mt-3 mb-4">
+          <div className="flex items-center gap-1.5">
+            <Flame size={13} className="text-zinc-300 dark:text-zinc-600" />
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Consumido{' '}
+              <span className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
                 {totalCalories.toLocaleString('pt-BR')}
               </span>
-              <span className="text-sm text-zinc-400 dark:text-zinc-500">
-                / {targetCalories.toLocaleString('pt-BR')} kcal
+            </span>
+          </div>
+          <span className="text-zinc-200 dark:text-zinc-700">·</span>
+          <div className="flex items-center gap-1.5">
+            <Leaf size={13} className={isOver ? 'text-red-400' : 'text-emerald-400'} />
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              {isOver ? 'Excedido' : 'Restante'}{' '}
+              <span className={cn(
+                'font-semibold tabular-nums',
+                isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'
+              )}>
+                {Math.abs(remaining).toLocaleString('pt-BR')}
               </span>
-            </div>
+            </span>
           </div>
-          <div className="text-right">
-            {workoutCalories > 0 && (
-              <p className="text-xs font-semibold tabular-nums text-orange-500 mb-1">
-                +{workoutCalories.toLocaleString('pt-BR')} queimados
-              </p>
-            )}
-            <p className={cn(
-              'text-sm font-semibold tabular-nums',
-              isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'
-            )}>
-              {isOver
-                ? `-${Math.abs(remaining).toLocaleString('pt-BR')} kcal`
-                : `+${remaining.toLocaleString('pt-BR')} kcal`}
-            </p>
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-              {isOver ? 'excedido' : 'disponível'}
-            </p>
-          </div>
+          {workoutCalories > 0 && (
+            <>
+              <span className="text-zinc-200 dark:text-zinc-700">·</span>
+              <div className="flex items-center gap-1.5">
+                <Dumbbell size={12} className="text-orange-400" />
+                <span className="text-xs text-orange-500 font-semibold tabular-nums">
+                  +{workoutCalories.toLocaleString('pt-BR')}
+                </span>
+              </div>
+            </>
+          )}
         </div>
+
+        {/* Progress bar */}
         <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
           <div
             className={cn(
@@ -99,8 +114,13 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
             style={{ width: `${pct}%` }}
           />
         </div>
+
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2">
+          Meta: {targetCalories.toLocaleString('pt-BR')} kcal/dia
+        </p>
       </div>
 
+      {/* Meals */}
       <div className="flex flex-col gap-2.5">
         {MEAL_TYPES.map((meal) => (
           <MealSection

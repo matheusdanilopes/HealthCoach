@@ -15,8 +15,8 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
   const pct = target > 0 ? Math.min((net / target) * 100, 100) : 0;
   const isOver = net > target;
 
-  const circumference = 2 * Math.PI * 48;
-  const strokeDashoffset = circumference - (pct / 100) * circumference;
+  const r = 46;
+  const circumference = 2 * Math.PI * r;
 
   const statusColor = useMemo(() => {
     if (isOver) return '#ef4444';
@@ -24,7 +24,7 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
     return '#2563eb';
   }, [isOver, pct]);
 
-  const statusColorLight = useMemo(() => {
+  const trackColor = useMemo(() => {
     if (isOver) return '#fef2f2';
     if (pct > 85) return '#fffbeb';
     return '#eff6ff';
@@ -32,33 +32,64 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
 
   return (
     <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
-            Calorias
-          </p>
-          <p className="text-3xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
+        Calorias de hoje
+      </p>
+
+      <div className="flex items-center gap-5">
+        {/* Left: numbers */}
+        <div className="flex-1 min-w-0">
+          <p className="text-4xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none">
             {consumed.toLocaleString('pt-BR')}
           </p>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-            de {target.toLocaleString('pt-BR')} kcal
+          {/* Target — larger & more contrast */}
+          <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 mt-1.5">
+            de{' '}
+            <span className="text-zinc-700 dark:text-zinc-300">
+              {target.toLocaleString('pt-BR')}
+            </span>{' '}
+            kcal
           </p>
+
+          {/* Remaining / over chip */}
+          <div className={cn(
+            'inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg text-sm font-semibold tabular-nums',
+            remaining >= 0
+              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-500'
+          )}>
+            <span className={cn(
+              'h-1.5 w-1.5 rounded-full flex-shrink-0',
+              remaining >= 0 ? 'bg-blue-500' : 'bg-red-500'
+            )} />
+            {remaining >= 0
+              ? `${Math.abs(remaining).toLocaleString('pt-BR')} kcal restantes`
+              : `${Math.abs(remaining).toLocaleString('pt-BR')} kcal excedidos`}
+          </div>
+
+          {burned > 0 && (
+            <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-sm font-semibold tabular-nums text-orange-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-orange-500 flex-shrink-0" />
+              +{burned.toLocaleString('pt-BR')} kcal treino
+            </div>
+          )}
         </div>
 
+        {/* Right: circular progress */}
         <div className="relative flex-shrink-0">
-          <svg width="88" height="88" className="-rotate-90">
+          <svg width="108" height="108" className="-rotate-90">
             <circle
-              cx="44" cy="44" r="36"
+              cx="54" cy="54" r={r}
               fill="none"
-              stroke={statusColorLight}
-              strokeWidth="7"
-              className="dark:opacity-20"
+              stroke={trackColor}
+              strokeWidth="8"
+              className="dark:opacity-[0.15]"
             />
             <circle
-              cx="44" cy="44" r="36"
+              cx="54" cy="54" r={r}
               fill="none"
               stroke={statusColor}
-              strokeWidth="7"
+              strokeWidth="8"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={circumference - (pct / 100) * circumference}
@@ -66,41 +97,12 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none">
+            <span className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none">
               {Math.round(pct)}%
             </span>
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">da meta</span>
           </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className={cn(
-          'flex-1 rounded-xl p-3',
-          remaining >= 0
-            ? 'bg-blue-50 dark:bg-blue-900/20'
-            : 'bg-red-50 dark:bg-red-900/20'
-        )}>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-0.5">
-            {remaining >= 0 ? 'Restante' : 'Excedido'}
-          </p>
-          <p className={cn(
-            'text-base font-bold tabular-nums leading-none',
-            remaining >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500'
-          )}>
-            {Math.abs(remaining).toLocaleString('pt-BR')}
-            <span className="text-xs font-normal ml-1 text-zinc-400">kcal</span>
-          </p>
-        </div>
-
-        {burned > 0 && (
-          <div className="flex-1 rounded-xl p-3 bg-orange-50 dark:bg-orange-900/20">
-            <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-0.5">Treino</p>
-            <p className="text-base font-bold tabular-nums text-orange-500 leading-none">
-              +{burned.toLocaleString('pt-BR')}
-              <span className="text-xs font-normal ml-1 text-zinc-400">kcal</span>
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

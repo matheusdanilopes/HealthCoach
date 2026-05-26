@@ -15,35 +15,38 @@ function getTargetMacros(targetCalories: number) {
   };
 }
 
-interface MacroItemProps {
+interface MacroRowProps {
   label: string;
-  shortLabel: string;
   value: number;
   target: number;
   color: string;
-  bgColor: string;
   trackColor: string;
+  accentText: string;
 }
 
-function MacroItem({ label, shortLabel, value, target, color, bgColor, trackColor }: MacroItemProps) {
+function MacroRow({ label, value, target, color, trackColor, accentText }: MacroRowProps) {
   const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0;
   const isOver = value > target && target > 0;
 
   return (
-    <div className={cn('flex-1 rounded-xl p-3', bgColor)}>
-      <div className="flex items-baseline justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-medium">
-          {shortLabel}
+    <div>
+      {/* Label row */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          {label}
         </span>
         <span className={cn(
-          'text-xs font-semibold tabular-nums',
-          isOver ? 'text-red-500' : 'text-zinc-600 dark:text-zinc-400'
+          'text-sm font-bold tabular-nums',
+          isOver ? 'text-red-500' : accentText
         )}>
           {Math.round(value)}
-          <span className="text-zinc-400 dark:text-zinc-600 font-normal">/{target}g</span>
+          <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
+            {' '}/ {target}g
+          </span>
         </span>
       </div>
-      <div className={cn('h-1.5 w-full rounded-full overflow-hidden', trackColor)}>
+      {/* Progress bar */}
+      <div className={cn('h-2 w-full rounded-full overflow-hidden', trackColor)}>
         <div
           className={cn('h-full rounded-full transition-all duration-500', isOver ? 'bg-red-500' : color)}
           style={{ width: `${pct}%` }}
@@ -58,36 +61,33 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
 
   return (
     <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
         Macronutrientes
       </p>
-      <div className="flex gap-2">
-        <MacroItem
+      <div className="flex flex-col gap-4">
+        <MacroRow
           label="Proteínas"
-          shortLabel="Prot"
           value={protein}
           target={targets.protein}
           color="bg-blue-500"
-          bgColor="bg-blue-50 dark:bg-blue-900/20"
-          trackColor="bg-blue-100 dark:bg-blue-900/40"
+          trackColor="bg-blue-100 dark:bg-blue-900/30"
+          accentText="text-blue-600 dark:text-blue-400"
         />
-        <MacroItem
+        <MacroRow
           label="Carboidratos"
-          shortLabel="Carbs"
           value={carbs}
           target={targets.carbs}
           color="bg-amber-400"
-          bgColor="bg-amber-50 dark:bg-amber-900/20"
-          trackColor="bg-amber-100 dark:bg-amber-900/40"
+          trackColor="bg-amber-100 dark:bg-amber-900/30"
+          accentText="text-amber-600 dark:text-amber-400"
         />
-        <MacroItem
+        <MacroRow
           label="Gorduras"
-          shortLabel="Gord"
           value={fat}
           target={targets.fat}
           color="bg-rose-400"
-          bgColor="bg-rose-50 dark:bg-rose-900/20"
-          trackColor="bg-rose-100 dark:bg-rose-900/40"
+          trackColor="bg-rose-100 dark:bg-rose-900/30"
+          accentText="text-rose-600 dark:text-rose-400"
         />
       </div>
     </div>

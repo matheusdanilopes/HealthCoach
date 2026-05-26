@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { TrendingDown, TrendingUp, Minus, Activity, CheckCircle, Calendar } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, Activity, CheckCircle, Calendar, Scale, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -49,6 +49,22 @@ function CustomTooltipCal({ active, payload, label, target }: any) {
   );
 }
 
+function EmptyChart({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <div className="h-44 flex flex-col items-center justify-center gap-3 px-6">
+      <div className="h-12 w-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+        {icon}
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">{title}</p>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 leading-relaxed max-w-[220px]">
+          {subtitle}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function HistoryClient({ weightLogs, dailyCalData, targetCalories }: HistoryClientProps) {
   const [calRange, setCalRange] = useState<7 | 30>(7);
   const { theme } = useTheme();
@@ -84,9 +100,31 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
   return (
     <div className="flex flex-col gap-4 pt-6 pb-4">
-      <div>
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-0.5">Últimos 30 dias</p>
-        <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Evolução</h1>
+      {/* Header with period selector */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Evolução</h1>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+            {calRange === 7 ? 'Últimos 7 dias' : 'Últimos 30 dias'}
+          </p>
+        </div>
+        {/* Prominent date range selector */}
+        <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl p-1">
+          {([7, 30] as const).map((n) => (
+            <button
+              key={n}
+              onClick={() => setCalRange(n)}
+              className={cn(
+                'px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150',
+                calRange === n
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              )}
+            >
+              {n}d
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Stats row */}
@@ -96,7 +134,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           <p className={cn('text-lg font-bold tabular-nums leading-none', trendColor)}>
             {weightTrend > 0 ? '+' : ''}{weightTrend.toFixed(1)}kg
           </p>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1">Variação</p>
+          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">Variação</p>
         </div>
         <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">
@@ -105,7 +143,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400 leading-none">
             {consistencyPct}%
           </p>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1">Consistência</p>
+          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">Consistência</p>
         </div>
         <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">
@@ -114,7 +152,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           <p className="text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-200 leading-none">
             {dailyCalData.length}
           </p>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1">Registros</p>
+          <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">Registros</p>
         </div>
       </div>
 
@@ -127,11 +165,11 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           </p>
         </div>
         {weightLogs.length < 2 ? (
-          <div className="h-40 flex items-center justify-center">
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center max-w-[200px] leading-relaxed">
-              Registre seu peso por pelo menos 2 dias para ver o gráfico
-            </p>
-          </div>
+          <EmptyChart
+            icon={<Scale size={22} className="text-zinc-400 dark:text-zinc-500" />}
+            title="Nenhum dado ainda"
+            subtitle="Registre seu peso por pelo menos 2 dias para desbloquear o gráfico de tendência."
+          />
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={weightLogs} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
@@ -166,31 +204,18 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
       {/* Calorie chart */}
       <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart2 size={14} className="text-emerald-500" />
           <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Histórico de calorias
           </p>
-          <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-            {([7, 30] as const).map((n) => (
-              <button
-                key={n}
-                onClick={() => setCalRange(n)}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150',
-                  calRange === n
-                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                    : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300'
-                )}
-              >
-                {n}d
-              </button>
-            ))}
-          </div>
         </div>
         {filteredCalData.length === 0 ? (
-          <div className="h-40 flex items-center justify-center">
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">Nenhum registro encontrado</p>
-          </div>
+          <EmptyChart
+            icon={<BarChart2 size={22} className="text-zinc-400 dark:text-zinc-500" />}
+            title="Sem registros neste período"
+            subtitle="Registre suas refeições diariamente para ver o histórico de calorias aqui."
+          />
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={filteredCalData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
