@@ -129,14 +129,14 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
+        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">{trendIcon}</div>
           <p className={cn('text-lg font-bold tabular-nums leading-none', trendColor)}>
             {weightTrend > 0 ? '+' : ''}{weightTrend.toFixed(1)}kg
           </p>
           <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">Variação</p>
         </div>
-        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
+        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">
             <CheckCircle size={16} className="text-emerald-500" />
           </div>
@@ -145,7 +145,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
           </p>
           <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">Consistência</p>
         </div>
-        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
+        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">
             <Calendar size={16} className="text-blue-500" />
           </div>
@@ -157,7 +157,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
       </div>
 
       {/* Weight chart */}
-      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
         <div className="flex items-center gap-2 mb-4">
           <Activity size={14} className="text-blue-500" />
           <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
@@ -203,7 +203,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
       </div>
 
       {/* Calorie chart */}
-      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
         <div className="flex items-center gap-2 mb-4">
           <BarChart2 size={14} className="text-emerald-500" />
           <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">

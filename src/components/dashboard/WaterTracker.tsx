@@ -32,7 +32,7 @@ export default function WaterTracker({ current, target, userId, onUpdate }: Wate
   const activeColor = isComplete ? 'text-emerald-500' : 'text-sky-600 dark:text-sky-400';
 
   return (
-    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">

@@ -56,7 +56,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
       </div>
 
       {/* Daily summary — calorie breakdown */}
-      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
         <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
           Total do dia
         </p>
@@ -134,7 +134,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
       </div>
 
       {workouts.length > 0 && (
-        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
           <div className="flex items-center gap-2 mb-3">
             <Dumbbell size={14} className="text-orange-500" />
             <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Treinos</p>

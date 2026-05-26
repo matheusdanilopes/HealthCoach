@@ -37,7 +37,7 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
     <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors"
+        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors"
       >
         <span className="text-lg leading-none">{getMealIcon(mealType)}</span>
         <div className="flex-1 text-left">
@@ -74,7 +74,7 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
               {logs.map((log) => (
                 <li
                   key={log.id}
-                  className="flex items-center gap-3 px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
+                  className="flex items-center gap-3 px-6 py-3 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-zinc-800 dark:text-zinc-200 truncate font-medium">
@@ -105,7 +105,7 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
 
           <button
             onClick={onAdd}
-            className="w-full flex items-center gap-2 px-5 py-3 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
+            className="w-full flex items-center gap-2 px-6 py-3 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
           >
             <Plus size={14} strokeWidth={2.5} />
             Adicionar alimento
