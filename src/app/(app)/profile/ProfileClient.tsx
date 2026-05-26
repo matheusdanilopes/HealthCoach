@@ -74,7 +74,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       {/* Stats */}
       {profile?.tdee && (
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-4">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-5">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Zap size={12} className="text-amber-500" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -86,7 +86,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-2xl p-4">
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-2xl p-5">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Target size={12} className="text-blue-600 dark:text-blue-400" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -103,12 +103,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Personal data form */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+        <div className="px-6 py-4 border-b border-zinc-50 dark:border-zinc-800/60">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Dados pessoais
           </p>
         </div>
-        <form onSubmit={handleSave} className="p-5 flex flex-col gap-4">
+        <form onSubmit={handleSave} className="p-6 flex flex-col gap-4">
           <Input
             label="Nome completo"
             value={fullName}
@@ -191,12 +191,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Account */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+        <div className="px-6 py-4 border-b border-zinc-50 dark:border-zinc-800/60">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Conta
           </p>
         </div>
-        <div className="p-2">
+        <div className="p-3">
           <Link
             href="/admin"
             className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"

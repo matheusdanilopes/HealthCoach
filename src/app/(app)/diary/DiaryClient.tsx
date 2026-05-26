@@ -59,7 +59,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
       </div>
 
       {/* Daily summary */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-3">
           Total do dia
         </p>
@@ -131,7 +131,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
       {/* Workouts */}
       {workouts.length > 0 && (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-          <div className="flex items-center gap-2.5 px-5 py-4">
+          <div className="flex items-center gap-2.5 px-6 py-4">
             <Dumbbell size={14} className="text-orange-500" />
             <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200 flex-1">
               Treinos
@@ -144,7 +144,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
             {workouts.map((w) => (
               <div
                 key={w.id}
-                className="flex items-center justify-between px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
+                className="flex items-center justify-between px-6 py-3.5 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
               >
                 <span className="text-[13px] text-zinc-600 dark:text-zinc-400">{w.food_name}</span>
                 <span className="text-[13px] font-semibold tabular-nums text-orange-500">
