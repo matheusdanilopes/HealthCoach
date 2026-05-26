@@ -8,7 +8,7 @@ import { Scale, Plus, Dumbbell, Flame, TrendingDown } from 'lucide-react';
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
-import AddFoodModal from '@/components/diary/AddFoodModal';
+import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
@@ -95,7 +95,7 @@ export default function DashboardClient({
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setAddFoodOpen(true)}
-            className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-sm shadow-blue-600/25 transition-all active:scale-[0.97]"
+            className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium shadow-sm shadow-emerald-600/25 transition-all active:scale-[0.97]"
           >
             <Plus size={15} strokeWidth={2.5} />
             Registrar refeição
@@ -154,7 +154,7 @@ export default function DashboardClient({
         </div>
       </div>
 
-      <AddFoodModal
+      <AIFoodLogger
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
         userId={userId}

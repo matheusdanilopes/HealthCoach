@@ -1,0 +1,447 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
+import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react';
+import type { FoodLog, MealType } from '@/types';
+
+const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
+  { value: 'breakfast', label: 'Café',   icon: '☀️' },
+  { value: 'lunch',     label: 'Almoço', icon: '🍽️' },
+  { value: 'dinner',    label: 'Jantar',  icon: '🌙' },
+  { value: 'snack',     label: 'Lanche',  icon: '🍎' },
+];
+
+interface FoodItem {
+  name: string;
+  quantity: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface AnalysisResult {
+  foods: FoodItem[];
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+}
+
+interface AIFoodLoggerProps {
+  open: boolean;
+  onClose: () => void;
+  userId: string;
+  defaultMeal?: MealType;
+  onAdded: (log: FoodLog) => void;
+}
+
+export default function AIFoodLogger({
+  open,
+  onClose,
+  defaultMeal = 'lunch',
+  onAdded,
+}: AIFoodLoggerProps) {
+  const [tab, setTab] = useState<'text' | 'image'>('text');
+  const [mealType, setMealType] = useState<MealType>(defaultMeal);
+  const [textInput, setTextInput] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setMealType(defaultMeal);
+      setTab('text');
+      setTextInput('');
+      setImageFile(null);
+      setImagePreview(null);
+      setResult(null);
+      setError(null);
+    }
+  }, [open, defaultMeal]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [textInput]);
+
+  function handleImageSelect(file: File) {
+    setImageFile(file);
+    setResult(null);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleImageSelect(file);
+    e.target.value = '';
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) handleImageSelect(file);
+  }
+
+  function removeImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    setResult(null);
+  }
+
+  function switchTab(t: 'text' | 'image') {
+    setTab(t);
+    setResult(null);
+    setError(null);
+  }
+
+  async function analyze() {
+    setAnalyzing(true);
+    setError(null);
+    try {
+      let body: Record<string, unknown>;
+      if (tab === 'text') {
+        if (!textInput.trim()) return;
+        body = { type: 'text', description: textInput.trim() };
+      } else {
+        if (!imagePreview || !imageFile) return;
+        body = {
+          type: 'image',
+          imageBase64: imagePreview.split(',')[1],
+          mimeType: imageFile.type || 'image/jpeg',
+        };
+      }
+      const res = await fetch('/api/food/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Erro desconhecido');
+      setResult(json as AnalysisResult);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleConfirm() {
+    if (!result) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const promises = result.foods.map((food) =>
+        fetch('/api/food', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
+            meal_type: mealType,
+            calories: food.calories,
+            protein: food.protein ?? null,
+            carbs: food.carbs ?? null,
+            fat: food.fat ?? null,
+          }),
+        }).then((r) => r.json() as Promise<FoodLog>)
+      );
+      const logs = await Promise.all(promises);
+      logs.forEach((log) => onAdded(log));
+      onClose();
+    } catch {
+      setError('Erro ao salvar. Tente novamente.');
+      setSaving(false);
+    }
+  }
+
+  const canAnalyze = tab === 'text' ? textInput.trim().length > 0 : !!imagePreview;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Registrar refeição com IA">
+      <div className="flex flex-col gap-4">
+        {/* Meal type selector */}
+        <div className="flex gap-1.5">
+          {MEAL_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setMealType(opt.value)}
+              className={cn(
+                'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-[11px] font-semibold transition-all duration-150',
+                mealType === opt.value
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+              )}
+            >
+              <span className="text-base leading-none">{opt.icon}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Mode tabs */}
+        {!result && (
+          <div className="flex bg-zinc-100 dark:bg-zinc-800/60 rounded-xl p-1 gap-1">
+            {(['text', 'image'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => switchTab(t)}
+                className={cn(
+                  'flex-1 py-2 rounded-lg text-[13px] font-medium transition-all',
+                  tab === t
+                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+                )}
+              >
+                {t === 'text' ? 'Texto' : 'Imagem'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Text input */}
+        {!result && tab === 'text' && (
+          <div className="flex flex-col gap-3">
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={textInput}
+                onChange={(e) => { setTextInput(e.target.value); setError(null); }}
+                placeholder="Ex: arroz, feijão e frango grelhado"
+                rows={3}
+                className={cn(
+                  'w-full resize-none rounded-xl border bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3',
+                  'border-zinc-200 dark:border-zinc-700/60',
+                  'text-[14px] leading-relaxed text-zinc-800 dark:text-zinc-100',
+                  'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
+                  'focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400/60',
+                  'transition-all'
+                )}
+              />
+            </div>
+            <Button
+              onClick={analyze}
+              loading={analyzing}
+              disabled={!canAnalyze}
+              className="w-full gap-2"
+            >
+              <Sparkles size={14} />
+              Analisar com IA
+            </Button>
+          </div>
+        )}
+
+        {/* Image input */}
+        {!result && tab === 'image' && (
+          <div className="flex flex-col gap-3">
+            {!imagePreview ? (
+              <>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed h-44 cursor-pointer transition-all',
+                    isDragging
+                      ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                      : 'border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/80 dark:bg-zinc-800/40 hover:border-zinc-300 dark:hover:border-zinc-600'
+                  )}
+                >
+                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-700/60">
+                    <ImagePlus size={22} className="text-zinc-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">
+                      Arraste ou clique para enviar
+                    </p>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                      JPG · PNG · WEBP
+                    </p>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-[13px] font-medium transition-all',
+                      'border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40',
+                      'text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    )}
+                  >
+                    <Camera size={14} />
+                    Câmera
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-[13px] font-medium transition-all',
+                      'border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40',
+                      'text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    )}
+                  >
+                    <ImagePlus size={14} />
+                    Galeria
+                  </button>
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="relative rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-sm">
+                <img src={imagePreview} alt="Preview da refeição" className="w-full h-52 object-cover" />
+                <button
+                  onClick={removeImage}
+                  className="absolute top-2.5 right-2.5 h-8 w-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-colors"
+                >
+                  <X size={13} className="text-white" />
+                </button>
+              </div>
+            )}
+
+            <Button
+              onClick={analyze}
+              loading={analyzing}
+              disabled={!canAnalyze}
+              className="w-full gap-2"
+            >
+              <Sparkles size={14} />
+              Analisar imagem
+            </Button>
+          </div>
+        )}
+
+        {/* Analysis result */}
+        {result && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-500 flex-shrink-0" />
+              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 flex-1">
+                {result.foods.length} alimento{result.foods.length !== 1 ? 's' : ''} identificado{result.foods.length !== 1 ? 's' : ''}
+              </p>
+              <button
+                type="button"
+                onClick={() => setResult(null)}
+                className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                <RotateCcw size={11} />
+                Refazer
+              </button>
+            </div>
+
+            {/* Food cards */}
+            <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
+              {result.foods.map((food, i) => (
+                <div
+                  key={i}
+                  className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug flex-1">
+                      {food.name}
+                      {food.quantity && (
+                        <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
+                          · {food.quantity}
+                        </span>
+                      )}
+                    </p>
+                    <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                      {food.calories} kcal
+                    </span>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      P <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.protein}g</span>
+                    </span>
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      C <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.carbs}g</span>
+                    </span>
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      G <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.fat}g</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Totals card */}
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 rounded-xl px-4 py-3.5 border border-emerald-100 dark:border-emerald-900/40">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                  Total da refeição
+                </span>
+                <span className="text-[20px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none">
+                  {result.totalCalories} <span className="text-[13px] font-medium">kcal</span>
+                </span>
+              </div>
+              <div className="flex gap-0">
+                {[
+                  { label: 'Proteína', value: result.totalProtein, unit: 'g', color: 'text-violet-600 dark:text-violet-400' },
+                  { label: 'Carboidratos', value: result.totalCarbs, unit: 'g', color: 'text-amber-600 dark:text-amber-400' },
+                  { label: 'Gorduras', value: result.totalFat, unit: 'g', color: 'text-rose-500 dark:text-rose-400' },
+                ].map((macro, i, arr) => (
+                  <div key={macro.label} className={cn('flex-1 flex flex-col items-center', i < arr.length - 1 && 'border-r border-emerald-100 dark:border-emerald-900/40')}>
+                    <span className={cn('text-[15px] font-bold tabular-nums', macro.color)}>
+                      {macro.value}{macro.unit}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                      {macro.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Button
+              onClick={handleConfirm}
+              loading={saving}
+              className="w-full"
+            >
+              Confirmar e salvar
+            </Button>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
+        )}
+      </div>
+    </Modal>
+  );
+}

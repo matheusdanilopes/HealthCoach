@@ -18,7 +18,7 @@ export default function Input({ label, error, className, ...props }: InputProps)
         className={cn(
           'h-11 w-full rounded-xl bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50',
           'px-3.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400/80 dark:focus:border-blue-500/60',
+          'focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 dark:focus:border-emerald-500/60',
           'transition-all duration-150',
           error && 'border-red-400/80 focus:ring-red-400/25',
           className

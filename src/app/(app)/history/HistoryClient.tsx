@@ -100,7 +100,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
   const gridColor   = isDark ? '#1f1f23' : '#f4f4f5';
   const tickColor   = isDark ? '#52525b' : '#a1a1aa';
   const cursorColor = isDark ? '#27272a' : '#f4f4f5';
-  const lineColor   = isDark ? '#60a5fa' : '#2563eb';
+  const lineColor   = isDark ? '#34d399' : '#059669';
 
   return (
     <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
@@ -163,7 +163,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
         {/* Records */}
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none text-center">
           <div className="flex items-center justify-center mb-2">
-            <Calendar size={15} className="text-blue-500" />
+            <Calendar size={15} className="text-emerald-500" />
           </div>
           <p className="text-base font-bold tabular-nums text-zinc-800 dark:text-zinc-200 leading-none">
             {dailyCalData.length}
@@ -177,7 +177,7 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
       {/* Weight chart */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
         <div className="flex items-center gap-2 mb-4">
-          <Scale size={13} className="text-blue-500" />
+          <Scale size={13} className="text-emerald-500" />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Tendência de peso
           </p>

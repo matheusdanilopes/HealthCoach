@@ -81,7 +81,7 @@ INSTRUÇÕES:
     }));
 
     const response = await getGemini().models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents,
       config: {
         systemInstruction,
@@ -89,6 +89,7 @@ INSTRUÇÕES:
         toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
         maxOutputTokens: 500,
         temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 
@@ -134,7 +135,7 @@ INSTRUÇÕES:
         // Follow-up with the function response
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
         const followUp = await getGemini().models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: [
             ...contents,
             { role: 'model', parts: modelParts },
@@ -143,7 +144,7 @@ INSTRUÇÕES:
               parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
             },
           ],
-          config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7 },
+          config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
         });
 
         assistantMessage = followUp.text ?? '';

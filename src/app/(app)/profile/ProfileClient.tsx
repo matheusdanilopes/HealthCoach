@@ -60,7 +60,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
       {/* Identity */}
       <div className="flex items-center gap-4">
-        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-600/20">
+        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/20">
           <span className="text-lg font-bold text-white tracking-tight">{initials}</span>
         </div>
         <div className="min-w-0 flex-1">
@@ -86,14 +86,14 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-2xl p-5">
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/30 rounded-2xl p-5">
             <div className="flex items-center gap-1.5 mb-3">
-              <Target size={12} className="text-blue-600 dark:text-blue-400" />
+              <Target size={12} className="text-emerald-600 dark:text-emerald-400" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 Meta
               </p>
             </div>
-            <p className="text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400 leading-none tracking-tight">
+            <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400 leading-none tracking-tight">
               {profile.target_calories?.toLocaleString('pt-BR')}
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
@@ -152,7 +152,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                     className={cn(
                       'flex flex-col items-center gap-2 px-2 py-3.5 rounded-xl border text-center transition-all duration-150 active:scale-[0.97]',
                       isSelected
-                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
                         : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
                     )}
                   >
@@ -160,14 +160,14 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                     <div>
                       <p className={cn(
                         'text-[11px] font-semibold leading-none',
-                        isSelected ? 'text-blue-700 dark:text-blue-400' : 'text-zinc-700 dark:text-zinc-300'
+                        isSelected ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'
                       )}>
                         {opt.label}
                       </p>
                       <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{opt.desc}</p>
                     </div>
                     {isSelected && (
-                      <div className="h-3.5 w-3.5 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center">
+                      <div className="h-3.5 w-3.5 rounded-full bg-emerald-600 dark:bg-emerald-500 flex items-center justify-center">
                         <Check size={7} className="text-white" strokeWidth={3} />
                       </div>
                     )}
