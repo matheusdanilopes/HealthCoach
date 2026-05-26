@@ -81,7 +81,7 @@ INSTRUÇÕES:
     }));
 
     const response = await getGemini().models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents,
       config: {
         systemInstruction,
@@ -134,7 +134,7 @@ INSTRUÇÕES:
         // Follow-up with the function response
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
         const followUp = await getGemini().models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: [
             ...contents,
             { role: 'model', parts: modelParts },
