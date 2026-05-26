@@ -44,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full antialiased">
         {/* Injected into server HTML before hydration — prevents dark-mode flash */}
         <Script src="/theme-init.js" strategy="beforeInteractive" />
+        <Script src="/pwa-init.js" strategy="beforeInteractive" />
         <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
         <PWAInstallPrompt />

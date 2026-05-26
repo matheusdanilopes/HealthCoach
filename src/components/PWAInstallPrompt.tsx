@@ -1,16 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Download, X, Share2 } from 'lucide-react';
 import { LogoIcon } from './ui/Logo';
 
-type Platform = 'android' | 'ios' | 'other';
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
-function detectPlatform(): Platform {
-  const ua = navigator.userAgent.toLowerCase();
-  if (/iphone|ipad|ipod/.test(ua)) return 'ios';
-  if (/android/.test(ua)) return 'android';
-  return 'other';
+declare global {
+  interface Window {
+    __pwaInstallEvent: BeforeInstallPromptEvent | null;
+  }
+  interface WindowEventMap {
+    'pwa-install-ready': Event;
+  }
+}
+
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  // iPadOS 13+ pretends to be desktop — detect via touch points
+  return /iphone|ipad|ipod/i.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function isStandalone(): boolean {
@@ -20,58 +33,62 @@ function isStandalone(): boolean {
   );
 }
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
 export default function PWAInstallPrompt() {
-  const [platform, setPlatform] = useState<Platform | null>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [show, setShow] = useState(false);
+  const [ios, setIos] = useState(false);
+  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installing, setInstalling] = useState(false);
+
+  const dismiss = useCallback(() => {
+    setShow(false);
+    try { localStorage.setItem('pwa-prompt-dismissed', '1'); } catch {}
+  }, []);
 
   useEffect(() => {
     if (isStandalone()) return;
-    try {
-      if (localStorage.getItem('pwa-prompt-dismissed')) return;
-    } catch {}
+    try { if (localStorage.getItem('pwa-prompt-dismissed')) return; } catch {}
 
-    const p = detectPlatform();
-    setPlatform(p);
+    const onIOS = isIOS();
+    setIos(onIOS);
 
-    if (p === 'android') {
-      const handler = (e: Event) => {
-        e.preventDefault();
-        setDeferredPrompt(e as BeforeInstallPromptEvent);
-        setShow(true);
-      };
-      window.addEventListener('beforeinstallprompt', handler);
-      return () => window.removeEventListener('beforeinstallprompt', handler);
-    }
-
-    if (p === 'ios') {
-      const t = setTimeout(() => setShow(true), 3000);
+    if (onIOS) {
+      const t = setTimeout(() => setShow(true), 2500);
       return () => clearTimeout(t);
     }
+
+    // Check if the event was already captured before React mounted
+    const stored = window.__pwaInstallEvent;
+    if (stored) {
+      setPrompt(stored);
+      setShow(true);
+      return;
+    }
+
+    // Otherwise wait for it (fires on first eligible visit or after previous dismiss expires)
+    function onReady() {
+      const e = window.__pwaInstallEvent;
+      if (e) {
+        setPrompt(e);
+        setShow(true);
+      }
+    }
+    window.addEventListener('pwa-install-ready', onReady);
+    return () => window.removeEventListener('pwa-install-ready', onReady);
   }, []);
 
-  function dismiss() {
-    setShow(false);
-    try { localStorage.setItem('pwa-prompt-dismissed', '1'); } catch {}
-  }
-
   async function install() {
-    if (!deferredPrompt) return;
+    if (!prompt) return;
     setInstalling(true);
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setShow(false);
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === 'accepted') {
+      setShow(false);
+      window.__pwaInstallEvent = null;
+    }
     setInstalling(false);
-    setDeferredPrompt(null);
   }
 
-  if (!show || !platform || platform === 'other') return null;
+  if (!show) return null;
 
   return (
     <div className="fixed bottom-[80px] left-3 right-3 z-[150] sm:left-auto sm:right-4 sm:w-[340px] animate-slide-up">
@@ -97,21 +114,21 @@ export default function PWAInstallPrompt() {
         </div>
 
         <div className="p-4">
-          {platform === 'ios' ? (
+          {ios ? (
             <div className="flex flex-col gap-2.5">
-              <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-1">
+              <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-0.5">
                 Para instalar no iPhone ou iPad:
               </p>
-              <div className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3.5 py-2.5">
-                <Share2 size={15} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                <span className="text-[12px] text-zinc-700 dark:text-zinc-300">
-                  1. Toque em <strong>Compartilhar</strong> (ícone de caixa com seta)
+              <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3.5 py-2.5">
+                <Share2 size={15} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <span className="text-[12px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                  Toque em <strong>Compartilhar</strong> (ícone de caixa com seta)
                 </span>
               </div>
-              <div className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3.5 py-2.5">
-                <Download size={15} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                <span className="text-[12px] text-zinc-700 dark:text-zinc-300">
-                  2. Selecione <strong>Adicionar à Tela de Início</strong>
+              <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3.5 py-2.5">
+                <Download size={15} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <span className="text-[12px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                  Selecione <strong>Adicionar à Tela de Início</strong>
                 </span>
               </div>
               <button
@@ -124,7 +141,7 @@ export default function PWAInstallPrompt() {
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Instale o app para acesso rápido, offline e experiência nativa.
+                Instale para acesso rápido, notificações e experiência nativa.
               </p>
               <button
                 onClick={install}
