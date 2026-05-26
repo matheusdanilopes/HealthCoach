@@ -7,7 +7,8 @@ import { signIn } from 'next-auth/react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import ThemeToggle from '@/components/ui/ThemeToggle';
-import { Activity, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Activity, ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const ACTIVITY_OPTIONS = [
   { value: 'sedentary', label: 'Sedentário', desc: 'Pouco ou nenhum exercício' },
@@ -66,49 +67,55 @@ export default function RegisterPage() {
   const currentStepIndex = steps.indexOf(step);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 bg-zinc-50 dark:bg-zinc-950 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 bg-[#f8f8f8] dark:bg-[#0a0a0b] py-10">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
-      <div className="w-full max-w-sm animate-fade-in">
+      <div className="w-full max-w-[360px] animate-fade-in">
         {/* Brand */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20">
+        <div className="flex flex-col items-center gap-3 mb-7">
+          <div className="h-[52px] w-[52px] rounded-[18px] bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/25">
             <Activity className="text-white" size={22} />
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <h1 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               HealthCoach AI
             </h1>
-            <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1">
               Crie sua conta em 2 passos
             </p>
           </div>
+
           {/* Step indicator */}
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-0.5">
             {steps.map((s, i) => (
               <div
                 key={s}
-                className={`h-1 rounded-full transition-all duration-300 ${
+                className={cn(
+                  'h-1 rounded-full transition-all duration-300',
                   i === currentStepIndex
                     ? 'w-8 bg-blue-600'
                     : i < currentStepIndex
-                      ? 'w-4 bg-blue-300 dark:bg-blue-700'
-                      : 'w-4 bg-zinc-200 dark:bg-zinc-700'
-                }`}
+                      ? 'w-5 bg-blue-400 dark:bg-blue-600'
+                      : 'w-5 bg-zinc-200 dark:bg-zinc-700'
+                )}
               />
             ))}
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none p-6">
           {step === 'account' ? (
             <>
               <div className="mb-5">
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Criar conta</h2>
-                <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">Passo 1 de 2 — Acesso</p>
+                <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  Criar conta
+                </h2>
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                  Passo 1 de 2 — Acesso
+                </p>
               </div>
               <form onSubmit={handleAccountStep} className="flex flex-col gap-4">
                 <Input
@@ -137,8 +144,9 @@ export default function RegisterPage() {
                   error={error}
                   autoComplete="new-password"
                 />
-                <Button type="submit" className="w-full mt-1">
-                  Continuar <ChevronRight size={15} />
+                <Button type="submit" className="w-full mt-1 gap-1.5">
+                  Continuar
+                  <ChevronRight size={14} />
                 </Button>
               </form>
             </>
@@ -146,13 +154,18 @@ export default function RegisterPage() {
             <>
               <button
                 onClick={() => setStep('account')}
-                className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-4 transition-colors"
+                className="flex items-center gap-1 text-[12px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mb-4 transition-colors"
               >
-                <ChevronLeft size={14} /> Voltar
+                <ChevronLeft size={13} />
+                Voltar
               </button>
               <div className="mb-5">
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Perfil de saúde</h2>
-                <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">Passo 2 de 2 — Anamnese</p>
+                <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  Perfil de saúde
+                </h2>
+                <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                  Passo 2 de 2 — Anamnese
+                </p>
               </div>
 
               <form onSubmit={handleProfileStep} className="flex flex-col gap-4">
@@ -165,7 +178,7 @@ export default function RegisterPage() {
                 />
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                     Sexo biológico
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -174,11 +187,12 @@ export default function RegisterPage() {
                         key={opt.value}
                         type="button"
                         onClick={() => setSex(opt.value as 'male' | 'female')}
-                        className={`h-10 rounded-xl border text-sm font-medium transition-all ${
+                        className={cn(
+                          'h-10 rounded-xl border text-[13px] font-medium transition-all duration-150',
                           sex === opt.value
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400'
-                            : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
-                        }`}
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700/60 text-blue-700 dark:text-blue-400'
+                            : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        )}
                       >
                         {opt.label}
                       </button>
@@ -211,7 +225,7 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                     Nível de atividade
                   </label>
                   <div className="flex flex-col gap-1.5">
@@ -220,27 +234,27 @@ export default function RegisterPage() {
                         key={opt.value}
                         type="button"
                         onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
-                        className={`flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${
+                        className={cn(
+                          'flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all duration-150',
                           activityLevel === opt.value
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                            : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 hover:border-zinc-300 dark:hover:border-zinc-600'
-                        }`}
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60'
+                            : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        )}
                       >
                         <div>
-                          <p className={`text-sm font-medium leading-none mb-0.5 ${
+                          <p className={cn(
+                            'text-[13px] font-medium leading-none mb-0.5',
                             activityLevel === opt.value
                               ? 'text-blue-700 dark:text-blue-400'
                               : 'text-zinc-700 dark:text-zinc-300'
-                          }`}>
+                          )}>
                             {opt.label}
                           </p>
                           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{opt.desc}</p>
                         </div>
                         {activityLevel === opt.value && (
                           <div className="h-4 w-4 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center flex-shrink-0">
-                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                              <path d="M1.5 4l2 2 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
+                            <Check size={8} className="text-white" strokeWidth={3} />
                           </div>
                         )}
                       </button>
@@ -249,9 +263,9 @@ export default function RegisterPage() {
                 </div>
 
                 {error && (
-                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-xl px-3.5 py-2.5">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />
-                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                    <p className="text-[13px] text-red-600 dark:text-red-400">{error}</p>
                   </div>
                 )}
 
@@ -263,9 +277,12 @@ export default function RegisterPage() {
           )}
         </div>
 
-        <p className="text-center text-sm text-zinc-400 dark:text-zinc-500 mt-4">
+        <p className="text-center text-[13px] text-zinc-400 dark:text-zinc-500 mt-4">
           Já tem conta?{' '}
-          <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors">
+          <Link
+            href="/login"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors"
+          >
             Entrar
           </Link>
         </p>

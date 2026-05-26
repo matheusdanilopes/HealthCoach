@@ -23,7 +23,7 @@ export default function Modal({ open, onClose, title, children, className }: Mod
 
   useEffect(() => {
     if (isClosing) {
-      const t = setTimeout(() => setRendered(false), 220);
+      const t = setTimeout(() => setRendered(false), 200);
       return () => clearTimeout(t);
     }
   }, [isClosing]);
@@ -37,39 +37,56 @@ export default function Modal({ open, onClose, title, children, className }: Mod
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      {/* Backdrop */}
       <div
         className={cn(
-          'absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm',
+          'absolute inset-0 bg-black/25 dark:bg-black/50 backdrop-blur-[2px]',
           isClosing ? 'animate-fade-out' : 'animate-fade-in'
         )}
         onClick={onClose}
       />
+
+      {/* Panel */}
       <div
         className={cn(
           'relative w-full max-w-md',
-          'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800',
-          'rounded-t-3xl sm:rounded-2xl p-6',
-          'shadow-xl dark:shadow-black/60',
+          'bg-white dark:bg-zinc-900',
+          'border border-zinc-100 dark:border-zinc-800/80',
+          'rounded-t-[24px] sm:rounded-2xl',
+          'shadow-2xl shadow-black/10 dark:shadow-black/60',
           isClosing ? 'animate-slide-down' : 'animate-slide-up',
           className
         )}
       >
-        <div className="flex items-center justify-between mb-5">
+        {/* Drag handle — mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+        </div>
+
+        <div className={cn('flex items-center justify-between px-6', title ? 'pb-4 pt-4 sm:pt-5' : 'pb-2 pt-4 sm:pt-5')}>
           {title && (
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              {title}
+            </h3>
           )}
           <button
             onClick={onClose}
             className={cn(
-              'h-7 w-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700',
-              'flex items-center justify-center text-zinc-400 dark:text-zinc-500 transition-colors',
+              'h-7 w-7 rounded-lg flex items-center justify-center transition-colors',
+              'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700',
+              'text-zinc-400 dark:text-zinc-500',
               !title && 'ml-auto'
             )}
           >
             <X size={13} />
           </button>
         </div>
-        {children}
+
+        {title && (
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 mx-6" />
+        )}
+
+        <div className="px-6 pb-6 pt-4">{children}</div>
       </div>
     </div>
   );

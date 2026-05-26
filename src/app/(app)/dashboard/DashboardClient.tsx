@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Scale, Plus, Dumbbell, Flame } from 'lucide-react';
+import { Scale, Plus, Dumbbell, Flame, TrendingDown } from 'lucide-react';
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
@@ -63,86 +63,94 @@ export default function DashboardClient({
   const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4">
-      {/* Header */}
+    <div className="flex flex-col gap-5 pt-6 pb-4 animate-fade-in">
+      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 capitalize mb-0.5">{dateStr}</p>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 capitalize mb-0.5 font-medium tracking-wide">
+            {dateStr}
+          </p>
+          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight">
             {greeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
         </div>
         <button
           onClick={() => setWeightModalOpen(true)}
-          className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95"
+          className="flex items-center gap-2 h-9 px-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 text-sm text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95"
         >
-          <Scale size={12} className="text-zinc-400" />
-          <span className="font-semibold tabular-nums">{latestWeight}kg</span>
+          <Scale size={13} className="text-zinc-400" />
+          <span className="font-semibold tabular-nums text-[13px]">{latestWeight}kg</span>
         </button>
       </div>
 
-      {/* 2-column layout: left = calorie + actions, right = macros + water */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start">
-        {/* Left column */}
-        <div className="flex flex-col gap-3 flex-1 w-full">
-          <CalorieCard
-            consumed={stats.calories}
-            burned={workoutBurned}
-            target={profile?.target_calories ?? 2000}
-          />
+      {/* Layout: calorie card full-width, then 2-col for macros/water */}
+      <div className="flex flex-col gap-3">
+        <CalorieCard
+          consumed={stats.calories}
+          burned={workoutBurned}
+          target={profile?.target_calories ?? 2000}
+        />
 
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setAddFoodOpen(true)}
-              className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-sm shadow-blue-600/20 transition-all active:scale-[0.97]"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              Registrar refeição
-            </button>
-            <button
-              onClick={() => setAddWorkoutOpen(true)}
-              className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm font-medium shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-[0.97]"
-            >
-              <Dumbbell size={16} />
-              Registrar treino
-            </button>
-          </div>
+        {/* Action buttons */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            onClick={() => setAddFoodOpen(true)}
+            className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-sm shadow-blue-600/25 transition-all active:scale-[0.97]"
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            Registrar refeição
+          </button>
+          <button
+            onClick={() => setAddWorkoutOpen(true)}
+            className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-700 dark:text-zinc-300 text-sm font-medium shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-[0.97]"
+          >
+            <Dumbbell size={15} />
+            Registrar treino
+          </button>
+        </div>
 
-          {profile?.tdee && (
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-1.5">
-                <Flame size={12} className="text-zinc-300 dark:text-zinc-600" />
-                <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                  TDEE{' '}
-                  <span className="text-zinc-600 dark:text-zinc-400 font-medium tabular-nums">
-                    {profile.tdee.toLocaleString('pt-BR')} kcal
-                  </span>
+        {/* TDEE / deficit info */}
+        {profile?.tdee && (
+          <div className="flex items-center justify-between px-1 py-0.5">
+            <div className="flex items-center gap-1.5">
+              <Flame size={11} className="text-zinc-300 dark:text-zinc-600" />
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                TDEE{' '}
+                <span className="text-zinc-600 dark:text-zinc-400 font-semibold tabular-nums">
+                  {profile.tdee.toLocaleString('pt-BR')} kcal
                 </span>
-              </div>
-              <span className="text-xs text-zinc-400 dark:text-zinc-500">
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <TrendingDown size={11} className="text-emerald-500" />
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
                 Déficit{' '}
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
                   {(profile.tdee - (profile.target_calories ?? 0)).toLocaleString('pt-BR')} kcal
                 </span>
               </span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Right column */}
-        <div className="flex flex-col gap-3 w-full sm:w-56 flex-shrink-0">
-          <MacroProgress
-            protein={stats.protein}
-            carbs={stats.carbs}
-            fat={stats.fat}
-            targetCalories={profile?.target_calories ?? 2000}
-          />
-          <WaterTracker
-            current={water}
-            target={profile?.target_water_ml ?? 2500}
-            userId={userId}
-            onUpdate={setWater}
-          />
+        {/* Macros + Water — side by side on sm+ */}
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <div className="flex-1">
+            <MacroProgress
+              protein={stats.protein}
+              carbs={stats.carbs}
+              fat={stats.fat}
+              targetCalories={profile?.target_calories ?? 2000}
+            />
+          </div>
+          <div className="sm:w-52 flex-shrink-0">
+            <WaterTracker
+              current={water}
+              target={profile?.target_water_ml ?? 2500}
+              userId={userId}
+              onUpdate={setWater}
+            />
+          </div>
         </div>
       </div>
 

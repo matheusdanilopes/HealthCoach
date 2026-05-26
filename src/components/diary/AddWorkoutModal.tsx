@@ -42,7 +42,7 @@ export default function AddWorkoutModal({ open, onClose, userId, onAdded }: AddW
   return (
     <Modal open={open} onClose={onClose} title="Registrar treino">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <p className="text-sm text-zinc-500">
+        <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
           O treino adiciona calorias ao seu teto diário, permitindo comer um pouco mais.
         </p>
         <Input

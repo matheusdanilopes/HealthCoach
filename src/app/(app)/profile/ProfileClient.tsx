@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight } from 'lucide-react';
+import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 
@@ -17,24 +17,9 @@ interface ProfileClientProps {
 }
 
 const ACTIVITY_OPTIONS = [
-  {
-    value: 'sedentary',
-    label: 'Sedentário',
-    desc: 'Pouco ou nenhum exercício',
-    icon: '🛋️',
-  },
-  {
-    value: 'moderate',
-    label: 'Moderado',
-    desc: 'Exercício 3–5x por semana',
-    icon: '🚶',
-  },
-  {
-    value: 'active',
-    label: 'Ativo',
-    desc: 'Exercício intenso 6–7x por semana',
-    icon: '🏃',
-  },
+  { value: 'sedentary', label: 'Sedentário', desc: 'Pouco exercício', icon: '🛋️' },
+  { value: 'moderate',  label: 'Moderado',   desc: '3–5x/semana',    icon: '🚶' },
+  { value: 'active',    label: 'Ativo',       desc: '6–7x/semana',    icon: '🏃' },
 ];
 
 export default function ProfileClient({ profile, userId, email }: ProfileClientProps) {
@@ -57,7 +42,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     });
     setLoading(false);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 2500);
     router.refresh();
   }
 
@@ -72,54 +57,58 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     .join('');
 
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-4">
-      {/* Avatar + identity — with truncation fix */}
-      <div className="flex items-center gap-4 mb-2">
-        <div className="h-14 w-14 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center flex-shrink-0">
-          <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{initials}</span>
+    <div className="flex flex-col gap-4 pt-6 pb-4 animate-fade-in">
+      {/* Identity */}
+      <div className="flex items-center gap-4">
+        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-600/20">
+          <span className="text-lg font-bold text-white tracking-tight">{initials}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 leading-tight truncate">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 leading-tight truncate tracking-tight">
             {profile?.full_name || 'Meu perfil'}
           </h1>
-          <p className="text-sm text-zinc-400 dark:text-zinc-500 truncate">{email}</p>
+          <p className="text-[13px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">{email}</p>
         </div>
       </div>
 
       {/* Stats */}
       {profile?.tdee && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl p-5">
-            <div className="flex items-center gap-1.5 mb-3">
-              <Zap size={13} className="text-amber-500" />
-              <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-medium">TDEE</p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Zap size={12} className="text-amber-500" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                TDEE
+              </p>
             </div>
-            <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none">
+            <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none tracking-tight">
               {profile.tdee.toLocaleString('pt-BR')}
             </p>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1.5">kcal/dia</p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 rounded-2xl p-5">
-            <div className="flex items-center gap-1.5 mb-3">
-              <Target size={13} className="text-blue-600 dark:text-blue-400" />
-              <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-medium">Meta</p>
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Target size={12} className="text-blue-600 dark:text-blue-400" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                Meta
+              </p>
             </div>
-            <p className="text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400 leading-none">
+            <p className="text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400 leading-none tracking-tight">
               {profile.target_calories?.toLocaleString('pt-BR')}
             </p>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1.5">kcal/dia</p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
         </div>
       )}
 
       {/* Personal data form */}
-      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-6 py-4 border-b border-zinc-50 dark:border-zinc-800">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Dados pessoais
           </p>
         </div>
-        <form onSubmit={handleSave} className="p-6 flex flex-col gap-4">
+        <form onSubmit={handleSave} className="p-5 flex flex-col gap-4">
           <Input
             label="Nome completo"
             value={fullName}
@@ -147,9 +136,9 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             />
           </div>
 
-          {/* Activity cards with icons */}
+          {/* Activity level */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+            <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
               Nível de atividade
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -159,33 +148,27 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setActivityLevel(opt.value as any)}
+                    onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
                     className={cn(
-                      'flex flex-col items-center gap-2 px-2 py-3.5 rounded-xl border text-center transition-all active:scale-[0.97]',
+                      'flex flex-col items-center gap-2 px-2 py-3.5 rounded-xl border text-center transition-all duration-150 active:scale-[0.97]',
                       isSelected
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                        : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 hover:border-zinc-300 dark:hover:border-zinc-600'
+                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60'
+                        : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
                     )}
                   >
-                    <span className="text-2xl leading-none">{opt.icon}</span>
+                    <span className="text-xl leading-none">{opt.icon}</span>
                     <div>
                       <p className={cn(
-                        'text-xs font-semibold leading-none',
-                        isSelected
-                          ? 'text-blue-700 dark:text-blue-400'
-                          : 'text-zinc-700 dark:text-zinc-300'
+                        'text-[11px] font-semibold leading-none',
+                        isSelected ? 'text-blue-700 dark:text-blue-400' : 'text-zinc-700 dark:text-zinc-300'
                       )}>
                         {opt.label}
                       </p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">
-                        {opt.desc.split(' ').slice(0, 3).join(' ')}
-                      </p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{opt.desc}</p>
                     </div>
                     {isSelected && (
                       <div className="h-3.5 w-3.5 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center">
-                        <svg width="7" height="7" viewBox="0 0 8 8" fill="none">
-                          <path d="M1.5 4l2 2 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+                        <Check size={7} className="text-white" strokeWidth={3} />
                       </div>
                     )}
                   </button>
@@ -200,42 +183,40 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             variant={saved ? 'secondary' : 'primary'}
             className="w-full"
           >
-            <Save size={14} />
+            {saved ? <Check size={14} /> : <Save size={14} />}
             {saved ? 'Salvo!' : 'Salvar alterações'}
           </Button>
         </form>
       </div>
 
-      {/* Account actions */}
-      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-6 py-4 border-b border-zinc-50 dark:border-zinc-800">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+      {/* Account */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Conta
           </p>
         </div>
         <div className="p-2">
           <Link
             href="/admin"
-            className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors group"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
           >
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                <ShieldCheck size={15} className="text-zinc-500 dark:text-zinc-400" />
-              </div>
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Gerenciar usuários
-              </span>
+            <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <ShieldCheck size={14} className="text-zinc-500 dark:text-zinc-400" />
             </div>
-            <ChevronRight size={14} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300 flex-1">
+              Gerenciar usuários
+            </span>
+            <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </Link>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors group"
           >
-            <div className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-              <LogOut size={15} className="text-red-500" />
+            <div className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-center justify-center flex-shrink-0">
+              <LogOut size={14} className="text-red-500" />
             </div>
-            <span className="text-sm font-medium text-red-500 dark:text-red-400">
+            <span className="text-[13px] font-medium text-red-500 dark:text-red-400">
               Sair da conta
             </span>
           </button>

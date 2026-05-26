@@ -76,17 +76,17 @@ export default function AddFoodModal({
     <Modal open={open} onClose={onClose} title="Adicionar alimento">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Meal type selector */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {MEAL_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
               onClick={() => setMealType(opt.value)}
               className={cn(
-                'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-medium transition-all',
+                'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-[11px] font-semibold transition-all duration-150',
                 mealType === opt.value
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
-                  : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/60 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                  ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-400'
+                  : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
               )}
             >
               <span className="text-base leading-none">{opt.icon}</span>

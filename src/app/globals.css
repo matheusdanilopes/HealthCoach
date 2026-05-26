@@ -18,7 +18,7 @@ html.dark {
 }
 
 body {
-  background: #fafafa;
+  background: #f8f8f8;
   color: #09090b;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -27,10 +27,11 @@ body {
 }
 
 html.dark body {
-  background: #09090b;
+  background: #0a0a0b;
   color: #fafafa;
 }
 
+/* Premium scrollbar */
 ::-webkit-scrollbar {
   width: 3px;
   height: 3px;
@@ -42,60 +43,52 @@ html.dark body {
   background: #e4e4e7;
   border-radius: 99px;
 }
-
 html.dark ::-webkit-scrollbar-thumb {
   background: #3f3f46;
 }
 
 /* Focus ring */
 :focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid rgba(59, 130, 246, 0.5);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
-/* Section label utility */
-.label-section {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+/* ─── Design system utilities ─── */
+
+.label-xs {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #a1a1aa;
 }
-
-html.dark .label-section {
+html.dark .label-xs {
   color: #71717a;
 }
 
-/* Card surface utility */
 .surface {
   background: #ffffff;
   border: 1px solid #f0f0f0;
   border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.02);
 }
-
 html.dark .surface {
   background: #111113;
-  border-color: #27272a;
-}
-
-/* Subtle box-shadow for cards */
-.card-shadow {
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-}
-
-html.dark .card-shadow {
+  border-color: #1f1f23;
   box-shadow: none;
 }
 
+/* ─── Keyframes ─── */
+
 @keyframes slide-up {
-  from { transform: translateY(20px); opacity: 0; }
+  from { transform: translateY(16px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
 
 @keyframes slide-down {
   from { transform: translateY(0);    opacity: 1; }
-  to   { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(16px); opacity: 0; }
 }
 
 @keyframes fade-in {
@@ -109,31 +102,83 @@ html.dark .card-shadow {
 }
 
 @keyframes scale-in {
-  from { transform: scale(0.96); opacity: 0; }
+  from { transform: scale(0.97); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
 }
 
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes bounce-soft {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-2px); }
+}
+
+@keyframes progress-fill {
+  from { width: 0%; }
+}
+
+/* ─── Animation classes ─── */
+
 .animate-slide-up {
-  animation: slide-up 0.26s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  animation: slide-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
 }
 
 .animate-slide-down {
-  animation: slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  animation: slide-down 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
 }
 
 .animate-fade-in {
-  animation: fade-in 0.2s ease-out forwards;
+  animation: fade-in 0.22s ease-out forwards;
   will-change: opacity;
 }
 
 .animate-fade-out {
-  animation: fade-out 0.18s ease-in forwards;
+  animation: fade-out 0.16s ease-in forwards;
   will-change: opacity;
 }
 
 .animate-scale-in {
-  animation: scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  animation: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e8e8e8 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+html.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    #1f1f23 25%,
+    #27272a 50%,
+    #1f1f23 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ─── Progress bar fill animation ─── */
+.progress-animated {
+  animation: progress-fill 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
