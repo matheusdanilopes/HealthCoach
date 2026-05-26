@@ -36,7 +36,7 @@ export default function Modal({ open, onClose, title, children, className }: Mod
   if (!rendered) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pb-14 sm:pb-0">
       {/* Backdrop */}
       <div
         className={cn(
@@ -54,7 +54,7 @@ export default function Modal({ open, onClose, title, children, className }: Mod
           'border border-zinc-100 dark:border-zinc-800/80',
           'rounded-t-[24px] sm:rounded-2xl',
           'shadow-2xl shadow-black/10 dark:shadow-black/60',
-          'max-h-[calc(100dvh-56px)] sm:max-h-[calc(100dvh-2rem)] flex flex-col',
+          'max-h-[calc(100dvh-8rem)] sm:max-h-[calc(100dvh-4rem)] flex flex-col',
           isClosing ? 'animate-slide-down' : 'animate-slide-up',
           className
         )}
