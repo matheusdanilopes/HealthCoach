@@ -4,7 +4,6 @@ import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 import SplashScreen from '@/components/SplashScreen';
-import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 export const metadata: Metadata = {
   title: 'HealthCoach AI',
@@ -37,18 +36,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className="h-full">
       <head>
-        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="manifest" href="/manifest.json" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-full antialiased">
-        {/* Injected into server HTML before hydration — prevents dark-mode flash */}
         <Script src="/theme-init.js" strategy="beforeInteractive" />
-        <Script src="/pwa-init.js" strategy="beforeInteractive" />
         <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
-        <PWAInstallPrompt />
         <ServiceWorkerRegistration />
       </body>
     </html>
