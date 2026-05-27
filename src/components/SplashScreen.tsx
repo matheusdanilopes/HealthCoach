@@ -15,7 +15,7 @@ export default function SplashScreen() {
     const t = setTimeout(() => {
       setVisible(false);
       try { sessionStorage.setItem('hc-splash', '1'); } catch {}
-    }, 1400);
+    }, 1600);
     return () => clearTimeout(t);
   }, []);
 
@@ -30,11 +30,17 @@ export default function SplashScreen() {
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
       ].join(' ')}
     >
-      <div className="flex flex-col items-center gap-5 animate-scale-in">
-        <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-2xl shadow-emerald-600/40">
-          <LogoIcon size={44} />
+      <div className="flex flex-col items-center gap-6">
+        {/* Icon with ambient glow */}
+        <div className="relative animate-splash-icon">
+          <div className="absolute inset-0 rounded-[32px] bg-emerald-500/20 blur-2xl scale-125" />
+          <div className="relative h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-500 to-emerald-800 flex items-center justify-center shadow-2xl shadow-emerald-700/40">
+            <LogoIcon size={44} />
+          </div>
         </div>
-        <div className="text-center">
+
+        {/* Brand text */}
+        <div className="text-center animate-splash-text">
           <p className="text-[28px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-none">
             HealthCoach
           </p>
@@ -44,14 +50,9 @@ export default function SplashScreen() {
         </div>
       </div>
 
-      <div className="absolute bottom-14 flex items-center gap-2">
-        {[0, 180, 360].map((delay) => (
-          <span
-            key={delay}
-            className="h-1.5 w-1.5 rounded-full bg-emerald-500"
-            style={{ animation: `pulse-soft 1.4s ease-in-out ${delay}ms infinite` }}
-          />
-        ))}
+      {/* Progress bar */}
+      <div className="absolute bottom-12 w-16 h-[2px] rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+        <div className="h-full bg-emerald-500 rounded-full animate-splash-progress" />
       </div>
     </div>
   );
