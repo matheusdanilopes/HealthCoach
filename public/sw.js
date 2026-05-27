@@ -1,7 +1,6 @@
-const CACHE_NAME = 'healthcoach-v2';
+const CACHE_NAME = 'healthcoach-v3';
 
 const PRECACHE = [
-  '/manifest.webmanifest',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
 ];
@@ -25,13 +24,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests for same-origin or CDN resources
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Pass through API and auth routes — always go to network
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/_next/')) {
+  // Always fetch fresh from network — never cache these
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/') ||
+    url.pathname === '/manifest.webmanifest' ||
+    url.pathname === '/manifest.json'
+  ) {
     return;
   }
 
