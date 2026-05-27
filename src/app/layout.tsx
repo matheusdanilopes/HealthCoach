@@ -43,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-full antialiased">
         <Script src="/theme-init.js" strategy="beforeInteractive" />
+        <Script src="/pwa-init.js" strategy="beforeInteractive" />
         <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
         <ServiceWorkerRegistration />

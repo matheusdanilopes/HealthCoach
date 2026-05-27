@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check } from 'lucide-react';
+import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 
@@ -31,6 +31,18 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [activityLevel, setActivityLevel] = useState(profile?.activity_level ?? 'sedentary');
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<{ prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
+
+  useEffect(() => {
+    const stored = (window as { __pwaInstallEvent?: typeof installPrompt }).__pwaInstallEvent;
+    if (stored) { setInstallPrompt(stored); return; }
+    function onReady() {
+      const e = (window as { __pwaInstallEvent?: typeof installPrompt }).__pwaInstallEvent;
+      if (e) setInstallPrompt(e);
+    }
+    window.addEventListener('pwa-install-ready', onReady);
+    return () => window.removeEventListener('pwa-install-ready', onReady);
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -197,6 +209,27 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           </p>
         </div>
         <div className="p-3">
+          {installPrompt && (
+            <button
+              onClick={async () => {
+                await installPrompt.prompt();
+                const { outcome } = await installPrompt.userChoice;
+                if (outcome === 'accepted') {
+                  setInstallPrompt(null);
+                  (window as { __pwaInstallEvent?: null }).__pwaInstallEvent = null;
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors group"
+            >
+              <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0">
+                <Download size={14} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <span className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400 flex-1 text-left">
+                Instalar app
+              </span>
+              <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            </button>
+          )}
           <Link
             href="/admin"
             className="flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
