@@ -6,7 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
-import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -241,7 +241,8 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 hover:border-orange-300 dark:hover:border-orange-700/60 hover:text-orange-500 dark:hover:text-orange-400 transition-all text-[13px] font-medium"
       >
         <Plus size={13} strokeWidth={2.5} />
-        Adicionar treino
+        Registrar treino
+        <Sparkles size={11} className="opacity-60" />
       </button>
 
       <AIFoodLogger
