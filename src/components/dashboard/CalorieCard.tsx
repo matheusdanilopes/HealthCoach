@@ -50,7 +50,7 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-1.5">
             <span className="text-[42px] font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none tracking-tight">
-              {consumed.toLocaleString('pt-BR')}
+              {net.toLocaleString('pt-BR')}
             </span>
           </div>
           <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1.5 font-medium">
@@ -60,6 +60,11 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
             </span>{' '}
             kcal
           </p>
+          {burned > 0 && (
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 tabular-nums">
+              {consumed.toLocaleString('pt-BR')} consumidas · {burned.toLocaleString('pt-BR')} queimadas
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-2 mt-4">
             <span className={cn(
@@ -72,12 +77,6 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
                 : `${Math.abs(remaining).toLocaleString('pt-BR')} excedidos`}
             </span>
 
-            {burned > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/40 text-[11px] font-semibold tabular-nums text-orange-600 dark:text-orange-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-orange-500 flex-shrink-0" />
-                +{burned.toLocaleString('pt-BR')} queimados
-              </span>
-            )}
           </div>
         </div>
 

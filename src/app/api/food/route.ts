@@ -7,7 +7,8 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { food_name, meal_type, calories, protein, carbs, fat, log_date } = await req.json();
-  const today = new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const date = log_date ?? today;
 
   const { data: row, error } = await supabase
