@@ -71,6 +71,7 @@ export default function AIFoodLogger({
       setImagePreview(null);
       setResult(null);
       setError(null);
+      setSaving(false);
     }
   }, [open, defaultMeal]);
 
@@ -171,6 +172,7 @@ export default function AIFoodLogger({
       onClose();
     } catch {
       setError('Erro ao salvar. Tente novamente.');
+    } finally {
       setSaving(false);
     }
   }

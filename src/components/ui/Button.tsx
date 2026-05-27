@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { type ButtonHTMLAttributes } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'orange';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
 }
@@ -30,6 +30,8 @@ export default function Button({
       'bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 dark:hover:bg-zinc-800/80 dark:text-zinc-400 dark:hover:text-zinc-100',
     danger:
       'bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50 dark:text-red-400 dark:border-red-900/50',
+    orange:
+      'bg-orange-500 hover:bg-orange-400 text-white shadow-sm shadow-orange-500/20 hover:shadow-orange-400/25',
   };
 
   const sizes = {

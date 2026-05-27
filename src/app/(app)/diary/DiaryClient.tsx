@@ -6,7 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
-import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -29,6 +29,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
   const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [loadingDate, setLoadingDate] = useState(false);
+  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
 
   const isToday = selectedDate === todayISO();
 
@@ -64,6 +65,13 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
   const handleDelete = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
   }, []);
+
+  async function handleDeleteWorkout(id: string) {
+    setDeletingWorkoutId(id);
+    await fetch(`/api/food?id=${id}`, { method: 'DELETE' });
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    setDeletingWorkoutId(null);
+  }
 
   function openAddForMeal(meal: MealType) {
     setActiveMeal(meal);
@@ -205,12 +213,22 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
             {workouts.map((w) => (
               <div
                 key={w.id}
-                className="flex items-center justify-between px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
+                className="flex items-center gap-3 px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
               >
-                <span className="text-[13px] text-zinc-600 dark:text-zinc-400">{w.food_name}</span>
-                <span className="text-[13px] font-semibold tabular-nums text-orange-500">
+                <span className="text-[13px] text-zinc-600 dark:text-zinc-400 flex-1 truncate">{w.food_name}</span>
+                <span className="text-[13px] font-semibold tabular-nums text-orange-500 flex-shrink-0">
                   {Math.abs(w.calories).toLocaleString('pt-BR')} kcal
                 </span>
+                <button
+                  onClick={() => handleDeleteWorkout(w.id)}
+                  disabled={deletingWorkoutId === w.id}
+                  className="flex-shrink-0 h-7 w-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-red-400 transition-all disabled:opacity-40"
+                >
+                  {deletingWorkoutId === w.id
+                    ? <span className="h-3 w-3 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
+                    : <Trash2 size={12} />
+                  }
+                </button>
               </div>
             ))}
           </div>
@@ -223,7 +241,8 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 hover:border-orange-300 dark:hover:border-orange-700/60 hover:text-orange-500 dark:hover:text-orange-400 transition-all text-[13px] font-medium"
       >
         <Plus size={13} strokeWidth={2.5} />
-        Adicionar treino
+        Registrar treino
+        <Sparkles size={11} className="opacity-60" />
       </button>
 
       <AIFoodLogger
@@ -239,22 +258,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(cal) => {
-          setLogs((prev) => [
-            ...prev,
-            {
-              id: `local-${Date.now()}`,
-              user_id: userId,
-              created_at: new Date().toISOString(),
-              food_name: 'Treino',
-              meal_type: 'snack',
-              calories: -cal,
-              protein: null,
-              carbs: null,
-              fat: null,
-            },
-          ]);
-        }}
+        onAdded={(log) => setLogs((prev) => [...prev, log])}
       />
     </div>
   );
