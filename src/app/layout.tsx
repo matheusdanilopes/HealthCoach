@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 import SplashScreen from '@/components/SplashScreen';
 
 export const metadata: Metadata = {
@@ -44,9 +43,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full antialiased">
         <Script src="/theme-init.js" strategy="beforeInteractive" />
         <Script src="/pwa-init.js" strategy="beforeInteractive" />
+        <Script src="/sw-register.js" strategy="afterInteractive" />
         <SplashScreen />
         <ThemeProvider>{children}</ThemeProvider>
-        <ServiceWorkerRegistration />
       </body>
     </html>
   );

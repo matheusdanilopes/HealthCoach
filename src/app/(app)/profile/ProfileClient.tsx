@@ -32,6 +32,23 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<{ prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
+  const [swStatus, setSwStatus] = useState<string>('');
+
+  useEffect(() => {
+    // SW status
+    const checkSW = () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          setSwStatus(reg ? 'ativo' : 'não registrado');
+        }).catch(() => setSwStatus('erro'));
+      } else {
+        setSwStatus('não suportado');
+      }
+    };
+    checkSW();
+    window.addEventListener('sw-registered', checkSW);
+    return () => window.removeEventListener('sw-registered', checkSW);
+  }, []);
 
   useEffect(() => {
     const stored = (window as { __pwaInstallEvent?: typeof installPrompt }).__pwaInstallEvent;
@@ -203,10 +220,20 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       {/* Account */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60 flex items-center justify-between">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Conta
           </p>
+          {swStatus && (
+            <span className={cn(
+              'text-[10px] font-medium px-2 py-0.5 rounded-full',
+              swStatus === 'ativo'
+                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400'
+                : 'bg-red-50 text-red-500 dark:bg-red-950/30 dark:text-red-400'
+            )}>
+              SW: {swStatus}
+            </span>
+          )}
         </div>
         <div className="p-3">
           {installPrompt && (

@@ -9,7 +9,8 @@ export function proxy(request: NextRequest) {
   const isPwaAsset =
     pathname === '/manifest.json' ||
     pathname === '/manifest.webmanifest' ||
-    pathname === '/sw.js';
+    pathname === '/sw.js' ||
+    pathname === '/sw-register.js';
 
   const isPublicRoute = pathname === '/' || isLoginRoute || isRegisterRoute || isApiRoute || isPwaAsset;
 
