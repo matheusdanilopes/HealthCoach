@@ -36,6 +36,7 @@ interface AIFoodLoggerProps {
   onClose: () => void;
   userId: string;
   defaultMeal?: MealType;
+  date?: string;
   onAdded: (log: FoodLog) => void;
 }
 
@@ -43,6 +44,7 @@ export default function AIFoodLogger({
   open,
   onClose,
   defaultMeal = 'lunch',
+  date,
   onAdded,
 }: AIFoodLoggerProps) {
   const [tab, setTab] = useState<'text' | 'image'>('text');
@@ -160,6 +162,7 @@ export default function AIFoodLogger({
             protein: food.protein ?? null,
             carbs: food.carbs ?? null,
             fat: food.fat ?? null,
+            log_date: date,
           }),
         }).then((r) => r.json() as Promise<FoodLog>)
       );
