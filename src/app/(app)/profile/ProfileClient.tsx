@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download } from 'lucide-react';
+import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   calculateTMB,
@@ -354,6 +354,18 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
             </button>
           )}
+          <Link
+            href="/settings/notifications"
+            className="flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
+          >
+            <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <Bell size={14} className="text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300 flex-1">
+              Notificações
+            </span>
+            <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </Link>
           <Link
             href="/admin"
             className="flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
