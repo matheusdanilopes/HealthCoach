@@ -14,7 +14,7 @@ const CATEGORIES: { key: keyof Omit<NotificationPreferences, 'enabled'>; label: 
 ];
 
 export default function NotificationsClient() {
-  const { permissionState, isEnabled, isLoading, enable, disable } = useNotifications();
+  const { permissionState, isSubscribed: isEnabled, isLoading, subscribe: enable, unsubscribe: disable } = useNotifications();
   const [prefs, setPrefs] = useState<NotificationPreferences>({
     enabled: true, imports: true, processing: true, updates: true,
   });
@@ -32,7 +32,7 @@ export default function NotificationsClient() {
 
   async function handleToggle() {
     if (isEnabled) {
-      disable();
+      await disable();
     } else {
       await enable();
     }
