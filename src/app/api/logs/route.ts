@@ -7,7 +7,9 @@ export async function GET(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const date = searchParams.get('date') ?? new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const localToday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const date = searchParams.get('date') ?? localToday;
 
   const [{ data: foodData }, { data: waterData }] = await Promise.all([
     supabase

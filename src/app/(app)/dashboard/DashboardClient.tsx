@@ -12,7 +12,7 @@ import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
-import { cn } from '@/lib/utils';
+import { cn, todayISO } from '@/lib/utils';
 import type { FoodLog, Profile } from '@/types';
 
 interface DashboardClientProps {
@@ -21,10 +21,6 @@ interface DashboardClientProps {
   initialWater: number;
   latestWeight: number;
   userId: string;
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 export default function DashboardClient({
@@ -234,22 +230,7 @@ export default function DashboardClient({
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(cal) => {
-          setFoodLogs((prev) => [
-            ...prev,
-            {
-              id: `local-${Date.now()}`,
-              user_id: userId,
-              created_at: new Date().toISOString(),
-              food_name: 'Treino',
-              meal_type: 'snack',
-              calories: -cal,
-              protein: null,
-              carbs: null,
-              fat: null,
-            },
-          ]);
-        }}
+        onAdded={(log) => setFoodLogs((prev) => [...prev, log])}
       />
       {isToday && (
         <WeightLogModal

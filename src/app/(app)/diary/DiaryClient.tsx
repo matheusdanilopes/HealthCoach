@@ -7,7 +7,7 @@ import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, todayISO } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -16,10 +16,6 @@ interface DiaryClientProps {
   userId: string;
   initialLogs: FoodLog[];
   targetCalories: number;
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 export default function DiaryClient({ userId, initialLogs, targetCalories }: DiaryClientProps) {
@@ -54,9 +50,12 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
 
   const positiveLogs = logs.filter((l) => l.calories > 0);
   const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
-  const remaining = targetCalories - totalCalories;
-  const pct = targetCalories > 0 ? Math.min((totalCalories / targetCalories) * 100, 100) : 0;
-  const isOver = totalCalories > targetCalories;
+  const workouts = logs.filter((l) => l.calories < 0);
+  const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
+  const net = totalCalories - workoutCalories;
+  const remaining = targetCalories - net;
+  const pct = targetCalories > 0 ? Math.min((net / targetCalories) * 100, 100) : 0;
+  const isOver = net > targetCalories;
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setLogs((prev) => [...prev, log]);
@@ -77,9 +76,6 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
     setActiveMeal(meal);
     setAddFoodOpen(true);
   }
-
-  const workouts = logs.filter((l) => l.calories < 0);
-  const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
 
   const displayDate = format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR });
 
