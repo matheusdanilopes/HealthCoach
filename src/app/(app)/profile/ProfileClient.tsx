@@ -8,6 +8,12 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  calculateTMB,
+  calculateTDEE,
+  calculateTargetCalories,
+  calculateAge,
+} from '@/lib/calculations';
 import type { Profile } from '@/types';
 
 interface ProfileClientProps {
@@ -22,6 +28,12 @@ const ACTIVITY_OPTIONS = [
   { value: 'active',    label: 'Ativo',       desc: '6–7x/semana',    icon: '🏃' },
 ];
 
+const MULTIPLIERS: Record<string, number> = {
+  sedentary: 1.2,
+  moderate: 1.55,
+  active: 1.725,
+};
+
 export default function ProfileClient({ profile, userId, email }: ProfileClientProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
@@ -34,8 +46,39 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [installPrompt, setInstallPrompt] = useState<{ prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
 
+  // Derive initial TMB from profile data
+  const derivedInitialTmb = (): string => {
+    const w = parseFloat(String(profile?.current_weight ?? ''));
+    const h = parseFloat(String(profile?.height_cm ?? ''));
+    const bd = profile?.birth_date;
+    const sex = profile?.sex;
+    if (w && h && bd && sex) {
+      return String(calculateTMB(w, h, calculateAge(bd), sex));
+    }
+    if (profile?.tdee && profile?.activity_level) {
+      return String(Math.round(profile.tdee / MULTIPLIERS[profile.activity_level]));
+    }
+    return '';
+  };
+
+  const [customTmb, setCustomTmb] = useState(derivedInitialTmb());
+  const [customMeta, setCustomMeta] = useState(String(profile?.target_calories ?? ''));
+
+  // Auto-recalculate TMB and Meta when physical data changes
   useEffect(() => {
-    // SW status
+    const w = parseFloat(weight);
+    const h = parseFloat(height);
+    const sex = profile?.sex;
+    if (!w || !h || !birthDate || !sex) return;
+    const age = calculateAge(birthDate);
+    const tmb = calculateTMB(w, h, age, sex);
+    const tdee = calculateTDEE(tmb, activityLevel as 'sedentary' | 'moderate' | 'active');
+    const meta = calculateTargetCalories(tdee);
+    setCustomTmb(String(tmb));
+    setCustomMeta(String(meta));
+  }, [weight, height, birthDate, activityLevel, profile?.sex]);
+
+  useEffect(() => {
     const checkSW = () => {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(reg => {
@@ -67,7 +110,15 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     await fetch('/api/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName, birthDate, weight, height, activityLevel }),
+      body: JSON.stringify({
+        fullName,
+        birthDate,
+        weight,
+        height,
+        activityLevel,
+        customTmb: customTmb ? Number(customTmb) : null,
+        customTargetCalories: customMeta ? Number(customMeta) : null,
+      }),
     });
     setLoading(false);
     setSaved(true);
@@ -85,6 +136,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
 
+  const tmbNum = Number(customTmb);
+  const metaNum = Number(customMeta);
+  const tdeePreview = tmbNum
+    ? calculateTDEE(tmbNum, activityLevel as 'sedentary' | 'moderate' | 'active')
+    : null;
+
   return (
     <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
       {/* Identity */}
@@ -100,8 +157,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         </div>
       </div>
 
-      {/* Stats */}
-      {profile?.tdee && (
+      {/* Stats preview */}
+      {(tdeePreview || metaNum) ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-5">
             <div className="flex items-center gap-1.5 mb-3">
@@ -111,7 +168,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               </p>
             </div>
             <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100 leading-none tracking-tight">
-              {profile.tdee.toLocaleString('pt-BR')}
+              {(tdeePreview ?? profile?.tdee ?? 0).toLocaleString('pt-BR')}
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
@@ -123,12 +180,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               </p>
             </div>
             <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400 leading-none tracking-tight">
-              {profile.target_calories?.toLocaleString('pt-BR')}
+              {(metaNum || profile?.target_calories || 0).toLocaleString('pt-BR')}
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Personal data form */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
@@ -204,6 +261,46 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                 );
               })}
             </div>
+          </div>
+
+          {/* Custom TMB and Meta */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                Metas calóricas
+              </label>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                Recalculado automaticamente com os dados acima
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="TMB (kcal)"
+                type="number"
+                value={customTmb}
+                onChange={(e) => {
+                  setCustomTmb(e.target.value);
+                  const tmb = Number(e.target.value);
+                  if (tmb > 0) {
+                    const tdee = calculateTDEE(tmb, activityLevel as 'sedentary' | 'moderate' | 'active');
+                    setCustomMeta(String(calculateTargetCalories(tdee)));
+                  }
+                }}
+                min="500"
+                max="5000"
+              />
+              <Input
+                label="Meta (kcal)"
+                type="number"
+                value={customMeta}
+                onChange={(e) => setCustomMeta(e.target.value)}
+                min="1200"
+                max="9999"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 -mt-1">
+              Mínimo de 1.200 kcal/dia para a meta.
+            </p>
           </div>
 
           <Button

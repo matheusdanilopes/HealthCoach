@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Scale, Plus, Dumbbell, Flame, TrendingDown } from 'lucide-react';
+import { Scale, Plus, Dumbbell, Flame, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
@@ -12,6 +12,7 @@ import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
+import { cn } from '@/lib/utils';
 import type { FoodLog, Profile } from '@/types';
 
 interface DashboardClientProps {
@@ -20,6 +21,10 @@ interface DashboardClientProps {
   initialWater: number;
   latestWeight: number;
   userId: string;
+}
+
+function todayISO() {
+  return new Date().toISOString().split('T')[0];
 }
 
 export default function DashboardClient({
@@ -35,6 +40,39 @@ export default function DashboardClient({
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayISO());
+  const [loadingDate, setLoadingDate] = useState(false);
+  const [greetingText, setGreetingText] = useState('');
+
+  // Use device local time for greeting
+  useEffect(() => {
+    const h = new Date().getHours();
+    if (h < 12) setGreetingText('Bom dia');
+    else if (h < 18) setGreetingText('Boa tarde');
+    else setGreetingText('Boa noite');
+  }, []);
+
+  const isToday = selectedDate === todayISO();
+
+  async function navigateTo(date: string) {
+    if (date > todayISO()) return;
+    setSelectedDate(date);
+    setLoadingDate(true);
+    try {
+      const res = await fetch(`/api/logs?date=${date}`);
+      const data = await res.json();
+      setFoodLogs(data.foodLogs);
+      setWater(data.water);
+    } finally {
+      setLoadingDate(false);
+    }
+  }
+
+  function changeDate(delta: number) {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    navigateTo(d.toISOString().split('T')[0]);
+  }
 
   const positiveLogs = foodLogs.filter((l) => l.calories > 0);
   const workoutBurned = Math.abs(
@@ -52,35 +90,64 @@ export default function DashboardClient({
     setFoodLogs((prev) => [...prev, log]);
   }, []);
 
-  const greeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Bom dia';
-    if (h < 18) return 'Boa tarde';
-    return 'Boa noite';
-  };
-
   const firstName = profile?.full_name?.split(' ')[0];
-  const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
+  const displayDate = format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
     <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 capitalize mb-0.5 font-medium tracking-wide">
-            {dateStr}
-          </p>
-          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight">
-            {greeting()}{firstName ? `, ${firstName}` : ''}
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight mb-3">
+            {isToday
+              ? `${greetingText}${firstName ? `, ${firstName}` : ''}`
+              : `Diário${firstName ? `, ${firstName}` : ''}`}
           </h1>
+          {/* Date navigation */}
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
+              loadingDate && 'opacity-50'
+            )}>
+              <button
+                onClick={() => changeDate(-1)}
+                disabled={loadingDate}
+                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-40 active:scale-95"
+                aria-label="Dia anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <p className="flex-1 text-center text-[13px] font-medium text-zinc-700 dark:text-zinc-200 capitalize select-none">
+                {displayDate}
+              </p>
+              <button
+                onClick={() => changeDate(1)}
+                disabled={isToday || loadingDate}
+                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+                aria-label="Próximo dia"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            {!isToday && (
+              <button
+                onClick={() => navigateTo(todayISO())}
+                className="h-9 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-95 whitespace-nowrap"
+              >
+                Hoje
+              </button>
+            )}
+          </div>
         </div>
-        <button
-          onClick={() => setWeightModalOpen(true)}
-          className="flex items-center gap-2 h-9 px-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 text-sm text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95"
-        >
-          <Scale size={13} className="text-zinc-400" />
-          <span className="font-semibold tabular-nums text-[13px]">{latestWeight}kg</span>
-        </button>
+        {isToday && (
+          <button
+            onClick={() => setWeightModalOpen(true)}
+            className="flex items-center gap-2 h-9 px-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 text-sm text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95"
+          >
+            <Scale size={13} className="text-zinc-400" />
+            <span className="font-semibold tabular-nums text-[13px]">{latestWeight}kg</span>
+          </button>
+        )}
       </div>
 
       {/* Layout: calorie card full-width, then 2-col for macros/water */}
@@ -148,6 +215,7 @@ export default function DashboardClient({
               current={water}
               target={profile?.target_water_ml ?? 2500}
               userId={userId}
+              date={selectedDate}
               onUpdate={setWater}
             />
           </div>
@@ -158,12 +226,14 @@ export default function DashboardClient({
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
         userId={userId}
+        date={selectedDate}
         onAdded={handleFoodAdded}
       />
       <AddWorkoutModal
         open={addWorkoutOpen}
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
+        date={selectedDate}
         onAdded={(cal) => {
           setFoodLogs((prev) => [
             ...prev,
@@ -181,15 +251,17 @@ export default function DashboardClient({
           ]);
         }}
       />
-      <WeightLogModal
-        open={weightModalOpen}
-        onClose={() => setWeightModalOpen(false)}
-        userId={userId}
-        currentWeight={latestWeight}
-        onLogged={() => router.refresh()}
-      />
+      {isToday && (
+        <WeightLogModal
+          open={weightModalOpen}
+          onClose={() => setWeightModalOpen(false)}
+          userId={userId}
+          currentWeight={latestWeight}
+          onLogged={() => router.refresh()}
+        />
+      )}
 
-      {profile && (
+      {profile && isToday && (
         <AIChat
           profile={profile}
           dailyCalories={stats.calories}

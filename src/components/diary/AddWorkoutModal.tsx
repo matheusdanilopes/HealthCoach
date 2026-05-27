@@ -9,10 +9,11 @@ interface AddWorkoutModalProps {
   open: boolean;
   onClose: () => void;
   userId: string;
+  date?: string;
   onAdded: (calories: number) => void;
 }
 
-export default function AddWorkoutModal({ open, onClose, userId, onAdded }: AddWorkoutModalProps) {
+export default function AddWorkoutModal({ open, onClose, userId, date, onAdded }: AddWorkoutModalProps) {
   const [activity, setActivity] = useState('');
   const [calories, setCalories] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ export default function AddWorkoutModal({ open, onClose, userId, onAdded }: AddW
         food_name: `🏃 ${activity}`,
         meal_type: 'snack',
         calories: -Math.abs(parseInt(calories)),
+        log_date: date,
       }),
     });
 

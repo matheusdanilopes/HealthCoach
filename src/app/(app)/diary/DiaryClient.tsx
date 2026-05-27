@@ -6,7 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
-import { Dumbbell, Plus, Flame } from 'lucide-react';
+import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -18,11 +18,38 @@ interface DiaryClientProps {
   targetCalories: number;
 }
 
+function todayISO() {
+  return new Date().toISOString().split('T')[0];
+}
+
 export default function DiaryClient({ userId, initialLogs, targetCalories }: DiaryClientProps) {
   const [logs, setLogs] = useState<FoodLog[]>(initialLogs);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
+  const [selectedDate, setSelectedDate] = useState(todayISO());
+  const [loadingDate, setLoadingDate] = useState(false);
+
+  const isToday = selectedDate === todayISO();
+
+  async function navigateTo(date: string) {
+    if (date > todayISO()) return;
+    setSelectedDate(date);
+    setLoadingDate(true);
+    try {
+      const res = await fetch(`/api/logs?date=${date}`);
+      const data = await res.json();
+      setLogs(data.foodLogs);
+    } finally {
+      setLoadingDate(false);
+    }
+  }
+
+  function changeDate(delta: number) {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    navigateTo(d.toISOString().split('T')[0]);
+  }
 
   const positiveLogs = logs.filter((l) => l.calories > 0);
   const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
@@ -46,16 +73,50 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
   const workouts = logs.filter((l) => l.calories < 0);
   const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
 
+  const displayDate = format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR });
+
   return (
     <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Header */}
-      <div>
-        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 capitalize mb-0.5 font-medium tracking-wide">
-          {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
-        </p>
+      <div className="flex flex-col gap-3">
         <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
           Diário
         </h1>
+        {/* Date navigation */}
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
+            loadingDate && 'opacity-50'
+          )}>
+            <button
+              onClick={() => changeDate(-1)}
+              disabled={loadingDate}
+              className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-40 active:scale-95"
+              aria-label="Dia anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <p className="flex-1 text-center text-[13px] font-medium text-zinc-700 dark:text-zinc-200 capitalize select-none">
+              {displayDate}
+            </p>
+            <button
+              onClick={() => changeDate(1)}
+              disabled={isToday || loadingDate}
+              className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+              aria-label="Próximo dia"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          {!isToday && (
+            <button
+              onClick={() => navigateTo(todayISO())}
+              className="h-9 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-95 whitespace-nowrap"
+            >
+              Hoje
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Daily summary */}
@@ -170,12 +231,14 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         onClose={() => setAddFoodOpen(false)}
         userId={userId}
         defaultMeal={activeMeal}
+        date={selectedDate}
         onAdded={handleFoodAdded}
       />
       <AddWorkoutModal
         open={addWorkoutOpen}
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
+        date={selectedDate}
         onAdded={(cal) => {
           setLogs((prev) => [
             ...prev,
