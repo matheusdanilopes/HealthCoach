@@ -78,41 +78,45 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
   return (
     <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Header */}
-      <div>
+      <div className="flex flex-col gap-3">
+        <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+          Diário
+        </h1>
         {/* Date navigation */}
-        <div className="flex items-center gap-1 mb-0.5">
-          <button
-            onClick={() => changeDate(-1)}
-            disabled={loadingDate}
-            className="p-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-40"
-          >
-            <ChevronLeft size={12} className="text-zinc-400" />
-          </button>
-          <p className={cn(
-            'text-[11px] text-zinc-400 dark:text-zinc-500 capitalize font-medium tracking-wide transition-opacity',
-            loadingDate && 'opacity-40'
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
+            loadingDate && 'opacity-50'
           )}>
-            {displayDate}
-          </p>
-          <button
-            onClick={() => changeDate(1)}
-            disabled={isToday || loadingDate}
-            className="p-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-          >
-            <ChevronRight size={12} className="text-zinc-400" />
-          </button>
+            <button
+              onClick={() => changeDate(-1)}
+              disabled={loadingDate}
+              className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-40 active:scale-95"
+              aria-label="Dia anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <p className="flex-1 text-center text-[13px] font-medium text-zinc-700 dark:text-zinc-200 capitalize select-none">
+              {displayDate}
+            </p>
+            <button
+              onClick={() => changeDate(1)}
+              disabled={isToday || loadingDate}
+              className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+              aria-label="Próximo dia"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
           {!isToday && (
             <button
               onClick={() => navigateTo(todayISO())}
-              className="ml-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors"
+              className="h-9 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-95 whitespace-nowrap"
             >
               Hoje
             </button>
           )}
         </div>
-        <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-          Diário
-        </h1>
       </div>
 
       {/* Daily summary */}
