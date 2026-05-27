@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { sendToUser } from '@/lib/notifications/webPush';
+import { sendToUser } from '@/lib/notifications/notify';
 
 export async function POST() {
   const session = await auth();
@@ -11,7 +11,6 @@ export async function POST() {
     body: 'Notificações funcionando perfeitamente!',
     category: 'updates',
     url: '/dashboard',
-    tag: 'test',
   });
 
   return NextResponse.json({ ok: true });

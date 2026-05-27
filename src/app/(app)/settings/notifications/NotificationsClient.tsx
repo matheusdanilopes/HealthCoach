@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { Bell, BellOff, CheckCircle2, AlertCircle, Loader2, ArrowLeft, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useNotifications } from '@/hooks/useNotifications';
 import type { NotificationPreferences } from '@/lib/notifications/types';
 
 const CATEGORIES: { key: keyof Omit<NotificationPreferences, 'enabled'>; label: string; desc: string }[] = [
@@ -14,7 +14,7 @@ const CATEGORIES: { key: keyof Omit<NotificationPreferences, 'enabled'>; label: 
 ];
 
 export default function NotificationsClient() {
-  const { permissionState, isSubscribed, isLoading, subscribe, unsubscribe } = usePushNotifications();
+  const { permissionState, isEnabled, isLoading, enable, disable } = useNotifications();
   const [prefs, setPrefs] = useState<NotificationPreferences>({
     enabled: true, imports: true, processing: true, updates: true,
   });
@@ -30,11 +30,11 @@ export default function NotificationsClient() {
       .finally(() => setLoadingPrefs(false));
   }, []);
 
-  async function handleToggleSubscription() {
-    if (isSubscribed) {
-      await unsubscribe();
+  async function handleToggle() {
+    if (isEnabled) {
+      disable();
     } else {
-      await subscribe();
+      await enable();
     }
   }
 
@@ -86,12 +86,9 @@ export default function NotificationsClient() {
       {isUnsupported && (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 rounded-2xl p-4 flex items-start gap-3">
           <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[13px] font-medium text-amber-700 dark:text-amber-400">Não suportado</p>
-            <p className="text-[12px] text-amber-600/80 dark:text-amber-500/80 mt-0.5">
-              Seu navegador não suporta notificações push. No iOS, use Safari 16.4+ e adicione o app à tela inicial.
-            </p>
-          </div>
+          <p className="text-[13px] text-amber-700 dark:text-amber-400">
+            Seu navegador não suporta notificações. Use Chrome, Firefox ou Safari atualizado.
+          </p>
         </div>
       )}
 
@@ -102,13 +99,13 @@ export default function NotificationsClient() {
           <div>
             <p className="text-[13px] font-medium text-red-600 dark:text-red-400">Permissão bloqueada</p>
             <p className="text-[12px] text-red-500/80 dark:text-red-400/70 mt-0.5">
-              Ative as notificações nas configurações do seu dispositivo para este site.
+              Ative as notificações nas configurações do navegador para este site.
             </p>
           </div>
         </div>
       )}
 
-      {/* Main toggle card */}
+      {/* Main toggle */}
       {!isUnsupported && (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
           <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
@@ -118,11 +115,11 @@ export default function NotificationsClient() {
           </div>
           <div className="p-4">
             <button
-              onClick={handleToggleSubscription}
+              onClick={handleToggle}
               disabled={isLoading || isDenied}
               className={cn(
                 'w-full flex items-center justify-between px-4 py-3.5 rounded-xl border transition-all duration-200 active:scale-[0.98]',
-                isSubscribed
+                isEnabled
                   ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-800/40'
                   : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40',
                 (isLoading || isDenied) && 'opacity-50 cursor-not-allowed',
@@ -131,11 +128,11 @@ export default function NotificationsClient() {
               <div className="flex items-center gap-3">
                 <div className={cn(
                   'h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0',
-                  isSubscribed ? 'bg-emerald-600' : 'bg-zinc-200 dark:bg-zinc-700',
+                  isEnabled ? 'bg-emerald-600' : 'bg-zinc-200 dark:bg-zinc-700',
                 )}>
                   {isLoading
                     ? <Loader2 size={15} className="text-white animate-spin" />
-                    : isSubscribed
+                    : isEnabled
                       ? <Bell size={15} className="text-white" />
                       : <BellOff size={15} className="text-zinc-500 dark:text-zinc-400" />
                   }
@@ -143,24 +140,22 @@ export default function NotificationsClient() {
                 <div className="text-left">
                   <p className={cn(
                     'text-[13px] font-semibold leading-none',
-                    isSubscribed ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300',
+                    isEnabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300',
                   )}>
-                    {isSubscribed ? 'Notificações ativas' : 'Notificações desativadas'}
+                    {isEnabled ? 'Notificações ativas' : 'Notificações desativadas'}
                   </p>
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                    {isSubscribed ? 'Toque para desativar' : 'Toque para ativar'}
+                    {isEnabled ? 'Toque para desativar' : 'Toque para ativar'}
                   </p>
                 </div>
               </div>
-
-              {/* Toggle pill */}
               <div className={cn(
                 'relative h-6 w-11 rounded-full transition-colors duration-200 flex-shrink-0',
-                isSubscribed ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-600',
+                isEnabled ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-600',
               )}>
                 <span className={cn(
                   'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all duration-200',
-                  isSubscribed ? 'left-[22px]' : 'left-0.5',
+                  isEnabled ? 'left-[22px]' : 'left-0.5',
                 )} />
               </div>
             </button>
@@ -169,7 +164,7 @@ export default function NotificationsClient() {
       )}
 
       {/* Category preferences */}
-      {isSubscribed && !loadingPrefs && (
+      {isEnabled && !loadingPrefs && (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
           <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -207,7 +202,7 @@ export default function NotificationsClient() {
       )}
 
       {/* Test notification */}
-      {isSubscribed && (
+      {isEnabled && (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
           <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -253,19 +248,12 @@ export default function NotificationsClient() {
                       : 'Enviar notificação de teste'}
               </span>
             </button>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-3 px-1">
+              A notificação aparece em até 30 segundos enquanto o app estiver aberto.
+            </p>
           </div>
         </div>
       )}
-
-      {/* iOS guidance */}
-      <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl p-4">
-        <p className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
-          iOS
-        </p>
-        <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-          No iPhone, adicione o app à tela inicial via Safari (&quot;Compartilhar → Adicionar à Tela de Início&quot;) e abra pelo ícone para ativar notificações push. Requer iOS 16.4 ou superior.
-        </p>
-      </div>
     </div>
   );
 }
