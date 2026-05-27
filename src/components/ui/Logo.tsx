@@ -3,14 +3,16 @@ import { cn } from '@/lib/utils';
 export function LogoIcon({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Left pillar of H */}
+      <rect x="4.9" y="5.8" width="3.4" height="12.4" rx="1.7" fill="white" fillOpacity="0.95" />
+      {/* Right pillar of H */}
+      <rect x="15.7" y="5.8" width="3.4" height="12.4" rx="1.7" fill="white" fillOpacity="0.95" />
+      {/* ECG crossbar connecting the pillars */}
       <path
-        d="M12 2C8.5 4.5 4 8.5 4 14C4 19.52 7.48 23 12 23C16.52 23 20 19.52 20 14C20 8.5 15.5 4.5 12 2Z"
-        fill="white"
-        fillOpacity="0.92"
-      />
-      <path
-        d="M7.5 13.5H9.5L10.5 10.5L12.5 17.5L14 12.5L15.5 13.5L17 13.5"
-        stroke="rgba(0,80,30,0.35)"
+        d="M8.3,12 L10,12 L10.8,9.4 L12,14.8 L13,10.5 L14,12 L15.7,12"
+        fill="none"
+        stroke="white"
+        strokeOpacity="0.95"
         strokeWidth="1.4"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -38,9 +40,9 @@ export default function Logo({ size = 'md', showText = true, className }: LogoPr
     <div className={cn('flex items-center', gap, className)}>
       <div className={cn(
         boxCls,
-        'bg-gradient-to-br from-emerald-500 to-emerald-700',
+        'bg-gradient-to-br from-emerald-500 to-emerald-800',
         'flex items-center justify-center flex-shrink-0',
-        'shadow-lg shadow-emerald-600/30',
+        'shadow-lg shadow-emerald-700/30',
       )}>
         <LogoIcon size={iconSize} />
       </div>

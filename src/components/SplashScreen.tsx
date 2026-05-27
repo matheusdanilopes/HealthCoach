@@ -15,7 +15,7 @@ export default function SplashScreen() {
     const t = setTimeout(() => {
       setVisible(false);
       try { sessionStorage.setItem('hc-splash', '1'); } catch {}
-    }, 1400);
+    }, 1600);
     return () => clearTimeout(t);
   }, []);
 
@@ -25,33 +25,39 @@ export default function SplashScreen() {
     <div
       className={[
         'fixed inset-0 z-[200] flex flex-col items-center justify-center select-none',
-        'bg-white dark:bg-[#0a0a0b]',
         'transition-opacity duration-500 ease-out',
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
       ].join(' ')}
+      style={{ background: 'linear-gradient(160deg, #059669 0%, #064e3b 55%, #022c22 100%)' }}
     >
-      <div className="flex flex-col items-center gap-5 animate-scale-in">
-        <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-2xl shadow-emerald-600/40">
-          <LogoIcon size={44} />
+      <div className="flex flex-col items-center gap-6">
+        {/* Icon with glow + shadow */}
+        <div className="relative animate-splash-icon">
+          {/* Ambient glow halo */}
+          <div className="absolute inset-0 rounded-[32px] bg-emerald-400/30 blur-2xl scale-150" />
+          {/* Icon container */}
+          <div
+            className="relative h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-400 to-emerald-800 flex items-center justify-center"
+            style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.45), 0 8px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.08)' }}
+          >
+            <LogoIcon size={44} />
+          </div>
         </div>
-        <div className="text-center">
-          <p className="text-[28px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-none">
+
+        {/* Brand text */}
+        <div className="text-center animate-splash-text">
+          <p className="text-[28px] font-bold text-white tracking-tight leading-none">
             HealthCoach
           </p>
-          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-2 tracking-[0.2em] uppercase">
+          <p className="text-sm font-semibold text-emerald-300 mt-2 tracking-[0.2em] uppercase">
             AI Coach
           </p>
         </div>
       </div>
 
-      <div className="absolute bottom-14 flex items-center gap-2">
-        {[0, 180, 360].map((delay) => (
-          <span
-            key={delay}
-            className="h-1.5 w-1.5 rounded-full bg-emerald-500"
-            style={{ animation: `pulse-soft 1.4s ease-in-out ${delay}ms infinite` }}
-          />
-        ))}
+      {/* Progress bar */}
+      <div className="absolute bottom-12 w-16 h-[2px] rounded-full bg-white/20 overflow-hidden">
+        <div className="h-full bg-white/70 rounded-full animate-splash-progress" />
       </div>
     </div>
   );
