@@ -4,13 +4,14 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import type { FoodLog } from '@/types';
 
 interface AddWorkoutModalProps {
   open: boolean;
   onClose: () => void;
   userId: string;
   date?: string;
-  onAdded: (calories: number) => void;
+  onAdded: (log: FoodLog) => void;
 }
 
 export default function AddWorkoutModal({ open, onClose, userId, date, onAdded }: AddWorkoutModalProps) {
@@ -23,22 +24,27 @@ export default function AddWorkoutModal({ open, onClose, userId, date, onAdded }
     if (!activity || !calories) return;
     setLoading(true);
 
-    await fetch('/api/food', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        food_name: `🏃 ${activity}`,
-        meal_type: 'snack',
-        calories: -Math.abs(parseInt(calories)),
-        log_date: date,
-      }),
-    });
+    try {
+      const res = await fetch('/api/food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          food_name: `🏃 ${activity}`,
+          meal_type: 'snack',
+          calories: -Math.abs(parseInt(calories)),
+          log_date: date,
+        }),
+      });
 
-    onAdded(parseInt(calories));
-    setActivity('');
-    setCalories('');
-    setLoading(false);
-    onClose();
+      if (!res.ok) return;
+      const log = await res.json() as FoodLog;
+      onAdded(log);
+      setActivity('');
+      setCalories('');
+      onClose();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
