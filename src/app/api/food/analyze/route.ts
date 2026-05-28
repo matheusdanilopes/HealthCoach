@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
+import { withGeminiRetry } from '@/lib/gemini-retry';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -128,16 +129,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
 
-    const response = await getGemini().models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts }],
-      config: {
-        systemInstruction: SYSTEM,
-        maxOutputTokens: 2048,
-        temperature: 0.2,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+    const response = await withGeminiRetry(() =>
+      getGemini().models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+        config: {
+          systemInstruction: SYSTEM,
+          maxOutputTokens: 2048,
+          temperature: 0.2,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+    );
 
     const raw = response.text ?? '';
     if (!raw) {
@@ -160,7 +163,14 @@ export async function POST(req: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Analyze API error:', msg);
+    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
     const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
+    if (is503) {
+      return NextResponse.json(
+        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
+        { status: 503 }
+      );
+    }
     if (is429) {
       return NextResponse.json(
         { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI, FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
+import { withGeminiRetry } from '@/lib/gemini-retry';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -88,18 +89,20 @@ INSTRUÇÕES:
       parts: [{ text: m.content }],
     }));
 
-    const response = await getGemini().models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents,
-      config: {
-        systemInstruction,
-        tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
-        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-        maxOutputTokens: 500,
-        temperature: 0.7,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+    const response = await withGeminiRetry(() =>
+      getGemini().models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+          maxOutputTokens: 500,
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+    );
 
     let foodLogged = false;
     let assistantMessage = '';
@@ -144,18 +147,20 @@ INSTRUÇÕES:
 
         // Follow-up with the function response
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
-        const followUp = await getGemini().models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            ...contents,
-            { role: 'model', parts: modelParts },
-            {
-              role: 'user',
-              parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
-            },
-          ],
-          config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
-        });
+        const followUp = await withGeminiRetry(() =>
+          getGemini().models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              ...contents,
+              { role: 'model', parts: modelParts },
+              {
+                role: 'user',
+                parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
+              },
+            ],
+            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
+          })
+        );
 
         assistantMessage = followUp.text ?? '';
       }
@@ -165,7 +170,22 @@ INSTRUÇÕES:
 
     return NextResponse.json({ message: assistantMessage, foodLogged, foodLog: insertedRow ?? null });
   } catch (error) {
-    console.error('Chat API error:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Chat API error:', msg);
+    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
+    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
+    if (is503) {
+      return NextResponse.json(
+        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
+        { status: 503 }
+      );
+    }
+    if (is429) {
+      return NextResponse.json(
+        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
+        { status: 429 }
+      );
+    }
     return NextResponse.json(
       { error: 'Erro interno. Verifique se a chave GEMINI_API_KEY está configurada.' },
       { status: 500 }
