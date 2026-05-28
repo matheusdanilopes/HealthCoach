@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { X, Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ChatMessage, Profile } from '@/types';
+import type { ChatMessage, FoodLog, Profile } from '@/types';
 
 interface AIChatProps {
   profile: Profile;
   dailyCalories: number;
   dailyWater: number;
   userId: string;
-  onFoodLogged?: () => void;
+  onFoodLogged?: (log: FoodLog) => void;
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === 'user';
   return (
     <div className={cn('flex gap-2 items-end', isUser ? 'flex-row-reverse' : 'flex-row')}>
@@ -40,7 +40,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       </div>
     </div>
   );
-}
+});
+
+const MAX_HISTORY = 10;
 
 export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
   const [open, setOpen] = useState(false);
@@ -53,14 +55,20 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Scroll to bottom only when messages change
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Focus input when chat opens
   useEffect(() => {
     if (open) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      setTimeout(() => inputRef.current?.focus(), 100);
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
     }
-  }, [open, messages]);
+  }, [open]);
 
-  async function sendMessage(e: React.FormEvent) {
+  const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
     if (!text || loading) return;
@@ -71,11 +79,15 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
     setLoading(true);
 
     try {
+      // Limit history sent to reduce payload size
+      const allMessages = [...messages, userMsg];
+      const trimmed = allMessages.slice(-MAX_HISTORY);
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })),
+          messages: trimmed.map((m) => ({ role: m.role, content: m.content })),
           userContext: {
             userId,
             name: profile.full_name,
@@ -90,7 +102,8 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
       });
       const data = await res.json();
       if (data.message) setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
-      if (data.foodLogged && onFoodLogged) onFoodLogged();
+      // Optimistic update - no router.refresh() needed
+      if (data.foodLogged && data.foodLog && onFoodLogged) onFoodLogged(data.foodLog as FoodLog);
     } catch {
       setMessages((prev) => [...prev, {
         role: 'assistant',
@@ -99,7 +112,7 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
     } finally {
       setLoading(false);
     }
-  }
+  }, [input, loading, messages, profile, dailyCalories, dailyWater, userId, onFoodLogged]);
 
   return (
     <>

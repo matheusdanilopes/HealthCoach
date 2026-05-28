@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,6 +20,15 @@ interface DashboardClientProps {
   serverDate: string;
   latestWeight: number;
   userId: string;
+  initialFoodLogs: FoodLog[];
+  initialWater: number;
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
 }
 
 export default function DashboardClient({
@@ -27,30 +36,33 @@ export default function DashboardClient({
   serverDate,
   latestWeight,
   userId,
+  initialFoodLogs,
+  initialWater,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
-  const [water, setWater] = useState(0);
+  const [foodLogs, setFoodLogs] = useState<FoodLog[]>(initialFoodLogs);
+  const [water, setWater] = useState(initialWater);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(serverDate);
-  const [loadingDate, setLoadingDate] = useState(true);
-  const [greetingText, setGreetingText] = useState('');
+  const [loadingDate, setLoadingDate] = useState(false);
+
+  // Stable greeting - computed once on mount
+  const greetingText = useMemo(() => getGreeting(), []);
 
   useEffect(() => {
-    const h = new Date().getHours();
-    if (h < 12) setGreetingText('Bom dia');
-    else if (h < 18) setGreetingText('Boa tarde');
-    else setGreetingText('Boa noite');
-
     const today = todayISO();
-    setSelectedDate(today);
-    fetch(`/api/logs?date=${today}`)
-      .then((r) => r.json())
-      .then((data) => { setFoodLogs(data.foodLogs ?? []); setWater(data.water ?? 0); })
-      .catch(() => { setFoodLogs([]); setWater(0); })
-      .finally(() => setLoadingDate(false));
+    // Handle timezone edge case where server date differs from client date
+    if (today !== serverDate) {
+      setSelectedDate(today);
+      setLoadingDate(true);
+      fetch(`/api/logs?date=${today}`)
+        .then((r) => r.json())
+        .then((data) => { setFoodLogs(data.foodLogs ?? []); setWater(data.water ?? 0); })
+        .catch(() => { setFoodLogs([]); setWater(0); })
+        .finally(() => setLoadingDate(false));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -76,19 +88,29 @@ export default function DashboardClient({
     navigateTo(d.toISOString().split('T')[0]);
   }
 
-  const positiveLogs = foodLogs.filter((l) => l.calories > 0);
-  const workoutBurned = Math.abs(
-    foodLogs.filter((l) => l.calories < 0).reduce((s, l) => s + l.calories, 0)
-  );
-
-  const stats = {
-    calories: positiveLogs.reduce((s, l) => s + l.calories, 0),
-    protein:  positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0),
-    carbs:    positiveLogs.reduce((s, l) => s + (l.carbs ?? 0), 0),
-    fat:      positiveLogs.reduce((s, l) => s + (l.fat ?? 0), 0),
-  };
+  // Memoize all derived stats to avoid redundant filter/reduce on every render
+  const { workoutBurned, stats } = useMemo(() => {
+    const positiveLogs = foodLogs.filter((l) => l.calories > 0);
+    const workoutBurned = Math.abs(
+      foodLogs.filter((l) => l.calories < 0).reduce((s, l) => s + l.calories, 0)
+    );
+    return {
+      workoutBurned,
+      stats: {
+        calories: positiveLogs.reduce((s, l) => s + l.calories, 0),
+        protein:  positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0),
+        carbs:    positiveLogs.reduce((s, l) => s + (l.carbs ?? 0), 0),
+        fat:      positiveLogs.reduce((s, l) => s + (l.fat ?? 0), 0),
+      },
+    };
+  }, [foodLogs]);
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
+    setFoodLogs((prev) => [...prev, log]);
+  }, []);
+
+  // Optimistic update from AI chat - avoids router.refresh() full re-render
+  const handleFoodLoggedFromChat = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
   }, []);
 
@@ -254,7 +276,7 @@ export default function DashboardClient({
           dailyCalories={stats.calories}
           dailyWater={water}
           userId={userId}
-          onFoodLogged={() => router.refresh()}
+          onFoodLogged={handleFoodLoggedFromChat}
         />
       )}
     </div>

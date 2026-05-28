@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
@@ -63,14 +63,23 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
     navigateTo(d.toISOString().split('T')[0]);
   }
 
-  const positiveLogs = logs.filter((l) => l.calories > 0);
-  const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
-  const workouts = logs.filter((l) => l.calories < 0);
-  const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
-  const net = totalCalories - workoutCalories;
-  const remaining = targetCalories - net;
-  const pct = targetCalories > 0 ? Math.min((net / targetCalories) * 100, 100) : 0;
-  const isOver = net > targetCalories;
+  const { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs } = useMemo(() => {
+    const positiveLogs = logs.filter((l) => l.calories > 0);
+    const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
+    const workouts = logs.filter((l) => l.calories < 0);
+    const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
+    const net = totalCalories - workoutCalories;
+    const remaining = targetCalories - net;
+    const pct = targetCalories > 0 ? Math.min((net / targetCalories) * 100, 100) : 0;
+    const isOver = net > targetCalories;
+    const mealLogs = {
+      breakfast: positiveLogs.filter((l) => l.meal_type === 'breakfast'),
+      lunch:     positiveLogs.filter((l) => l.meal_type === 'lunch'),
+      dinner:    positiveLogs.filter((l) => l.meal_type === 'dinner'),
+      snack:     positiveLogs.filter((l) => l.meal_type === 'snack'),
+    };
+    return { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs };
+  }, [logs, targetCalories]);
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setLogs((prev) => [...prev, log]);
@@ -205,7 +214,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
           <MealSection
             key={meal}
             mealType={meal}
-            logs={logs.filter((l) => l.meal_type === meal && l.calories > 0)}
+            logs={mealLogs[meal]}
             onAdd={() => openAddForMeal(meal)}
             onDelete={handleDelete}
             onEdit={setEditingLog}

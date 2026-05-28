@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 interface CalorieCardProps {
@@ -9,7 +9,7 @@ interface CalorieCardProps {
   target: number;
 }
 
-export default function CalorieCard({ consumed, burned, target }: CalorieCardProps) {
+const CalorieCard = memo(function CalorieCard({ consumed, burned, target }: CalorieCardProps) {
   const net = consumed - burned;
   const remaining = target - net;
   const pct = target > 0 ? Math.min((net / target) * 100, 100) : 0;
@@ -124,4 +124,6 @@ export default function CalorieCard({ consumed, burned, target }: CalorieCardPro
       </div>
     </div>
   );
-}
+});
+
+export default CalorieCard;

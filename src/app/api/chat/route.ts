@@ -103,6 +103,7 @@ INSTRUÇÕES:
 
     let foodLogged = false;
     let assistantMessage = '';
+    let insertedRow: Record<string, unknown> | null = null;
 
     const functionCalls = response.functionCalls;
     if (functionCalls?.length) {
@@ -120,7 +121,7 @@ INSTRUÇÕES:
         const today = new Date().toISOString().split('T')[0];
         let insertError: unknown = null;
         try {
-          const { error } = await supabase.from('food_logs').insert({
+          const { data, error } = await supabase.from('food_logs').insert({
             user_id: user.id,
             food_name: args.food_name,
             meal_type: args.meal_type,
@@ -129,8 +130,9 @@ INSTRUÇÕES:
             carbs: args.carbs ?? null,
             fat: args.fat ?? null,
             log_date: today,
-          });
+          }).select().single();
           if (error) insertError = error;
+          else insertedRow = data as Record<string, unknown>;
         } catch (e) {
           insertError = e;
         }
@@ -161,7 +163,7 @@ INSTRUÇÕES:
       assistantMessage = response.text ?? '';
     }
 
-    return NextResponse.json({ message: assistantMessage, foodLogged });
+    return NextResponse.json({ message: assistantMessage, foodLogged, foodLog: insertedRow ?? null });
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(
