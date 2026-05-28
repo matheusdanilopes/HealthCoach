@@ -1,15 +1,19 @@
 'use client';
 
-import { memo, useEffect, useState, useCallback } from 'react';
-import { Sparkles, Apple, Dumbbell, TrendingUp, Brain, ChevronRight, RefreshCw } from 'lucide-react';
+import { memo, useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Sparkles, Apple, Dumbbell, TrendingUp, Brain,
+  ChevronRight, RefreshCw, Droplets, Check,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AIInsight } from '@/types';
 
 const TYPE_CONFIG = {
-  nutrition: { icon: Apple, label: 'Nutrição' },
-  workout:   { icon: Dumbbell, label: 'Treino' },
-  body:      { icon: TrendingUp, label: 'Corpo' },
-  behavior:  { icon: Brain, label: 'Hábitos' },
+  nutrition: { icon: Apple,      label: 'Nutrição' },
+  workout:   { icon: Dumbbell,   label: 'Treino'   },
+  body:      { icon: TrendingUp, label: 'Corpo'    },
+  behavior:  { icon: Brain,      label: 'Hábitos'  },
 };
 
 const PRIORITY_CONFIG = {
@@ -58,36 +62,40 @@ function InsightSkeleton() {
             <div className="h-3 w-4/5 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
           </div>
         </div>
+        <div className="mt-4 h-9 w-36 rounded-xl bg-zinc-100 dark:bg-zinc-800 animate-pulse ml-auto" />
       </div>
     </div>
   );
 }
 
-// Minimum interval between auto-refreshes triggered by meal additions (ms)
-const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000;
+// Minimum gap between auto-refreshes triggered by meal additions
+const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 interface AIInsightCardProps {
   userId: string;
-  /** Increment to trigger a refresh after a meal is logged */
+  /** Increment each time a meal/workout is logged to trigger a background refresh */
   refreshKey?: number;
 }
 
 const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey = 0 }: AIInsightCardProps) {
-  const [insight, setInsight] = useState<AIInsight | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const router = useRouter();
+  const [insight, setInsight]     = useState<AIInsight | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const lastAutoRefresh = useState<number>(0);
+  const [actionDone, setActionDone] = useState(false);
+  const [actioning, setActioning]   = useState(false);
+  const lastAutoRefresh             = useRef(0);
 
   const fetchInsight = useCallback(async (force = false) => {
-    if (force) setRefreshing(true);
-    else setLoading(true);
+    if (force) setRefreshing(true); else setLoading(true);
     setError(false);
     try {
       const res = await fetch(force ? '/api/ai-insights?refresh=1' : '/api/ai-insights');
       if (!res.ok) throw new Error('fetch failed');
       const data: AIInsight = await res.json();
       setInsight(data);
+      setActionDone(false);
     } catch {
       setError(true);
     } finally {
@@ -96,36 +104,58 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
     }
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    fetchInsight();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Initial fetch
+  useEffect(() => { fetchInsight(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-refresh when a meal is added, respecting the minimum interval
+  // Auto-refresh after meal/workout logged, respecting minimum interval
   useEffect(() => {
     if (refreshKey === 0) return;
     const now = Date.now();
-    if (now - lastAutoRefresh[0] < AUTO_REFRESH_INTERVAL) return;
-    lastAutoRefresh[0] = now;
+    if (now - lastAutoRefresh.current < AUTO_REFRESH_INTERVAL_MS) return;
+    lastAutoRefresh.current = now;
     fetchInsight(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
+  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAction = useCallback(async () => {
+    if (!insight?.metadata) return;
+    const action = insight.metadata.action as { type: string; value: number | null } | null;
+    if (!action) return;
+
+    setActioning(true);
+    try {
+      if (action.type === 'log_water') {
+        const ml = action.value ?? 500;
+        await fetch('/api/water', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount_ml: ml }),
+        });
+        setActionDone(true);
+      } else if (action.type === 'open_diary') {
+        router.push('/diary');
+      }
+    } finally {
+      setActioning(false);
+    }
+  }, [insight, router]);
 
   if (loading) return <InsightSkeleton />;
   if (error || !insight) return null;
 
-  const typeConfig  = TYPE_CONFIG[insight.type]   ?? TYPE_CONFIG.behavior;
-  const prioConfig  = PRIORITY_CONFIG[insight.priority] ?? PRIORITY_CONFIG.informativo;
+  const typeConfig = TYPE_CONFIG[insight.type as keyof typeof TYPE_CONFIG]      ?? TYPE_CONFIG.behavior;
+  const prioConfig = PRIORITY_CONFIG[insight.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.informativo;
   const Icon = typeConfig.icon;
+
+  const action = insight.metadata?.action as { type: string; value: number | null } | null | undefined;
+  const hasAction = action?.type === 'log_water' || action?.type === 'open_diary';
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none overflow-hidden animate-fade-in">
-      {/* Accent bar */}
+      {/* Gradient accent bar */}
       <div className="h-[2px] bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600" />
 
       <div className="p-5">
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-1.5">
             <Sparkles size={11} className="text-emerald-500 flex-shrink-0" />
@@ -139,27 +169,24 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
             className="p-1 rounded-lg text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/70 transition-all disabled:opacity-40 active:scale-90"
             aria-label="Atualizar insight"
           >
-            <RefreshCw size={12} className={cn('transition-transform', refreshing && 'animate-spin')} />
+            <RefreshCw size={12} className={cn(refreshing && 'animate-spin')} />
           </button>
         </div>
 
-        {/* Insight content */}
+        {/* Content */}
         <div className="flex items-start gap-3">
-          {/* Type icon */}
           <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', prioConfig.icon)}>
             <Icon size={16} />
           </div>
 
-          {/* Text block */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-2 mb-1.5">
               <h3 className="flex-1 text-[14px] font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">
                 {insight.title}
               </h3>
-              {/* Priority badge */}
               <span className={cn(
                 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border flex-shrink-0 mt-0.5',
-                prioConfig.badge
+                prioConfig.badge,
               )}>
                 <span className={cn('h-1.5 w-1.5 rounded-full', prioConfig.dot)} />
                 {prioConfig.label}
@@ -171,13 +198,47 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
           </div>
         </div>
 
-        {/* CTA */}
-        {insight.cta && (
-          <div className="flex justify-end mt-3.5">
-            <span className="flex items-center gap-1 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
-              {insight.cta}
-              <ChevronRight size={12} />
-            </span>
+        {/* Action area */}
+        {(hasAction || insight.cta) && (
+          <div className="flex justify-end mt-4">
+            {hasAction ? (
+              /* One-tap action button */
+              <button
+                onClick={handleAction}
+                disabled={actioning || actionDone}
+                className={cn(
+                  'flex items-center gap-2 h-9 px-4 rounded-xl text-[12px] font-semibold transition-all active:scale-[0.97] disabled:pointer-events-none',
+                  actionDone
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/50'
+                    : action?.type === 'log_water'
+                      ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-sm shadow-sky-500/25'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/25',
+                )}
+              >
+                {actionDone ? (
+                  <>
+                    <Check size={13} strokeWidth={2.5} />
+                    Registrado!
+                  </>
+                ) : action?.type === 'log_water' ? (
+                  <>
+                    <Droplets size={13} />
+                    {insight.cta ?? `Registrar ${action.value ?? 500}ml`}
+                  </>
+                ) : (
+                  <>
+                    {insight.cta ?? 'Ver diário'}
+                    <ChevronRight size={13} />
+                  </>
+                )}
+              </button>
+            ) : (
+              /* Static CTA hint */
+              <span className="flex items-center gap-1 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
+                {insight.cta}
+                <ChevronRight size={12} />
+              </span>
+            )}
           </div>
         )}
       </div>
