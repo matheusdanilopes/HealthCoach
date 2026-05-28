@@ -11,6 +11,10 @@ interface AIChatProps {
   dailyWater: number;
   userId: string;
   onFoodLogged?: (log: FoodLog) => void;
+  /** Increment to programmatically open the chat */
+  triggerOpen?: number;
+  /** Pre-fills the input when triggerOpen fires */
+  initialInput?: string;
 }
 
 const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage }) {
@@ -44,7 +48,7 @@ const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage })
 
 const MAX_HISTORY = 10;
 
-export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
+export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged, triggerOpen, initialInput }: AIChatProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: 'assistant',
@@ -54,6 +58,9 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevTrigger = useRef(0);
+  const initialInputRef = useRef(initialInput);
+  initialInputRef.current = initialInput;
 
   // Scroll to bottom only when messages change
   useEffect(() => {
@@ -67,6 +74,16 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
       return () => clearTimeout(t);
     }
   }, [open]);
+
+  // Open chat with pre-filled input when triggered externally (e.g. from insight card)
+  useEffect(() => {
+    if (!triggerOpen || triggerOpen === prevTrigger.current) return;
+    prevTrigger.current = triggerOpen;
+    setOpen(true);
+    if (initialInputRef.current) {
+      setInput(initialInputRef.current);
+    }
+  }, [triggerOpen]);
 
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

@@ -8,6 +8,7 @@ import { Scale, Plus, Dumbbell, Flame, TrendingDown, ChevronLeft, ChevronRight }
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
+import AIInsightCard from '@/components/dashboard/AIInsightCard';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
@@ -47,6 +48,9 @@ export default function DashboardClient({
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(serverDate);
   const [loadingDate, setLoadingDate] = useState(false);
+  const [insightKey, setInsightKey]       = useState(0);
+  const [chatTrigger, setChatTrigger]     = useState(0);
+  const [chatInitialInput, setChatInitialInput] = useState('');
 
   // Stable greeting - computed once on mount
   const greetingText = useMemo(() => getGreeting(), []);
@@ -107,11 +111,13 @@ export default function DashboardClient({
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
+    setInsightKey((k) => k + 1);
   }, []);
 
   // Optimistic update from AI chat - avoids router.refresh() full re-render
   const handleFoodLoggedFromChat = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
+    setInsightKey((k) => k + 1);
   }, []);
 
   const firstName = profile?.full_name?.split(' ')[0];
@@ -181,6 +187,18 @@ export default function DashboardClient({
           burned={workoutBurned}
           target={profile?.target_calories ?? 2000}
         />
+
+        {/* AI Insights — only on today's view */}
+        {isToday && (
+          <AIInsightCard
+            userId={userId}
+            refreshKey={insightKey}
+            onOpenChat={(msg) => {
+              setChatInitialInput(msg);
+              setChatTrigger((k) => k + 1);
+            }}
+          />
+        )}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3">
@@ -258,7 +276,7 @@ export default function DashboardClient({
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(log) => setFoodLogs((prev) => [...prev, log])}
+        onAdded={(log) => { setFoodLogs((prev) => [...prev, log]); setInsightKey((k) => k + 1); }}
       />
       {isToday && (
         <WeightLogModal
@@ -277,6 +295,8 @@ export default function DashboardClient({
           dailyWater={water}
           userId={userId}
           onFoodLogged={handleFoodLoggedFromChat}
+          triggerOpen={chatTrigger}
+          initialInput={chatInitialInput}
         />
       )}
     </div>
