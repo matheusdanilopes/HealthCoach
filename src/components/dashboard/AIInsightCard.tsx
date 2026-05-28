@@ -1,11 +1,7 @@
 'use client';
 
 import { memo, useEffect, useState, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  Sparkles, Apple, Dumbbell, TrendingUp, Brain,
-  ChevronRight, RefreshCw, Droplets, Check,
-} from 'lucide-react';
+import { Sparkles, Apple, Dumbbell, TrendingUp, Brain, ChevronRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AIInsight } from '@/types';
 
@@ -62,29 +58,30 @@ function InsightSkeleton() {
             <div className="h-3 w-4/5 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
           </div>
         </div>
-        <div className="mt-4 h-9 w-36 rounded-xl bg-zinc-100 dark:bg-zinc-800 animate-pulse ml-auto" />
       </div>
     </div>
   );
 }
 
-// Minimum gap between auto-refreshes triggered by meal additions
 const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 interface AIInsightCardProps {
   userId: string;
   /** Increment each time a meal/workout is logged to trigger a background refresh */
   refreshKey?: number;
+  /** Called when the user taps the CTA — passes a pre-formed message for the chat */
+  onOpenChat?: (message: string) => void;
 }
 
-const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey = 0 }: AIInsightCardProps) {
-  const router = useRouter();
-  const [insight, setInsight]     = useState<AIInsight | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(false);
+const AIInsightCard = memo(function AIInsightCard({
+  userId: _userId,
+  refreshKey = 0,
+  onOpenChat,
+}: AIInsightCardProps) {
+  const [insight, setInsight]       = useState<AIInsight | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [actionDone, setActionDone] = useState(false);
-  const [actioning, setActioning]   = useState(false);
   const lastAutoRefresh             = useRef(0);
 
   const fetchInsight = useCallback(async (force = false) => {
@@ -95,7 +92,6 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
       if (!res.ok) throw new Error('fetch failed');
       const data: AIInsight = await res.json();
       setInsight(data);
-      setActionDone(false);
     } catch {
       setError(true);
     } finally {
@@ -104,10 +100,8 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
     }
   }, []);
 
-  // Initial fetch
   useEffect(() => { fetchInsight(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-refresh after meal/workout logged, respecting minimum interval
   useEffect(() => {
     if (refreshKey === 0) return;
     const now = Date.now();
@@ -116,38 +110,19 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
     fetchInsight(true);
   }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleAction = useCallback(async () => {
-    if (!insight?.metadata) return;
-    const action = insight.metadata.action as { type: string; value: number | null } | null;
-    if (!action) return;
-
-    setActioning(true);
-    try {
-      if (action.type === 'log_water') {
-        const ml = action.value ?? 500;
-        await fetch('/api/water', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount_ml: ml }),
-        });
-        setActionDone(true);
-      } else if (action.type === 'open_diary') {
-        router.push('/diary');
-      }
-    } finally {
-      setActioning(false);
-    }
-  }, [insight, router]);
-
   if (loading) return <InsightSkeleton />;
   if (error || !insight) return null;
 
-  const typeConfig = TYPE_CONFIG[insight.type as keyof typeof TYPE_CONFIG]      ?? TYPE_CONFIG.behavior;
+  const typeConfig = TYPE_CONFIG[insight.type as keyof typeof TYPE_CONFIG]           ?? TYPE_CONFIG.behavior;
   const prioConfig = PRIORITY_CONFIG[insight.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.informativo;
   const Icon = typeConfig.icon;
 
-  const action = insight.metadata?.action as { type: string; value: number | null } | null | undefined;
-  const hasAction = action?.type === 'log_water' || action?.type === 'open_diary';
+  function handleCTA() {
+    if (!onOpenChat) return;
+    // Build a natural opening message from the insight context
+    const msg = `Quero saber mais sobre: "${insight!.title}". ${insight!.message}`;
+    onOpenChat(msg);
+  }
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none overflow-hidden animate-fade-in">
@@ -198,47 +173,16 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey 
           </div>
         </div>
 
-        {/* Action area */}
-        {(hasAction || insight.cta) && (
+        {/* CTA → opens chat with context */}
+        {insight.cta && onOpenChat && (
           <div className="flex justify-end mt-4">
-            {hasAction ? (
-              /* One-tap action button */
-              <button
-                onClick={handleAction}
-                disabled={actioning || actionDone}
-                className={cn(
-                  'flex items-center gap-2 h-9 px-4 rounded-xl text-[12px] font-semibold transition-all active:scale-[0.97] disabled:pointer-events-none',
-                  actionDone
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/50'
-                    : action?.type === 'log_water'
-                      ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-sm shadow-sky-500/25'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/25',
-                )}
-              >
-                {actionDone ? (
-                  <>
-                    <Check size={13} strokeWidth={2.5} />
-                    Registrado!
-                  </>
-                ) : action?.type === 'log_water' ? (
-                  <>
-                    <Droplets size={13} />
-                    {insight.cta ?? `Registrar ${action.value ?? 500}ml`}
-                  </>
-                ) : (
-                  <>
-                    {insight.cta ?? 'Ver diário'}
-                    <ChevronRight size={13} />
-                  </>
-                )}
-              </button>
-            ) : (
-              /* Static CTA hint */
-              <span className="flex items-center gap-1 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
-                {insight.cta}
-                <ChevronRight size={12} />
-              </span>
-            )}
+            <button
+              onClick={handleCTA}
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold shadow-sm shadow-emerald-600/25 transition-all active:scale-[0.97]"
+            >
+              {insight.cta}
+              <ChevronRight size={12} strokeWidth={2.5} />
+            </button>
           </div>
         )}
       </div>

@@ -30,7 +30,6 @@ function extractJSON(raw: string): any {
 
 const VALID_TYPES      = ['nutrition', 'workout', 'body', 'behavior'];
 const VALID_PRIORITIES = ['informativo', 'atencao', 'positivo', 'recomendacao'];
-const VALID_ACTIONS    = ['log_water', 'open_diary', null];
 
 const MEAL_LABEL: Record<string, string> = {
   breakfast: 'Café da manhã',
@@ -53,13 +52,11 @@ const DOW_FOCUS: Record<number, string> = {
 };
 
 const FALLBACK_INSIGHT = {
-  type:        'nutrition',
-  priority:    'recomendacao',
-  title:       'Registre sua primeira refeição',
-  message:     'Comece registrando o café da manhã para receber orientações personalizadas sobre o restante do dia.',
-  cta:         'Registrar refeição',
-  action_type: 'open_diary',
-  action_value: null as number | null,
+  type:     'nutrition',
+  priority: 'recomendacao',
+  title:    'Registre sua primeira refeição',
+  message:  'Comece registrando o café da manhã para receber orientações personalizadas sobre o restante do dia.',
+  cta:      'Me ajude',
 };
 
 export async function GET(req: Request) {
@@ -246,7 +243,7 @@ HISTÓRICO — últimos 14 dias (${histDates.length} com registro):
 FOCO: ${focusText}
 
 Retorne APENAS JSON válido (sem markdown):
-{"type":"nutrition|workout|body|behavior","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras","message":"1-2 frases específicas com dados reais","cta":"rótulo do botão (2-4 palavras) ou null","action_type":"log_water|open_diary|null","action_value":500}`;
+{"type":"nutrition|workout|body|behavior","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras","message":"1-2 frases específicas com dados reais","cta":"rótulo do botão que abre o chat (ex: 'Ver sugestões', 'Me ajude', 'Saiba mais') ou null"}`;
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
@@ -257,7 +254,7 @@ Retorne APENAS JSON válido (sem markdown):
 REGRAS:
 1. Tom: sempre positivo, sem julgamentos. Exagero → "Dias assim acontecem — o importante é o equilíbrio a longo prazo."
 2. Especificidade: cite alimentos, quantidades e horários reais dos dados. Nunca invente padrões não evidenciados.
-3. action_type: use "log_water" (com action_value em ml, ex: 500) ao sugerir hidratação. Use "open_diary" para incentivar registrar refeições. Null caso contrário.
+3. cta: rótulo curto do botão que abrirá o chat para aprofundar o tema (ex: "Ver sugestões", "Me ajude"). Se não houver ação clara, use null.
 4. Variedade: siga o FOCO indicado, priorizando ⚠️ ou 🎉.
 5. Retorne SOMENTE JSON válido, sem markdown, sem texto fora do JSON.`,
           maxOutputTokens: 280,
@@ -268,26 +265,18 @@ REGRAS:
     );
 
     const raw = response.text ?? '';
-    let parsed: {
-      type: string; priority: string; title: string; message: string;
-      cta?: string | null; action_type?: string | null; action_value?: number | null;
-    };
+    let parsed: { type: string; priority: string; title: string; message: string; cta?: string | null };
     try { parsed = extractJSON(raw); }
     catch { parsed = FALLBACK_INSIGHT; }
 
-    const actionType  = VALID_ACTIONS.includes(parsed.action_type ?? null)
-      ? (parsed.action_type ?? null) : null;
-    const actionValue = typeof parsed.action_value === 'number' ? parsed.action_value : null;
-
     const insightData = {
       user_id:  userId,
-      type:     VALID_TYPES.includes(parsed.type)           ? parsed.type     : 'nutrition',
-      priority: VALID_PRIORITIES.includes(parsed.priority)  ? parsed.priority : 'recomendacao',
+      type:     VALID_TYPES.includes(parsed.type)          ? parsed.type     : 'nutrition',
+      priority: VALID_PRIORITIES.includes(parsed.priority) ? parsed.priority : 'recomendacao',
       title:    String(parsed.title   ?? FALLBACK_INSIGHT.title).slice(0, 100),
       message:  String(parsed.message ?? FALLBACK_INSIGHT.message).slice(0, 300),
       cta:      parsed.cta ? String(parsed.cta).slice(0, 60) : null,
       metadata: {
-        action: actionType ? { type: actionType, value: actionValue ?? (actionType === 'log_water' ? 500 : null) } : null,
         todayCal, todayProt, remainCal, remainProt,
         avgCal, avgProt, workoutDays, histDays: histDates.length, streak, weekendSpike,
       },

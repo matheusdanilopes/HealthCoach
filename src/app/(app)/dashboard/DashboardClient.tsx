@@ -48,7 +48,9 @@ export default function DashboardClient({
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(serverDate);
   const [loadingDate, setLoadingDate] = useState(false);
-  const [insightKey, setInsightKey] = useState(0);
+  const [insightKey, setInsightKey]       = useState(0);
+  const [chatTrigger, setChatTrigger]     = useState(0);
+  const [chatInitialInput, setChatInitialInput] = useState('');
 
   // Stable greeting - computed once on mount
   const greetingText = useMemo(() => getGreeting(), []);
@@ -187,7 +189,16 @@ export default function DashboardClient({
         />
 
         {/* AI Insights — only on today's view */}
-        {isToday && <AIInsightCard userId={userId} refreshKey={insightKey} />}
+        {isToday && (
+          <AIInsightCard
+            userId={userId}
+            refreshKey={insightKey}
+            onOpenChat={(msg) => {
+              setChatInitialInput(msg);
+              setChatTrigger((k) => k + 1);
+            }}
+          />
+        )}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3">
@@ -284,6 +295,8 @@ export default function DashboardClient({
           dailyWater={water}
           userId={userId}
           onFoodLogged={handleFoodLoggedFromChat}
+          triggerOpen={chatTrigger}
+          initialInput={chatInitialInput}
         />
       )}
     </div>
