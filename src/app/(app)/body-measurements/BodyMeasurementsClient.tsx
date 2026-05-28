@@ -17,7 +17,7 @@ import {
   Lightbulb, GitCompare, X, ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, todayISO } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
@@ -62,7 +62,7 @@ const MEASUREMENT_FIELDS: MeasurementField[] = [
 
 /* ─── Helpers ─── */
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayISO();
 
 function avg(a: number | null, b: number | null): number | null {
   if (a != null && b != null) return (a + b) / 2;
