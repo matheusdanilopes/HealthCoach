@@ -14,30 +14,28 @@ const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 interface DiaryClientProps {
   userId: string;
-  initialLogs: FoodLog[];
-  initialDate: string;
+  serverDate: string;
   targetCalories: number;
 }
 
-export default function DiaryClient({ userId, initialLogs, initialDate, targetCalories }: DiaryClientProps) {
-  const clientToday = todayISO();
-  const [logs, setLogs] = useState<FoodLog[]>(initialDate === clientToday ? initialLogs : []);
+export default function DiaryClient({ userId, serverDate, targetCalories }: DiaryClientProps) {
+  const [logs, setLogs] = useState<FoodLog[]>([]);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
-  const [selectedDate, setSelectedDate] = useState(clientToday);
-  const [loadingDate, setLoadingDate] = useState(initialDate !== clientToday);
+  const [selectedDate, setSelectedDate] = useState(serverDate);
+  const [loadingDate, setLoadingDate] = useState(true);
   const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
 
   const isToday = selectedDate === todayISO();
 
   useEffect(() => {
-    if (initialDate !== clientToday) {
-      fetch(`/api/logs?date=${clientToday}`)
-        .then((r) => r.json())
-        .then((data) => setLogs(data.foodLogs ?? []))
-        .finally(() => setLoadingDate(false));
-    }
+    const today = todayISO();
+    setSelectedDate(today);
+    fetch(`/api/logs?date=${today}`)
+      .then((r) => r.json())
+      .then((data) => setLogs(data.foodLogs ?? []))
+      .finally(() => setLoadingDate(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
