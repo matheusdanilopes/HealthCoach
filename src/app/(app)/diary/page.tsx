@@ -26,6 +26,7 @@ export default async function DiaryPage() {
     <DiaryClient
       userId={userId}
       initialLogs={(foodData as FoodLog[]) ?? []}
+      initialDate={today}
       targetCalories={profileData?.target_calories ?? 2000}
     />
   );
