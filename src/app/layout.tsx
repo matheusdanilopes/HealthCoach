@@ -8,8 +8,21 @@ export const metadata: Metadata = {
   description: 'Seu coach de saúde com inteligência artificial',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'HealthCoach AI',
+    startupImage: [
+      { url: '/splash/splash-iphone-se.png',         media: '(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)' },
+      { url: '/splash/splash-iphone-8plus.png',      media: '(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-x.png',          media: '(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-xr.png',         media: '(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)' },
+      { url: '/splash/splash-iphone-xsmax.png',      media: '(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-12.png',         media: '(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-12max.png',      media: '(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-14pro.png',      media: '(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-14promax.png',   media: '(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-16pro.png',      media: '(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)' },
+      { url: '/splash/splash-iphone-16promax.png',   media: '(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3)' },
+    ],
   },
   icons: {
     icon: [
