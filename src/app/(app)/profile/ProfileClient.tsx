@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download } from 'lucide-react';
+import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   calculateTMB,
@@ -64,8 +64,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [customTmb, setCustomTmb] = useState(derivedInitialTmb());
   const [customMeta, setCustomMeta] = useState(String(profile?.target_calories ?? ''));
 
-  // Auto-recalculate TMB and Meta when physical data changes
-  useEffect(() => {
+  function handleRecalculate() {
     const w = parseFloat(weight);
     const h = parseFloat(height);
     const sex = profile?.sex;
@@ -76,7 +75,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     const meta = calculateTargetCalories(tdee);
     setCustomTmb(String(tmb));
     setCustomMeta(String(meta));
-  }, [weight, height, birthDate, activityLevel, profile?.sex]);
+  }
 
   useEffect(() => {
     const checkSW = () => {
@@ -269,23 +268,21 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                 Metas calóricas
               </label>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                Recalculado automaticamente com os dados acima
-              </p>
+              <button
+                type="button"
+                onClick={handleRecalculate}
+                className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+              >
+                <RefreshCw size={10} />
+                Recalcular
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label="TMB (kcal)"
                 type="number"
                 value={customTmb}
-                onChange={(e) => {
-                  setCustomTmb(e.target.value);
-                  const tmb = Number(e.target.value);
-                  if (tmb > 0) {
-                    const tdee = calculateTDEE(tmb, activityLevel as 'sedentary' | 'moderate' | 'active');
-                    setCustomMeta(String(calculateTargetCalories(tdee)));
-                  }
-                }}
+                onChange={(e) => setCustomTmb(e.target.value)}
                 min="500"
                 max="5000"
               />
