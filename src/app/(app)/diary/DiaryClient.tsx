@@ -35,6 +35,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
     fetch(`/api/logs?date=${today}`)
       .then((r) => r.json())
       .then((data) => setLogs(data.foodLogs ?? []))
+      .catch(() => setLogs([]))
       .finally(() => setLoadingDate(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,7 +47,9 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
     try {
       const res = await fetch(`/api/logs?date=${date}`);
       const data = await res.json();
-      setLogs(data.foodLogs);
+      setLogs(data.foodLogs ?? []);
+    } catch {
+      setLogs([]);
     } finally {
       setLoadingDate(false);
     }

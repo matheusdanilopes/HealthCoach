@@ -17,35 +17,41 @@ import type { FoodLog, Profile } from '@/types';
 
 interface DashboardClientProps {
   profile: Profile | null;
-  initialFoodLogs: FoodLog[];
-  initialWater: number;
+  serverDate: string;
   latestWeight: number;
   userId: string;
 }
 
 export default function DashboardClient({
   profile,
-  initialFoodLogs,
-  initialWater,
+  serverDate,
   latestWeight,
   userId,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [foodLogs, setFoodLogs] = useState<FoodLog[]>(initialFoodLogs);
-  const [water, setWater] = useState(initialWater);
+  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
+  const [water, setWater] = useState(0);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(todayISO());
-  const [loadingDate, setLoadingDate] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(serverDate);
+  const [loadingDate, setLoadingDate] = useState(true);
   const [greetingText, setGreetingText] = useState('');
 
-  // Use device local time for greeting
   useEffect(() => {
     const h = new Date().getHours();
     if (h < 12) setGreetingText('Bom dia');
     else if (h < 18) setGreetingText('Boa tarde');
     else setGreetingText('Boa noite');
+
+    const today = todayISO();
+    setSelectedDate(today);
+    fetch(`/api/logs?date=${today}`)
+      .then((r) => r.json())
+      .then((data) => { setFoodLogs(data.foodLogs ?? []); setWater(data.water ?? 0); })
+      .catch(() => { setFoodLogs([]); setWater(0); })
+      .finally(() => setLoadingDate(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isToday = selectedDate === todayISO();
@@ -57,8 +63,8 @@ export default function DashboardClient({
     try {
       const res = await fetch(`/api/logs?date=${date}`);
       const data = await res.json();
-      setFoodLogs(data.foodLogs);
-      setWater(data.water);
+      setFoodLogs(data.foodLogs ?? []);
+      setWater(data.water ?? 0);
     } finally {
       setLoadingDate(false);
     }
