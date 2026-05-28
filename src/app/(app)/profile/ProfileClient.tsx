@@ -1,12 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { LogOut, Save, Zap, Target, ShieldCheck, ChevronRight, Check, Download, RefreshCw } from 'lucide-react';
+import {
+  LogOut,
+  Save,
+  Zap,
+  Target,
+  ShieldCheck,
+  ChevronRight,
+  Check,
+  Download,
+  RefreshCw,
+  Pencil,
+  Calculator,
+  RotateCcw,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   calculateTMB,
@@ -24,8 +37,8 @@ interface ProfileClientProps {
 
 const ACTIVITY_OPTIONS = [
   { value: 'sedentary', label: 'Sedentário', desc: 'Pouco exercício', icon: '🛋️' },
-  { value: 'moderate',  label: 'Moderado',   desc: '3–5x/semana',    icon: '🚶' },
-  { value: 'active',    label: 'Ativo',       desc: '6–7x/semana',    icon: '🏃' },
+  { value: 'moderate', label: 'Moderado', desc: '3–5×/semana', icon: '🚶' },
+  { value: 'active', label: 'Ativo', desc: '6–7×/semana', icon: '🏃' },
 ];
 
 const MULTIPLIERS: Record<string, number> = {
@@ -34,55 +47,86 @@ const MULTIPLIERS: Record<string, number> = {
   active: 1.725,
 };
 
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+      <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          {title}
+        </p>
+      </div>
+      <div className="p-5 flex flex-col gap-4">{children}</div>
+    </div>
+  );
+}
+
 export default function ProfileClient({ profile, userId, email }: ProfileClientProps) {
   const router = useRouter();
+
+  // Personal data
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [birthDate, setBirthDate] = useState(profile?.birth_date ?? '');
+  const [sex, setSex] = useState<'male' | 'female'>(profile?.sex ?? 'male');
+
+  // Physical metrics
   const [weight, setWeight] = useState(String(profile?.current_weight ?? ''));
   const [height, setHeight] = useState(String(profile?.height_cm ?? ''));
-  const [activityLevel, setActivityLevel] = useState(profile?.activity_level ?? 'sedentary');
+  const [activityLevel, setActivityLevel] = useState<'sedentary' | 'moderate' | 'active'>(
+    (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active'
+  );
+
+  // Caloric goals — TMB initialized in useEffect to preserve manual values
+  const [customTmb, setCustomTmb] = useState('');
+  const [isTmbManual, setIsTmbManual] = useState(false);
+  const [customMeta, setCustomMeta] = useState(String(profile?.target_calories ?? ''));
+
+  // UI states
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<{ prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<{
+    prompt(): Promise<void>;
+    userChoice: Promise<{ outcome: string }>;
+  } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
 
-  // Derive initial TMB from profile data
-  const derivedInitialTmb = (): string => {
+  // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
+  useEffect(() => {
     const w = parseFloat(String(profile?.current_weight ?? ''));
     const h = parseFloat(String(profile?.height_cm ?? ''));
     const bd = profile?.birth_date;
-    const sex = profile?.sex;
-    if (w && h && bd && sex) {
-      return String(calculateTMB(w, h, calculateAge(bd), sex));
-    }
-    if (profile?.tdee && profile?.activity_level) {
-      return String(Math.round(profile.tdee / MULTIPLIERS[profile.activity_level]));
-    }
-    return '';
-  };
+    const s = profile?.sex;
+    const hasFormulaInputs = !!(w && h && bd && s);
 
-  const [customTmb, setCustomTmb] = useState(derivedInitialTmb());
-  const [customMeta, setCustomMeta] = useState(String(profile?.target_calories ?? ''));
+    if (profile?.tdee && profile?.activity_level && MULTIPLIERS[profile.activity_level]) {
+      const reversed = Math.round(profile.tdee / MULTIPLIERS[profile.activity_level]);
+      setCustomTmb(String(reversed));
+      if (hasFormulaInputs) {
+        const formulaTmb = calculateTMB(w, h, calculateAge(bd!), s!);
+        // Threshold > 3 avoids false positives from rounding
+        setIsTmbManual(Math.abs(reversed - formulaTmb) > 3);
+      }
+      return;
+    }
 
-  function handleRecalculate() {
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
-    const sex = profile?.sex;
-    if (!w || !h || !birthDate || !sex) return;
-    const age = calculateAge(birthDate);
-    const tmb = calculateTMB(w, h, age, sex);
-    const tdee = calculateTDEE(tmb, activityLevel as 'sedentary' | 'moderate' | 'active');
-    const meta = calculateTargetCalories(tdee);
-    setCustomTmb(String(tmb));
-    setCustomMeta(String(meta));
-  }
+    if (hasFormulaInputs) {
+      const tmb = calculateTMB(w, h, calculateAge(bd!), s!);
+      setCustomTmb(String(tmb));
+      setIsTmbManual(false);
+      if (!profile?.target_calories) {
+        const tdee = calculateTDEE(tmb, (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active');
+        setCustomMeta(String(calculateTargetCalories(tdee)));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const checkSW = () => {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration().then(reg => {
-          setSwStatus(reg ? 'ativo' : 'não registrado');
-        }).catch(() => setSwStatus('erro'));
+        navigator.serviceWorker
+          .getRegistration()
+          .then((reg) => setSwStatus(reg ? 'ativo' : 'não registrado'))
+          .catch(() => setSwStatus('erro'));
       } else {
         setSwStatus('não suportado');
       }
@@ -94,7 +138,10 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
   useEffect(() => {
     const stored = (window as { __pwaInstallEvent?: typeof installPrompt }).__pwaInstallEvent;
-    if (stored) { setInstallPrompt(stored); return; }
+    if (stored) {
+      setInstallPrompt(stored);
+      return;
+    }
     function onReady() {
       const e = (window as { __pwaInstallEvent?: typeof installPrompt }).__pwaInstallEvent;
       if (e) setInstallPrompt(e);
@@ -103,7 +150,25 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     return () => window.removeEventListener('pwa-install-ready', onReady);
   }, []);
 
-  async function handleSave(e: React.FormEvent) {
+  function handleTmbChange(value: string) {
+    setCustomTmb(value);
+    setIsTmbManual(true);
+  }
+
+  function handleRecalculate() {
+    const w = parseFloat(weight);
+    const h = parseFloat(height);
+    if (!w || !h || !birthDate) return;
+    const age = calculateAge(birthDate);
+    const tmb = calculateTMB(w, h, age, sex);
+    const tdee = calculateTDEE(tmb, activityLevel);
+    const meta = calculateTargetCalories(tdee);
+    setCustomTmb(String(tmb));
+    setCustomMeta(String(meta));
+    setIsTmbManual(false);
+  }
+
+  async function handleSave(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     await fetch('/api/profile', {
@@ -114,6 +179,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         birthDate,
         weight,
         height,
+        sex,
         activityLevel,
         customTmb: customTmb ? Number(customTmb) : null,
         customTargetCalories: customMeta ? Number(customMeta) : null,
@@ -137,14 +203,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
   const tmbNum = Number(customTmb);
   const metaNum = Number(customMeta);
-  const tdeePreview = tmbNum
-    ? calculateTDEE(tmbNum, activityLevel as 'sedentary' | 'moderate' | 'active')
-    : null;
+  const tdeePreview = tmbNum ? calculateTDEE(tmbNum, activityLevel) : null;
 
   return (
-    <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
-      {/* Identity */}
-      <div className="flex items-center gap-4">
+    <div className="flex flex-col gap-4 pt-6 pb-8 animate-fade-in">
+      {/* Identity header */}
+      <div className="flex items-center gap-4 px-1">
         <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/20">
           <span className="text-lg font-bold text-white tracking-tight">{initials}</span>
         </div>
@@ -156,11 +220,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         </div>
       </div>
 
-      {/* Stats preview */}
-      {(tdeePreview || metaNum) ? (
+      {/* Stats bar */}
+      {(tdeePreview || metaNum || profile?.tdee || profile?.target_calories) ? (
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-5">
-            <div className="flex items-center gap-1.5 mb-3">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
               <Zap size={12} className="text-amber-500" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 TDEE
@@ -171,8 +235,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/30 rounded-2xl p-5">
-            <div className="flex items-center gap-1.5 mb-3">
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/30 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
               <Target size={12} className="text-emerald-600 dark:text-emerald-400" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 Meta
@@ -186,14 +250,10 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         </div>
       ) : null}
 
-      {/* Personal data form */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-            Dados pessoais
-          </p>
-        </div>
-        <form onSubmit={handleSave} className="p-5 flex flex-col gap-5">
+      {/* Form */}
+      <form onSubmit={handleSave} className="flex flex-col gap-3">
+        {/* Dados pessoais */}
+        <SectionCard title="Dados pessoais">
           <Input
             label="Nome completo"
             value={fullName}
@@ -205,6 +265,46 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             value={birthDate}
             onChange={(e) => setBirthDate(e.target.value)}
           />
+
+          <div className="flex flex-col gap-2.5">
+            <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+              Sexo biológico
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: 'male', label: 'Masculino', icon: '♂' },
+                  { value: 'female', label: 'Feminino', icon: '♀' },
+                ] as const
+              ).map((opt) => {
+                const isSelected = sex === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSex(opt.value)}
+                    className={cn(
+                      'flex items-center gap-2.5 px-3.5 h-11 rounded-xl border transition-all duration-150 active:scale-[0.97]',
+                      isSelected
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    )}
+                  >
+                    <span className="text-base leading-none">{opt.icon}</span>
+                    <span className="text-[13px] font-medium flex-1 text-left">{opt.label}</span>
+                    {isSelected && (
+                      <Check size={13} className="text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Usado no cálculo da TMB (fórmula de Harris-Benedict).</p>
+          </div>
+        </SectionCard>
+
+        {/* Métricas físicas */}
+        <SectionCard title="Métricas físicas">
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Peso (kg)"
@@ -221,12 +321,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             />
           </div>
 
-          {/* Activity level */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
               Nível de atividade
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               {ACTIVITY_OPTIONS.map((opt) => {
                 const isSelected = activityLevel === opt.value;
                 return (
@@ -235,7 +334,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                     type="button"
                     onClick={() => setActivityLevel(opt.value as typeof activityLevel)}
                     className={cn(
-                      'flex flex-col items-center gap-2 px-2 py-3.5 rounded-xl border text-center transition-all duration-150 active:scale-[0.97]',
+                      'flex flex-col items-center gap-2 px-2 py-3 rounded-xl border text-center transition-all duration-150 active:scale-[0.97]',
                       isSelected
                         ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
                         : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 hover:border-zinc-300 dark:hover:border-zinc-600'
@@ -243,10 +342,14 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                   >
                     <span className="text-xl leading-none">{opt.icon}</span>
                     <div>
-                      <p className={cn(
-                        'text-[11px] font-semibold leading-none',
-                        isSelected ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'
-                      )}>
+                      <p
+                        className={cn(
+                          'text-[11px] font-semibold leading-none',
+                          isSelected
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-zinc-700 dark:text-zinc-300'
+                        )}
+                      >
                         {opt.label}
                       </p>
                       <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{opt.desc}</p>
@@ -261,70 +364,133 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               })}
             </div>
           </div>
+        </SectionCard>
 
-          {/* Custom TMB and Meta */}
-          <div className="flex flex-col gap-3">
+        {/* Metas calóricas */}
+        <SectionCard title="Metas calóricas">
+          {/* TMB field */}
+          <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                Metas calóricas
+                TMB (kcal/dia)
               </label>
-              <button
-                type="button"
-                onClick={handleRecalculate}
-                className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
-              >
-                <RefreshCw size={10} />
-                Recalcular
-              </button>
+              <div className="flex items-center gap-2">
+                {isTmbManual ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
+                      <Pencil size={8} />
+                      Manual
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRecalculate}
+                      className="flex items-center gap-1 text-[10px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                    >
+                      <RotateCcw size={9} />
+                      Usar automático
+                    </button>
+                  </>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40">
+                    <Calculator size={8} />
+                    Automático
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="TMB (kcal)"
-                type="number"
-                value={customTmb}
-                onChange={(e) => setCustomTmb(e.target.value)}
-                min="500"
-                max="5000"
-              />
-              <Input
-                label="Meta (kcal)"
-                type="number"
-                value={customMeta}
-                onChange={(e) => setCustomMeta(e.target.value)}
-                min="1200"
-                max="9999"
-              />
-            </div>
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 -mt-1">
-              Mínimo de 1.200 kcal/dia para a meta.
+
+            <input
+              type="number"
+              value={customTmb}
+              onChange={(e) => handleTmbChange(e.target.value)}
+              min={500}
+              max={5000}
+              className={cn(
+                'h-11 w-full rounded-xl px-3.5 text-sm tabular-nums transition-all duration-150',
+                'focus:outline-none focus:ring-2',
+                isTmbManual
+                  ? 'bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/80 dark:border-amber-800/30 text-zinc-900 dark:text-zinc-100 focus:ring-amber-400/25 focus:border-amber-400/80'
+                  : 'bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:ring-emerald-500/25 focus:border-emerald-400/80'
+              )}
+            />
+
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              {isTmbManual
+                ? 'Valor manual salvo — o sistema não irá sobrescrevê-lo automaticamente.'
+                : 'Calculado pela fórmula de Harris-Benedict. Edite o campo para definir um valor manual.'}
             </p>
           </div>
 
-          <Button
-            type="submit"
-            loading={loading}
-            variant={saved ? 'secondary' : 'primary'}
-            className="w-full"
-          >
-            {saved ? <Check size={14} /> : <Save size={14} />}
-            {saved ? 'Salvo!' : 'Salvar alterações'}
-          </Button>
-        </form>
-      </div>
+          {/* TDEE preview — read-only */}
+          {tdeePreview ? (
+            <div className="flex items-center justify-between bg-zinc-50/80 dark:bg-zinc-800/40 rounded-xl px-3.5 py-3 border border-zinc-100 dark:border-zinc-700/40">
+              <div className="flex items-center gap-2">
+                <Zap size={13} className="text-amber-500" />
+                <span className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                  TDEE calculado
+                </span>
+              </div>
+              <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                {tdeePreview.toLocaleString('pt-BR')} kcal
+              </span>
+            </div>
+          ) : null}
 
-      {/* Account */}
+          {/* Meta calórica */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                Meta calórica (kcal/dia)
+              </span>
+              {!isTmbManual && (
+                <button
+                  type="button"
+                  onClick={handleRecalculate}
+                  className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                >
+                  <RefreshCw size={9} />
+                  Recalcular
+                </button>
+              )}
+            </div>
+            <input
+              type="number"
+              value={customMeta}
+              onChange={(e) => setCustomMeta(e.target.value)}
+              min={1200}
+              max={9999}
+              className="h-11 w-full rounded-xl px-3.5 text-sm tabular-nums bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 transition-all duration-150"
+            />
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Mínimo de 1.200 kcal/dia.</p>
+          </div>
+        </SectionCard>
+
+        <Button
+          type="submit"
+          loading={loading}
+          variant={saved ? 'secondary' : 'primary'}
+          className="w-full"
+        >
+          {saved ? <Check size={14} /> : <Save size={14} />}
+          {saved ? 'Salvo com sucesso!' : 'Salvar alterações'}
+        </Button>
+      </form>
+
+      {/* Conta */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
         <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60 flex items-center justify-between">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Conta
           </p>
           {swStatus && (
-            <span className={cn(
-              'text-[10px] font-medium px-2 py-0.5 rounded-full',
-              swStatus === 'ativo'
-                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400'
-                : 'bg-red-50 text-red-500 dark:bg-red-950/30 dark:text-red-400'
-            )}>
+            <span
+              className={cn(
+                'text-[10px] font-medium px-2 py-0.5 rounded-full',
+                swStatus === 'ativo'
+                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400'
+                  : 'bg-red-50 text-red-500 dark:bg-red-950/30 dark:text-red-400'
+              )}
+            >
               SW: {swStatus}
             </span>
           )}
@@ -348,7 +514,10 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               <span className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400 flex-1 text-left">
                 Instalar app
               </span>
-              <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+              <ChevronRight
+                size={13}
+                className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors"
+              />
             </button>
           )}
           <Link
@@ -361,7 +530,10 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300 flex-1">
               Gerenciar usuários
             </span>
-            <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            <ChevronRight
+              size={13}
+              className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors"
+            />
           </Link>
           <button
             onClick={handleSignOut}
