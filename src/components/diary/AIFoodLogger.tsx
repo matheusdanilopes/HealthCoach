@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check } from 'lucide-react';
 import type { FoodLog, MealType } from '@/types';
 
 const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
@@ -29,6 +29,8 @@ interface AnalysisResult {
   totalProtein: number;
   totalCarbs: number;
   totalFat: number;
+  confidence?: 'low' | 'medium' | 'high';
+  portionAssumption?: 'small' | 'medium' | 'large';
 }
 
 interface AIFoodLoggerProps {
@@ -55,6 +57,8 @@ export default function AIFoodLogger({
   const [isDragging, setIsDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [editedFoods, setEditedFoods] = useState<FoodItem[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +74,8 @@ export default function AIFoodLogger({
       setImageFile(null);
       setImagePreview(null);
       setResult(null);
+      setEditedFoods([]);
+      setEditingIndex(null);
       setError(null);
       setSaving(false);
     }
@@ -81,6 +87,35 @@ export default function AIFoodLogger({
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [textInput]);
+
+  useEffect(() => {
+    if (result) {
+      setEditedFoods(result.foods.map((f) => ({ ...f })));
+      setEditingIndex(null);
+    } else {
+      setEditedFoods([]);
+    }
+  }, [result]);
+
+  const computedTotal = useMemo(
+    () =>
+      editedFoods.reduce(
+        (acc, f) => ({
+          calories: acc.calories + (Number(f.calories) || 0),
+          protein: +(acc.protein + (Number(f.protein) || 0)).toFixed(1),
+          carbs: +(acc.carbs + (Number(f.carbs) || 0)).toFixed(1),
+          fat: +(acc.fat + (Number(f.fat) || 0)).toFixed(1),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      ),
+    [editedFoods]
+  );
+
+  function updateFood(index: number, field: keyof FoodItem, value: string | number) {
+    setEditedFoods((prev) =>
+      prev.map((f, i) => (i === index ? { ...f, [field]: value } : f))
+    );
+  }
 
   function handleImageSelect(file: File) {
     setImageFile(file);
@@ -181,21 +216,21 @@ export default function AIFoodLogger({
   }
 
   async function handleConfirm() {
-    if (!result) return;
+    if (!result || editedFoods.length === 0) return;
     setSaving(true);
     setError(null);
     try {
-      const promises = result.foods.map((food) =>
+      const promises = editedFoods.map((food) =>
         fetch('/api/food', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
             meal_type: mealType,
-            calories: food.calories,
-            protein: food.protein ?? null,
-            carbs: food.carbs ?? null,
-            fat: food.fat ?? null,
+            calories: Math.round(Number(food.calories) || 0),
+            protein: Number(food.protein) || null,
+            carbs: Number(food.carbs) || null,
+            fat: Number(food.fat) || null,
             log_date: date,
           }),
         }).then((r) => r.json() as Promise<FoodLog>)
@@ -390,8 +425,20 @@ export default function AIFoodLogger({
             <div className="flex items-center gap-2">
               <CheckCircle2 size={15} className="text-emerald-500 flex-shrink-0" />
               <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 flex-1">
-                {result.foods.length} alimento{result.foods.length !== 1 ? 's' : ''} identificado{result.foods.length !== 1 ? 's' : ''}
+                {editedFoods.length} alimento{editedFoods.length !== 1 ? 's' : ''} identificado{editedFoods.length !== 1 ? 's' : ''}
               </p>
+              {result.confidence && (
+                <span className={cn(
+                  'text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0',
+                  result.confidence === 'high'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                    : result.confidence === 'medium'
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                )}>
+                  {result.confidence === 'high' ? 'Alta confiança' : result.confidence === 'medium' ? 'Estimativa' : 'Incerto'}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setResult(null)}
@@ -403,36 +450,120 @@ export default function AIFoodLogger({
             </div>
 
             {/* Food cards */}
-            <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
-              {result.foods.map((food, i) => (
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+              {editedFoods.map((food, i) => (
                 <div
                   key={i}
                   className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40"
                 >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug flex-1">
-                      {food.name}
-                      {food.quantity && (
-                        <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
-                          · {food.quantity}
+                  {editingIndex === i ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-200 flex-1 leading-snug">
+                          {food.name}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setEditingIndex(null)}
+                          className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold"
+                        >
+                          <Check size={12} />
+                          OK
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Qtd</span>
+                          <input
+                            type="text"
+                            value={food.quantity}
+                            onChange={(e) => updateFood(i, 'quantity', e.target.value)}
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Kcal</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={food.calories}
+                            onChange={(e) => updateFood(i, 'calories', e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Proteína (g)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={food.protein}
+                            onChange={(e) => updateFood(i, 'protein', e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Carbs (g)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={food.carbs}
+                            onChange={(e) => updateFood(i, 'carbs', e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Gordura (g)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={food.fat}
+                            onChange={(e) => updateFood(i, 'fat', e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug flex-1">
+                          {food.name}
+                          {food.quantity && (
+                            <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
+                              · {food.quantity}
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {food.calories} kcal
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingIndex(i)}
+                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          P <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.protein}g</span>
                         </span>
-                      )}
-                    </p>
-                    <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                      {food.calories} kcal
-                    </span>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      P <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.protein}g</span>
-                    </span>
-                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      C <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.carbs}g</span>
-                    </span>
-                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      G <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.fat}g</span>
-                    </span>
-                  </div>
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          C <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.carbs}g</span>
+                        </span>
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          G <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.fat}g</span>
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -444,14 +575,14 @@ export default function AIFoodLogger({
                   Total da refeição
                 </span>
                 <span className="text-[20px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none">
-                  {result.totalCalories} <span className="text-[13px] font-medium">kcal</span>
+                  {computedTotal.calories} <span className="text-[13px] font-medium">kcal</span>
                 </span>
               </div>
               <div className="flex gap-0">
                 {[
-                  { label: 'Proteína', value: result.totalProtein, unit: 'g', color: 'text-violet-600 dark:text-violet-400' },
-                  { label: 'Carboidratos', value: result.totalCarbs, unit: 'g', color: 'text-amber-600 dark:text-amber-400' },
-                  { label: 'Gorduras', value: result.totalFat, unit: 'g', color: 'text-rose-500 dark:text-rose-400' },
+                  { label: 'Proteína', value: computedTotal.protein, unit: 'g', color: 'text-violet-600 dark:text-violet-400' },
+                  { label: 'Carboidratos', value: computedTotal.carbs, unit: 'g', color: 'text-amber-600 dark:text-amber-400' },
+                  { label: 'Gorduras', value: computedTotal.fat, unit: 'g', color: 'text-rose-500 dark:text-rose-400' },
                 ].map((macro, i, arr) => (
                   <div key={macro.label} className={cn('flex-1 flex flex-col items-center', i < arr.length - 1 && 'border-r border-emerald-100 dark:border-emerald-900/40')}>
                     <span className={cn('text-[15px] font-bold tabular-nums', macro.color)}>
@@ -464,6 +595,10 @@ export default function AIFoodLogger({
                 ))}
               </div>
             </div>
+
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center -mt-1">
+              Estimativa aproximada baseada na descrição enviada
+            </p>
 
             <Button
               onClick={handleConfirm}
