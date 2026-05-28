@@ -31,6 +31,32 @@ export async function POST(req: Request) {
   return NextResponse.json({ ...row, user_id: session.user.id });
 }
 
+export async function PATCH(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id, food_name, calories, protein, carbs, fat } = await req.json();
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  const { data: row, error } = await supabase
+    .from('food_logs')
+    .update({
+      food_name,
+      calories,
+      protein: protein ?? null,
+      carbs: carbs ?? null,
+      fat: fat ?? null,
+    })
+    .eq('id', id)
+    .eq('user_id', session.user.id)
+    .select('id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ...row, user_id: session.user.id });
+}
+
 export async function DELETE(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

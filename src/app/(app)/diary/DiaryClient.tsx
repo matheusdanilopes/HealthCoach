@@ -6,6 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
+import EditFoodModal from '@/components/diary/EditFoodModal';
 import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles } from 'lucide-react';
 import { cn, todayISO } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
@@ -22,6 +23,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
   const [logs, setLogs] = useState<FoodLog[]>([]);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
   const [selectedDate, setSelectedDate] = useState(serverDate);
   const [loadingDate, setLoadingDate] = useState(true);
@@ -76,6 +78,10 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
 
   const handleDelete = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
+  }, []);
+
+  const handleUpdated = useCallback((updated: FoodLog) => {
+    setLogs((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
   }, []);
 
   async function handleDeleteWorkout(id: string) {
@@ -202,6 +208,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
             logs={logs.filter((l) => l.meal_type === meal && l.calories > 0)}
             onAdd={() => openAddForMeal(meal)}
             onDelete={handleDelete}
+            onEdit={setEditingLog}
           />
         ))}
       </div>
@@ -268,6 +275,12 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
         userId={userId}
         date={selectedDate}
         onAdded={(log) => setLogs((prev) => [...prev, log])}
+      />
+      <EditFoodModal
+        open={editingLog !== null}
+        onClose={() => setEditingLog(null)}
+        log={editingLog}
+        onUpdated={handleUpdated}
       />
     </div>
   );
