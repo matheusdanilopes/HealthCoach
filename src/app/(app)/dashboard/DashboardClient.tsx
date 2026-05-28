@@ -48,6 +48,7 @@ export default function DashboardClient({
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(serverDate);
   const [loadingDate, setLoadingDate] = useState(false);
+  const [insightKey, setInsightKey] = useState(0);
 
   // Stable greeting - computed once on mount
   const greetingText = useMemo(() => getGreeting(), []);
@@ -108,11 +109,13 @@ export default function DashboardClient({
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
+    setInsightKey((k) => k + 1);
   }, []);
 
   // Optimistic update from AI chat - avoids router.refresh() full re-render
   const handleFoodLoggedFromChat = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
+    setInsightKey((k) => k + 1);
   }, []);
 
   const firstName = profile?.full_name?.split(' ')[0];
@@ -184,7 +187,7 @@ export default function DashboardClient({
         />
 
         {/* AI Insights — only on today's view */}
-        {isToday && <AIInsightCard userId={userId} />}
+        {isToday && <AIInsightCard userId={userId} refreshKey={insightKey} />}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3">
@@ -262,7 +265,7 @@ export default function DashboardClient({
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(log) => setFoodLogs((prev) => [...prev, log])}
+        onAdded={(log) => { setFoodLogs((prev) => [...prev, log]); setInsightKey((k) => k + 1); }}
       />
       {isToday && (
         <WeightLogModal

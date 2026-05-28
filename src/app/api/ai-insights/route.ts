@@ -36,12 +36,19 @@ function extractJSON(raw: string): any {
 const VALID_TYPES = ['nutrition', 'workout', 'body', 'behavior'];
 const VALID_PRIORITIES = ['informativo', 'atencao', 'positivo', 'recomendacao'];
 
+const MEAL_LABEL: Record<string, string> = {
+  breakfast: 'Café da manhã',
+  lunch:     'Almoço',
+  dinner:    'Jantar',
+  snack:     'Lanche',
+};
+
 const FALLBACK_INSIGHT = {
-  type: 'behavior' as const,
-  priority: 'informativo' as const,
-  title: 'Registre suas refeições hoje',
-  message: 'Manter registros diários ajuda a identificar padrões e acelerar seus resultados.',
-  cta: null,
+  type:     'nutrition' as const,
+  priority: 'recomendacao' as const,
+  title:    'Registre sua primeira refeição',
+  message:  'Comece o dia registrando o café da manhã para receber orientações personalizadas sobre o restante das refeições.',
+  cta:      'Registrar refeição',
 };
 
 export async function GET(req: Request) {
@@ -53,14 +60,14 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const forceRefresh = searchParams.get('refresh') === '1';
 
-    // Return cached insight if fresh (6-hour window) and not forcing refresh
+    // Cache window: 2 hours — short enough to reflect today's evolving meals
     if (!forceRefresh) {
-      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
       const { data: cached } = await supabase
         .from('ai_insights')
         .select('*')
         .eq('user_id', userId)
-        .gte('generated_at', sixHoursAgo)
+        .gte('generated_at', twoHoursAgo)
         .order('generated_at', { ascending: false })
         .limit(1)
         .single();
@@ -68,12 +75,18 @@ export async function GET(req: Request) {
       if (cached) return NextResponse.json(cached);
     }
 
-    // Gather last 7 days of context in parallel
+    const today = new Date().toISOString().split('T')[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0];
 
-    const [{ data: profile }, { data: foodLogs }, { data: weightLogs }] = await Promise.all([
+    // Fetch all needed data in parallel
+    const [
+      { data: profile },
+      { data: todayLogs },
+      { data: historyLogs },
+      { data: weightLogs },
+    ] = await Promise.all([
       supabase
         .from('users')
         .select('full_name, current_weight, target_calories, tdee, sex')
@@ -81,9 +94,16 @@ export async function GET(req: Request) {
         .single(),
       supabase
         .from('food_logs')
-        .select('calories, protein, carbs, fat, log_date')
+        .select('food_name, meal_type, calories, protein, carbs, fat')
         .eq('user_id', userId)
-        .gte('log_date', sevenDaysAgo),
+        .eq('log_date', today)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('food_logs')
+        .select('calories, protein, log_date')
+        .eq('user_id', userId)
+        .gte('log_date', sevenDaysAgo)
+        .lt('log_date', today),
       supabase
         .from('weight_logs')
         .select('weight_kg, log_date')
@@ -92,45 +112,68 @@ export async function GET(req: Request) {
         .order('log_date', { ascending: true }),
     ]);
 
-    // Compute aggregates for context
-    const positiveLogs = (foodLogs ?? []).filter((l) => l.calories > 0);
-    const workoutLogs = (foodLogs ?? []).filter((l) => l.calories < 0);
-    const logDates = [...new Set(positiveLogs.map((l) => l.log_date))];
-    const workoutDays = new Set(workoutLogs.map((l) => l.log_date)).size;
+    // ── Today's stats ──
+    const todayFood  = (todayLogs ?? []).filter((l) => l.calories > 0);
+    const todayWorkouts = (todayLogs ?? []).filter((l) => l.calories < 0);
+    const todayCal   = todayFood.reduce((s, l) => s + l.calories, 0);
+    const todayProt  = Math.round(todayFood.reduce((s, l) => s + (l.protein ?? 0), 0));
+    const todayBurned = Math.abs(todayWorkouts.reduce((s, l) => s + l.calories, 0));
+    const targetCal  = profile?.target_calories ?? 0;
+    const targetProt = targetCal > 0 ? Math.round((targetCal * 0.3) / 4) : 0;
+    const remainCal  = targetCal - todayCal + todayBurned;
+    const remainProt = Math.max(0, targetProt - todayProt);
 
-    const avgCal =
-      logDates.length > 0
-        ? Math.round(positiveLogs.reduce((s, l) => s + l.calories, 0) / logDates.length)
-        : 0;
-    const avgProtein =
-      logDates.length > 0
-        ? Math.round(positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0) / logDates.length)
-        : 0;
+    // Format today's meal list for the prompt
+    const mealLines =
+      todayFood.length === 0
+        ? '  (nenhuma refeição registrada ainda)'
+        : todayFood
+            .map((l) => {
+              const label = MEAL_LABEL[l.meal_type ?? ''] ?? 'Refeição';
+              const prot  = l.protein ? ` | ${Math.round(l.protein)}g prot` : '';
+              return `  • ${label}: ${l.food_name} — ${l.calories} kcal${prot}`;
+            })
+            .join('\n');
 
-    const targetCal = profile?.target_calories ?? 0;
-    const targetProtein = targetCal > 0 ? Math.round((targetCal * 0.3) / 4) : 0;
+    // ── 7-day history stats (excluding today) ──
+    const histFood   = (historyLogs ?? []).filter((l) => l.calories > 0);
+    const histDates  = [...new Set(histFood.map((l) => l.log_date))];
+    const avgCal     = histDates.length > 0
+      ? Math.round(histFood.reduce((s, l) => s + l.calories, 0) / histDates.length)
+      : 0;
+    const avgProt    = histDates.length > 0
+      ? Math.round(histFood.reduce((s, l) => s + (l.protein ?? 0), 0) / histDates.length)
+      : 0;
+    const workoutDays = new Set(
+      (historyLogs ?? []).filter((l) => l.calories < 0).map((l) => l.log_date)
+    ).size;
+
+    // Weight trend
+    const latestW  = weightLogs?.[weightLogs.length - 1]?.weight_kg ?? profile?.current_weight;
+    const oldestW  = weightLogs?.[0]?.weight_kg ?? null;
+    const wTrend   = latestW
+      ? `${latestW}kg${oldestW && oldestW !== latestW ? ` (${latestW > oldestW ? '+' : ''}${(Number(latestW) - Number(oldestW)).toFixed(1)}kg em 7d)` : ''}`
+      : 'não informado';
+
     const firstName = profile?.full_name?.split(' ')[0] ?? 'Usuário';
-    const currentWeight =
-      weightLogs && weightLogs.length > 0
-        ? weightLogs[weightLogs.length - 1].weight_kg
-        : (profile?.current_weight ?? null);
-    const oldestWeight = weightLogs?.[0]?.weight_kg ?? null;
-    const weightChange =
-      currentWeight && oldestWeight && currentWeight !== oldestWeight
-        ? ` (${currentWeight > oldestWeight ? '+' : ''}${(currentWeight - oldestWeight).toFixed(1)}kg em 7d)`
-        : '';
-    const weightStr = currentWeight ? `${currentWeight}kg${weightChange}` : 'não informado';
-    const calAdherence =
-      targetCal > 0 && avgCal > 0 ? `${Math.round((avgCal / targetCal) * 100)}%` : 'sem dados';
 
-    const contextPrompt = `Usuário: ${firstName}, peso ${weightStr}, meta ${targetCal} kcal/dia
-Últimos 7 dias (${logDates.length}/7 com registro):
-- Kcal médias: ${avgCal} kcal (${calAdherence} da meta)
-- Proteína média: ${avgProtein}g/dia (meta: ${targetProtein}g/dia)
-- Treinos: ${workoutDays}/7 dias
+    const contextPrompt = `PERFIL: ${firstName} | Peso: ${wTrend} | Meta: ${targetCal} kcal/dia | Proteína: ${targetProt}g/dia
+
+HOJE:
+${mealLines}
+→ Consumido: ${todayCal} kcal | ${todayProt}g proteína${todayBurned > 0 ? ` | ${todayBurned} kcal queimadas` : ''}
+→ Ainda disponível: ${remainCal} kcal | ${remainProt}g proteína
+
+HISTÓRICO (6 dias anteriores, ${histDates.length}/6 com registro):
+→ Kcal médias: ${avgCal} kcal/dia | Proteína média: ${avgProt}g/dia | Treinos: ${workoutDays} dias
+
+Gere 1 orientação prática e personalizada sobre:
+- O que comer nas próximas refeições para atingir a meta
+- Como ajustar a alimentação do restante do dia
+- Como está o progresso calórico/proteico até agora
 
 Retorne APENAS JSON válido (sem markdown):
-{"type":"nutrition|workout|body|behavior","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras","message":"1 frase curta e acionável","cta":"2-3 palavras ou null}`;
+{"type":"nutrition|workout|body|behavior","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras","message":"1-2 frases específicas e acionáveis com base nos dados","cta":"2-3 palavras ou null"}`;
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
@@ -138,9 +181,9 @@ Retorne APENAS JSON válido (sem markdown):
         contents: [{ role: 'user', parts: [{ text: contextPrompt }] }],
         config: {
           systemInstruction:
-            'Você é um health coach. Analise os dados e gere 1 insight personalizado. Retorne SOMENTE JSON válido, sem markdown, sem texto extra.',
-          maxOutputTokens: 200,
-          temperature: 0.85,
+            'Você é um health coach nutricional. Analise os dados reais do usuário e oriente sobre as próximas refeições de forma específica e acionável — mencione alimentos concretos quando relevante. Retorne SOMENTE JSON válido, sem markdown nem texto extra.',
+          maxOutputTokens: 250,
+          temperature: 0.8,
           thinkingConfig: { thinkingBudget: 0 },
         },
       })
@@ -155,16 +198,16 @@ Retorne APENAS JSON válido (sem markdown):
     }
 
     const insightData = {
-      user_id: userId,
-      type: VALID_TYPES.includes(parsed.type) ? parsed.type : 'behavior',
-      priority: VALID_PRIORITIES.includes(parsed.priority) ? parsed.priority : 'informativo',
-      title: String(parsed.title ?? FALLBACK_INSIGHT.title).slice(0, 100),
-      message: String(parsed.message ?? FALLBACK_INSIGHT.message).slice(0, 250),
-      cta: parsed.cta ? String(parsed.cta).slice(0, 50) : null,
-      metadata: { logDays: logDates.length, avgCal, avgProtein, workoutDays },
+      user_id:  userId,
+      type:     VALID_TYPES.includes(parsed.type)       ? parsed.type     : 'nutrition',
+      priority: VALID_PRIORITIES.includes(parsed.priority) ? parsed.priority : 'recomendacao',
+      title:    String(parsed.title   ?? FALLBACK_INSIGHT.title).slice(0, 100),
+      message:  String(parsed.message ?? FALLBACK_INSIGHT.message).slice(0, 300),
+      cta:      parsed.cta ? String(parsed.cta).slice(0, 50) : null,
+      metadata: { todayCal, todayProt, remainCal, remainProt, avgCal, avgProt: avgProt, workoutDays, histDays: histDates.length },
     };
 
-    // Best-effort cache to DB; return inline if table not yet migrated
+    // Best-effort cache — transparent fallback if table not yet migrated
     try {
       const { data: saved, error } = await supabase
         .from('ai_insights')
@@ -174,14 +217,14 @@ Retorne APENAS JSON válido (sem markdown):
 
       if (!error && saved) return NextResponse.json(saved);
     } catch {
-      // Table may not exist yet — fall through
+      // Table may not exist yet
     }
 
     return NextResponse.json({
       ...insightData,
-      id: crypto.randomUUID(),
+      id:           crypto.randomUUID(),
       generated_at: new Date().toISOString(),
-      read_at: null,
+      read_at:      null,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

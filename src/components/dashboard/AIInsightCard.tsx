@@ -63,15 +63,21 @@ function InsightSkeleton() {
   );
 }
 
+// Minimum interval between auto-refreshes triggered by meal additions (ms)
+const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000;
+
 interface AIInsightCardProps {
   userId: string;
+  /** Increment to trigger a refresh after a meal is logged */
+  refreshKey?: number;
 }
 
-const AIInsightCard = memo(function AIInsightCard({ userId: _userId }: AIInsightCardProps) {
+const AIInsightCard = memo(function AIInsightCard({ userId: _userId, refreshKey = 0 }: AIInsightCardProps) {
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const lastAutoRefresh = useState<number>(0);
 
   const fetchInsight = useCallback(async (force = false) => {
     if (force) setRefreshing(true);
@@ -90,9 +96,21 @@ const AIInsightCard = memo(function AIInsightCard({ userId: _userId }: AIInsight
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     fetchInsight();
-  }, [fetchInsight]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-refresh when a meal is added, respecting the minimum interval
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    const now = Date.now();
+    if (now - lastAutoRefresh[0] < AUTO_REFRESH_INTERVAL) return;
+    lastAutoRefresh[0] = now;
+    fetchInsight(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   if (loading) return <InsightSkeleton />;
   if (error || !insight) return null;
