@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { Droplets } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,12 +14,12 @@ interface WaterTrackerProps {
 
 const QUICK_AMOUNTS = [150, 250, 350, 500];
 
-export default function WaterTracker({ current, target, date, onUpdate }: WaterTrackerProps) {
+const WaterTracker = memo(function WaterTracker({ current, target, date, onUpdate }: WaterTrackerProps) {
   const [loading, setLoading] = useState<number | null>(null);
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
   const isComplete = pct >= 100;
 
-  async function addWater(ml: number) {
+  const addWater = useCallback(async (ml: number) => {
     setLoading(ml);
     await fetch('/api/water', {
       method: 'POST',
@@ -28,7 +28,7 @@ export default function WaterTracker({ current, target, date, onUpdate }: WaterT
     });
     onUpdate(current + ml);
     setLoading(null);
-  }
+  }, [current, date, onUpdate]);
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
@@ -98,4 +98,6 @@ export default function WaterTracker({ current, target, date, onUpdate }: WaterT
       </div>
     </div>
   );
-}
+});
+
+export default WaterTracker;

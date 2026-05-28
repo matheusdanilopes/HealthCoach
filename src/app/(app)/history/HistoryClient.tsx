@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   LineChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -73,34 +73,40 @@ export default function HistoryClient({ weightLogs, dailyCalData, targetCalories
   const [calRange, setCalRange] = useState<7 | 30>(7);
   const { theme } = useTheme();
 
-  const filteredCalData = calRange === 7 ? dailyCalData.slice(-7) : dailyCalData;
+  const filteredCalData = useMemo(
+    () => calRange === 7 ? dailyCalData.slice(-7) : dailyCalData,
+    [calRange, dailyCalData]
+  );
 
-  const weightTrend = weightLogs.length >= 2
-    ? weightLogs[weightLogs.length - 1].weight - weightLogs[0].weight
-    : 0;
+  const { weightTrend, consistencyPct, trendClass, trendIcon } = useMemo(() => {
+    const weightTrend = weightLogs.length >= 2
+      ? weightLogs[weightLogs.length - 1].weight - weightLogs[0].weight
+      : 0;
+    const consistentDays = dailyCalData.filter((d) => d.calories <= targetCalories).length;
+    const consistencyPct = dailyCalData.length > 0
+      ? Math.round((consistentDays / dailyCalData.length) * 100)
+      : 0;
+    const trendClass = weightTrend < 0
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : weightTrend > 0 ? 'text-red-500' : 'text-zinc-400';
+    const trendIcon = weightTrend < 0
+      ? <TrendingDown size={15} className="text-emerald-600 dark:text-emerald-400" />
+      : weightTrend > 0
+        ? <TrendingUp size={15} className="text-red-500" />
+        : <Minus size={15} className="text-zinc-400" />;
+    return { weightTrend, consistencyPct, trendClass, trendIcon };
+  }, [weightLogs, dailyCalData, targetCalories]);
 
-  const consistentDays = dailyCalData.filter((d) => d.calories <= targetCalories).length;
-  const consistencyPct = dailyCalData.length > 0
-    ? Math.round((consistentDays / dailyCalData.length) * 100)
-    : 0;
-
-  const trendClass = weightTrend < 0
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : weightTrend > 0
-      ? 'text-red-500'
-      : 'text-zinc-400';
-
-  const trendIcon = weightTrend < 0
-    ? <TrendingDown size={15} className="text-emerald-600 dark:text-emerald-400" />
-    : weightTrend > 0
-      ? <TrendingUp size={15} className="text-red-500" />
-      : <Minus size={15} className="text-zinc-400" />;
-
-  const isDark = theme === 'dark';
-  const gridColor   = isDark ? '#1f1f23' : '#f4f4f5';
-  const tickColor   = isDark ? '#52525b' : '#a1a1aa';
-  const cursorColor = isDark ? '#27272a' : '#f4f4f5';
-  const lineColor   = isDark ? '#34d399' : '#059669';
+  const { isDark, gridColor, tickColor, cursorColor, lineColor } = useMemo(() => {
+    const isDark = theme === 'dark';
+    return {
+      isDark,
+      gridColor:   isDark ? '#1f1f23' : '#f4f4f5',
+      tickColor:   isDark ? '#52525b' : '#a1a1aa',
+      cursorColor: isDark ? '#27272a' : '#f4f4f5',
+      lineColor:   isDark ? '#34d399' : '#059669',
+    };
+  }, [theme]);
 
   return (
     <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">

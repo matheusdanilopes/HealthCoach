@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 const MACRO_SPLIT = { protein: 0.3, carbs: 0.4, fat: 0.3 };
@@ -29,7 +30,7 @@ interface MacroBarProps {
   textColor: string;
 }
 
-function MacroBar({ label, value, target, splitPct, kcalPerG, color, trackColor, textColor }: MacroBarProps) {
+const MacroBar = memo(function MacroBar({ label, value, target, splitPct, kcalPerG, color, trackColor, textColor }: MacroBarProps) {
   const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0;
   const isOver = value > target && target > 0;
   const kcalConsumed = Math.round(value * kcalPerG);
@@ -69,10 +70,10 @@ function MacroBar({ label, value, target, splitPct, kcalPerG, color, trackColor,
       </div>
     </div>
   );
-}
+});
 
-export default function MacroProgress({ protein, carbs, fat, targetCalories }: MacroProgressProps) {
-  const targets = getTargetMacros(targetCalories);
+const MacroProgress = memo(function MacroProgress({ protein, carbs, fat, targetCalories }: MacroProgressProps) {
+  const targets = useMemo(() => getTargetMacros(targetCalories), [targetCalories]);
 
   const totalKcalFromMacros =
     Math.round(protein * KCAL_PER_G.protein) +
@@ -130,4 +131,6 @@ export default function MacroProgress({ protein, carbs, fat, targetCalories }: M
       </div>
     </div>
   );
-}
+});
+
+export default MacroProgress;

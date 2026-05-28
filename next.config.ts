@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  compress: true,
   async headers() {
     return [
       {
@@ -22,6 +23,20 @@ const nextConfig: NextConfig = {
         headers: [
           { key: 'Content-Type',  value: 'application/manifest+json' },
           { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+        ],
+      },
+      // Long-lived cache for versioned static assets (Next.js adds content hash to filenames)
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      // Cache PWA icons (they change rarely)
+      {
+        source: '/icons/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' },
         ],
       },
     ];
