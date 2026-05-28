@@ -29,6 +29,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [needsReanalysis, setNeedsReanalysis] = useState(false);
 
   // Snapshot of initial values for dirty comparison
   const initialRef = useRef({ foodName: '', calories: 0, protein: 0, carbs: 0, fat: 0 });
@@ -51,6 +52,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
       setError(null);
       setIsDirty(false);
       setConfirmClose(false);
+      setNeedsReanalysis(false);
     }
   }, [open, log]);
 
@@ -84,6 +86,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
       setCarbs(+(data.totalCarbs ?? 0).toFixed(1));
       setFat(+(data.totalFat ?? 0).toFixed(1));
       setIsDirty(true);
+      setNeedsReanalysis(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
     } finally {
@@ -93,6 +96,10 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
 
   async function handleSave() {
     if (!log) return;
+    if (needsReanalysis) {
+      setError('Re-analise com IA antes de salvar as alterações.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -161,7 +168,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
             <input
               type="text"
               value={foodName}
-              onChange={(e) => { setFoodName(e.target.value); setError(null); markDirty(); }}
+              onChange={(e) => { setFoodName(e.target.value); setError(null); markDirty(); setNeedsReanalysis(true); }}
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3 text-[14px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400/60 transition-all"
             />
           </div>
@@ -171,13 +178,17 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
             type="button"
             onClick={handleReanalyze}
             disabled={analyzing || !foodName.trim()}
-            className="flex items-center justify-center gap-2 h-10 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all disabled:opacity-50 disabled:pointer-events-none"
+            className={`flex items-center justify-center gap-2 h-10 rounded-xl border text-[13px] font-semibold transition-all disabled:opacity-50 disabled:pointer-events-none ${
+              needsReanalysis
+                ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-400/40'
+                : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+            }`}
           >
             {analyzing
               ? <span className="h-3.5 w-3.5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
               : <Sparkles size={13} />
             }
-            {analyzing ? 'Analisando...' : 'Re-analisar com IA'}
+            {analyzing ? 'Analisando...' : needsReanalysis ? 'Re-analisar com IA (obrigatório)' : 'Re-analisar com IA'}
           </button>
 
           {/* Nutritional fields */}
@@ -224,7 +235,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
             <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
           )}
 
-          <Button onClick={handleSave} loading={saving} className="w-full">
+          <Button onClick={handleSave} loading={saving} disabled={saving || needsReanalysis} className="w-full">
             Salvar alterações
           </Button>
         </div>
