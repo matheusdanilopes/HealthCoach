@@ -16,7 +16,7 @@ import {
   Flame, Activity, TrendingDown, TrendingUp,
   Minus, ChevronDown, Lightbulb, GitCompare, X,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, todayISO } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
@@ -49,7 +49,7 @@ const TIME_FILTERS: { value: TimeRange; label: string }[] = [
 
 /* ─── Helpers ─── */
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayISO();
 
 function delta(current: number, previous: number, goodDown: boolean) {
   const diff = current - previous;

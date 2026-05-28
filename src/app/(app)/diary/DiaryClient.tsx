@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
@@ -14,20 +14,31 @@ const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 interface DiaryClientProps {
   userId: string;
-  initialLogs: FoodLog[];
+  serverDate: string;
   targetCalories: number;
 }
 
-export default function DiaryClient({ userId, initialLogs, targetCalories }: DiaryClientProps) {
-  const [logs, setLogs] = useState<FoodLog[]>(initialLogs);
+export default function DiaryClient({ userId, serverDate, targetCalories }: DiaryClientProps) {
+  const [logs, setLogs] = useState<FoodLog[]>([]);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
-  const [selectedDate, setSelectedDate] = useState(todayISO());
-  const [loadingDate, setLoadingDate] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(serverDate);
+  const [loadingDate, setLoadingDate] = useState(true);
   const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
 
   const isToday = selectedDate === todayISO();
+
+  useEffect(() => {
+    const today = todayISO();
+    setSelectedDate(today);
+    fetch(`/api/logs?date=${today}`)
+      .then((r) => r.json())
+      .then((data) => setLogs(data.foodLogs ?? []))
+      .catch(() => setLogs([]))
+      .finally(() => setLoadingDate(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function navigateTo(date: string) {
     if (date > todayISO()) return;
@@ -36,7 +47,9 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
     try {
       const res = await fetch(`/api/logs?date=${date}`);
       const data = await res.json();
-      setLogs(data.foodLogs);
+      setLogs(data.foodLogs ?? []);
+    } catch {
+      setLogs([]);
     } finally {
       setLoadingDate(false);
     }
