@@ -43,14 +43,26 @@ REGRAS FINAIS:
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractJSON(raw: string): any {
-  // Strip markdown code fences if present
   const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
   try {
     return JSON.parse(stripped);
   } catch {
-    const match = stripped.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('No JSON found in response');
+    // Use balanced-brace extraction so trailing text with braces doesn't break the parse
+    const start = stripped.indexOf('{');
+    if (start === -1) throw new Error('No JSON found in response');
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < stripped.length; i++) {
+      const ch = stripped[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
+    }
+    throw new Error('No valid JSON object found in response');
   }
 }
 
@@ -85,9 +97,9 @@ export async function POST(req: Request) {
       contents: [{ role: 'user', parts }],
       config: {
         systemInstruction: SYSTEM,
-        maxOutputTokens: 1200,
+        maxOutputTokens: 2048,
         temperature: 0.2,
-        thinkingConfig: { thinkingBudget: 1024 },
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 

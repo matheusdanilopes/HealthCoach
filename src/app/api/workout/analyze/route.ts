@@ -26,9 +26,21 @@ function extractJSON(raw: string): Record<string, unknown> {
   try {
     return JSON.parse(stripped);
   } catch {
-    const match = stripped.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('No JSON found in response');
+    const start = stripped.indexOf('{');
+    if (start === -1) throw new Error('No JSON found in response');
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < stripped.length; i++) {
+      const ch = stripped[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
+    }
+    throw new Error('No valid JSON object found in response');
   }
 }
 
