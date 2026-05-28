@@ -101,10 +101,23 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         }),
       });
       const data = await res.json();
+
+      if (!res.ok) {
+        // Restore input on transient errors so the user can resend without retyping
+        if (res.status === 503 || res.status === 429) setInput(text);
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: data.error ?? 'Desculpe, tive um problema. Tente novamente.',
+        }]);
+        return;
+      }
+
       if (data.message) setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
       // Optimistic update - no router.refresh() needed
       if (data.foodLogged && data.foodLog && onFoodLogged) onFoodLogged(data.foodLog as FoodLog);
     } catch {
+      // Restore input on network errors too
+      setInput(text);
       setMessages((prev) => [...prev, {
         role: 'assistant',
         content: 'Desculpe, tive um problema. Tente novamente.',
