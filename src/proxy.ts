@@ -6,7 +6,13 @@ export function proxy(request: NextRequest) {
   const isLoginRoute = pathname.startsWith('/login');
   const isRegisterRoute = pathname.startsWith('/register');
   const isApiRoute = pathname.startsWith('/api/');
-  const isPublicRoute = pathname === '/' || isLoginRoute || isRegisterRoute || isApiRoute;
+  const isPwaAsset =
+    pathname === '/manifest.json' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/sw.js' ||
+    pathname === '/sw-register.js';
+
+  const isPublicRoute = pathname === '/' || isLoginRoute || isRegisterRoute || isApiRoute || isPwaAsset;
 
   if (isPublicRoute) {
     return NextResponse.next();

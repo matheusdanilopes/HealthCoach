@@ -8,12 +8,13 @@ interface WaterTrackerProps {
   current: number;
   target: number;
   userId: string;
+  date?: string;
   onUpdate: (newTotal: number) => void;
 }
 
 const QUICK_AMOUNTS = [150, 250, 350, 500];
 
-export default function WaterTracker({ current, target, onUpdate }: WaterTrackerProps) {
+export default function WaterTracker({ current, target, date, onUpdate }: WaterTrackerProps) {
   const [loading, setLoading] = useState<number | null>(null);
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
   const isComplete = pct >= 100;
@@ -23,7 +24,7 @@ export default function WaterTracker({ current, target, onUpdate }: WaterTracker
     await fetch('/api/water', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount_ml: ml }),
+      body: JSON.stringify({ amount_ml: ml, log_date: date }),
     });
     onUpdate(current + ml);
     setLoading(null);

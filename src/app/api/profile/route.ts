@@ -13,7 +13,8 @@ export async function PUT(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { fullName, birthDate, weight, height, activityLevel } = await req.json();
+  const { fullName, birthDate, weight, height, activityLevel, customTmb, customTargetCalories } =
+    await req.json();
 
   const w = parseFloat(weight);
   const h = parseFloat(height);
@@ -27,9 +28,17 @@ export async function PUT(req: Request) {
 
   const sex = (userData?.sex ?? 'male') as 'male' | 'female';
 
-  const tmb = calculateTMB(w, h, age, sex);
-  const tdee = calculateTDEE(tmb, activityLevel);
-  const targetCal = calculateTargetCalories(tdee);
+  const formulaTmb = calculateTMB(w, h, age, sex);
+  const effectiveTmb =
+    customTmb != null && Number.isFinite(Number(customTmb))
+      ? Math.round(Number(customTmb))
+      : formulaTmb;
+  const tdee = calculateTDEE(effectiveTmb, activityLevel);
+  const formulaTarget = calculateTargetCalories(tdee);
+  const targetCal =
+    customTargetCalories != null && Number.isFinite(Number(customTargetCalories))
+      ? Math.max(Math.round(Number(customTargetCalories)), 1200)
+      : formulaTarget;
   const targetWater = calculateWaterTarget(w);
 
   await supabase

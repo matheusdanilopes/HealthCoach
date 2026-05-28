@@ -67,11 +67,9 @@ export default function PWAInstallPrompt() {
       return () => clearTimeout(t);
     }
 
-    // Android: show banner regardless of whether beforeinstallprompt fires.
-    // If the event is already captured, use it for one-tap install.
-    // Otherwise show after a short delay with manual instructions as fallback.
-    if (!isAndroid()) return;
-
+    // Android and desktop: use beforeinstallprompt for one-tap install.
+    // On Android, also show a manual-instructions fallback if the event
+    // doesn't fire within 3 s (e.g. Chrome hasn't deemed the site eligible yet).
     const stored = window.__pwaInstallEvent;
     if (stored) {
       setPrompt(stored);
@@ -91,18 +89,22 @@ export default function PWAInstallPrompt() {
     }
     window.addEventListener('pwa-install-ready', onReady);
 
-    // Fallback: if beforeinstallprompt doesn't fire within 3 s, show
-    // the banner anyway with manual "Add to Home Screen" instructions.
-    const fallback = setTimeout(() => {
-      if (!shown) {
-        shown = true;
-        setShow(true);
-      }
-    }, 3000);
+    // Android-only fallback: if beforeinstallprompt doesn't fire within 3 s,
+    // show the banner with manual "Add to Home Screen" instructions.
+    // Desktop browsers don't get this fallback — no native install = no banner.
+    let fallback: ReturnType<typeof setTimeout> | undefined;
+    if (isAndroid()) {
+      fallback = setTimeout(() => {
+        if (!shown) {
+          shown = true;
+          setShow(true);
+        }
+      }, 3000);
+    }
 
     return () => {
       window.removeEventListener('pwa-install-ready', onReady);
-      clearTimeout(fallback);
+      if (fallback !== undefined) clearTimeout(fallback);
     };
   }, []);
 

@@ -56,6 +56,13 @@ html.dark ::-webkit-scrollbar-thumb {
   border-radius: 8px;
 }
 
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* ─── Design system utilities ─── */
 
 .label-xs {
@@ -127,6 +134,21 @@ html.dark .surface {
   from { width: 0%; }
 }
 
+@keyframes splash-icon {
+  from { transform: scale(0.72); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes splash-text {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes splash-progress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
 /* ─── Animation classes ─── */
 
 .animate-slide-up {
@@ -174,6 +196,23 @@ html.dark .animate-shimmer {
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
+}
+
+/* ─── Splash screen animations ─── */
+
+.animate-splash-icon {
+  animation: splash-icon 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-splash-text {
+  animation: splash-text 0.4s ease-out 0.22s both;
+  will-change: transform, opacity;
+}
+
+.animate-splash-progress {
+  animation: splash-progress 1.4s ease-in-out forwards;
+  will-change: width;
 }
 
 .animate-pulse-soft {

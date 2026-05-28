@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, Pencil } from 'lucide-react';
 import { getMealLabel, getMealIcon, cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -10,6 +10,7 @@ interface MealSectionProps {
   logs: FoodLog[];
   onAdd: () => void;
   onDelete: (id: string) => void;
+  onEdit: (log: FoodLog) => void;
 }
 
 function getDefaultExpanded(mealType: MealType): boolean {
@@ -20,7 +21,7 @@ function getDefaultExpanded(mealType: MealType): boolean {
   return false;
 }
 
-export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSectionProps) {
+export default function MealSection({ mealType, logs, onAdd, onDelete, onEdit }: MealSectionProps) {
   const [expanded, setExpanded] = useState(() => getDefaultExpanded(mealType) || logs.length > 0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -93,6 +94,13 @@ export default function MealSection({ mealType, logs, onAdd, onDelete }: MealSec
                   <span className="text-[13px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400 flex-shrink-0">
                     {log.calories.toLocaleString('pt-BR')} kcal
                   </span>
+                  <button
+                    onClick={() => onEdit(log)}
+                    className="flex-shrink-0 h-7 w-7 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700/50 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 transition-all"
+                    title="Editar"
+                  >
+                    <Pencil size={11} />
+                  </button>
                   <button
                     onClick={() => handleDelete(log.id)}
                     disabled={deletingId === log.id}

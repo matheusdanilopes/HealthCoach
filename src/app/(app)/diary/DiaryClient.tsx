@@ -1,34 +1,76 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
-import { Dumbbell, Plus, Flame } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import EditFoodModal from '@/components/diary/EditFoodModal';
+import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles } from 'lucide-react';
+import { cn, todayISO } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 interface DiaryClientProps {
   userId: string;
-  initialLogs: FoodLog[];
+  serverDate: string;
   targetCalories: number;
 }
 
-export default function DiaryClient({ userId, initialLogs, targetCalories }: DiaryClientProps) {
-  const [logs, setLogs] = useState<FoodLog[]>(initialLogs);
+export default function DiaryClient({ userId, serverDate, targetCalories }: DiaryClientProps) {
+  const [logs, setLogs] = useState<FoodLog[]>([]);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
+  const [selectedDate, setSelectedDate] = useState(serverDate);
+  const [loadingDate, setLoadingDate] = useState(true);
+  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
+
+  const isToday = selectedDate === todayISO();
+
+  useEffect(() => {
+    const today = todayISO();
+    setSelectedDate(today);
+    fetch(`/api/logs?date=${today}`)
+      .then((r) => r.json())
+      .then((data) => setLogs(data.foodLogs ?? []))
+      .catch(() => setLogs([]))
+      .finally(() => setLoadingDate(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function navigateTo(date: string) {
+    if (date > todayISO()) return;
+    setSelectedDate(date);
+    setLoadingDate(true);
+    try {
+      const res = await fetch(`/api/logs?date=${date}`);
+      const data = await res.json();
+      setLogs(data.foodLogs ?? []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoadingDate(false);
+    }
+  }
+
+  function changeDate(delta: number) {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    navigateTo(d.toISOString().split('T')[0]);
+  }
 
   const positiveLogs = logs.filter((l) => l.calories > 0);
   const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
-  const remaining = targetCalories - totalCalories;
-  const pct = targetCalories > 0 ? Math.min((totalCalories / targetCalories) * 100, 100) : 0;
-  const isOver = totalCalories > targetCalories;
+  const workouts = logs.filter((l) => l.calories < 0);
+  const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
+  const net = totalCalories - workoutCalories;
+  const remaining = targetCalories - net;
+  const pct = targetCalories > 0 ? Math.min((net / targetCalories) * 100, 100) : 0;
+  const isOver = net > targetCalories;
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setLogs((prev) => [...prev, log]);
@@ -38,24 +80,66 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
     setLogs((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
+  const handleUpdated = useCallback((updated: FoodLog) => {
+    setLogs((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+  }, []);
+
+  async function handleDeleteWorkout(id: string) {
+    setDeletingWorkoutId(id);
+    await fetch(`/api/food?id=${id}`, { method: 'DELETE' });
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    setDeletingWorkoutId(null);
+  }
+
   function openAddForMeal(meal: MealType) {
     setActiveMeal(meal);
     setAddFoodOpen(true);
   }
 
-  const workouts = logs.filter((l) => l.calories < 0);
-  const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
+  const displayDate = format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
     <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
       {/* Header */}
-      <div>
-        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 capitalize mb-0.5 font-medium tracking-wide">
-          {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
-        </p>
+      <div className="flex flex-col gap-3">
         <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
           Diário
         </h1>
+        {/* Date navigation */}
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
+            loadingDate && 'opacity-50'
+          )}>
+            <button
+              onClick={() => changeDate(-1)}
+              disabled={loadingDate}
+              className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-40 active:scale-95"
+              aria-label="Dia anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <p className="flex-1 text-center text-[13px] font-medium text-zinc-700 dark:text-zinc-200 capitalize select-none">
+              {displayDate}
+            </p>
+            <button
+              onClick={() => changeDate(1)}
+              disabled={isToday || loadingDate}
+              className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+              aria-label="Próximo dia"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          {!isToday && (
+            <button
+              onClick={() => navigateTo(todayISO())}
+              className="h-9 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-95 whitespace-nowrap"
+            >
+              Hoje
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Daily summary */}
@@ -124,6 +208,7 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
             logs={logs.filter((l) => l.meal_type === meal && l.calories > 0)}
             onAdd={() => openAddForMeal(meal)}
             onDelete={handleDelete}
+            onEdit={setEditingLog}
           />
         ))}
       </div>
@@ -144,12 +229,22 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
             {workouts.map((w) => (
               <div
                 key={w.id}
-                className="flex items-center justify-between px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
+                className="flex items-center gap-3 px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
               >
-                <span className="text-[13px] text-zinc-600 dark:text-zinc-400">{w.food_name}</span>
-                <span className="text-[13px] font-semibold tabular-nums text-orange-500">
+                <span className="text-[13px] text-zinc-600 dark:text-zinc-400 flex-1 truncate">{w.food_name}</span>
+                <span className="text-[13px] font-semibold tabular-nums text-orange-500 flex-shrink-0">
                   {Math.abs(w.calories).toLocaleString('pt-BR')} kcal
                 </span>
+                <button
+                  onClick={() => handleDeleteWorkout(w.id)}
+                  disabled={deletingWorkoutId === w.id}
+                  className="flex-shrink-0 h-7 w-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-red-400 transition-all disabled:opacity-40"
+                >
+                  {deletingWorkoutId === w.id
+                    ? <span className="h-3 w-3 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
+                    : <Trash2 size={12} />
+                  }
+                </button>
               </div>
             ))}
           </div>
@@ -162,7 +257,8 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 hover:border-orange-300 dark:hover:border-orange-700/60 hover:text-orange-500 dark:hover:text-orange-400 transition-all text-[13px] font-medium"
       >
         <Plus size={13} strokeWidth={2.5} />
-        Adicionar treino
+        Registrar treino
+        <Sparkles size={11} className="opacity-60" />
       </button>
 
       <AIFoodLogger
@@ -170,28 +266,21 @@ export default function DiaryClient({ userId, initialLogs, targetCalories }: Dia
         onClose={() => setAddFoodOpen(false)}
         userId={userId}
         defaultMeal={activeMeal}
+        date={selectedDate}
         onAdded={handleFoodAdded}
       />
       <AddWorkoutModal
         open={addWorkoutOpen}
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
-        onAdded={(cal) => {
-          setLogs((prev) => [
-            ...prev,
-            {
-              id: `local-${Date.now()}`,
-              user_id: userId,
-              created_at: new Date().toISOString(),
-              food_name: 'Treino',
-              meal_type: 'snack',
-              calories: -cal,
-              protein: null,
-              carbs: null,
-              fat: null,
-            },
-          ]);
-        }}
+        date={selectedDate}
+        onAdded={(log) => setLogs((prev) => [...prev, log])}
+      />
+      <EditFoodModal
+        open={editingLog !== null}
+        onClose={() => setEditingLog(null)}
+        log={editingLog}
+        onUpdated={handleUpdated}
       />
     </div>
   );
