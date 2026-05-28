@@ -216,37 +216,54 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
       {/* Workouts */}
       {workouts.length > 0 && (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
-          <div className="flex items-center gap-2.5 px-5 py-3.5">
-            <Dumbbell size={14} className="text-orange-500" />
+          <div className="flex items-center gap-2.5 px-5 py-4">
+            <div className="h-7 w-7 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/40 flex items-center justify-center flex-shrink-0">
+              <Dumbbell size={13} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
             <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200 flex-1">
               Treinos
             </p>
-            <span className="text-[13px] font-bold tabular-nums text-orange-500">
-              -{workoutCalories.toLocaleString('pt-BR')} kcal
-            </span>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                -{workoutCalories.toLocaleString('pt-BR')}
+              </span>
+              <span className="text-[11px] text-emerald-500 dark:text-emerald-500 font-medium ml-0.5">kcal</span>
+            </div>
           </div>
           <div className="border-t border-zinc-100 dark:border-zinc-800/60">
-            {workouts.map((w) => (
-              <div
-                key={w.id}
-                className="flex items-center gap-3 px-5 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
-              >
-                <span className="text-[13px] text-zinc-600 dark:text-zinc-400 flex-1 truncate">{w.food_name}</span>
-                <span className="text-[13px] font-semibold tabular-nums text-orange-500 flex-shrink-0">
-                  {Math.abs(w.calories).toLocaleString('pt-BR')} kcal
-                </span>
-                <button
-                  onClick={() => handleDeleteWorkout(w.id)}
-                  disabled={deletingWorkoutId === w.id}
-                  className="flex-shrink-0 h-7 w-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-red-400 transition-all disabled:opacity-40"
+            {workouts.map((w) => {
+              const nameParts = w.food_name.match(/^(\S+)\s(.+?)(\s·\s(\d+)min)?$/);
+              const emoji = nameParts?.[1] ?? '';
+              const name  = nameParts?.[2]?.replace(/\s·\s\d+min$/, '') ?? w.food_name;
+              const dur   = nameParts?.[4];
+              return (
+                <div
+                  key={w.id}
+                  className="flex items-center gap-3 px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
                 >
-                  {deletingWorkoutId === w.id
-                    ? <span className="h-3 w-3 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
-                    : <Trash2 size={12} />
-                  }
-                </button>
-              </div>
-            ))}
+                  <span className="text-[18px] leading-none flex-shrink-0">{emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 truncate">{name}</p>
+                    {dur && (
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{dur} min</p>
+                    )}
+                  </div>
+                  <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                    -{Math.abs(w.calories).toLocaleString('pt-BR')} kcal
+                  </span>
+                  <button
+                    onClick={() => handleDeleteWorkout(w.id)}
+                    disabled={deletingWorkoutId === w.id}
+                    className="flex-shrink-0 h-7 w-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-red-400 transition-all disabled:opacity-40 active:scale-95"
+                  >
+                    {deletingWorkoutId === w.id
+                      ? <span className="h-3 w-3 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
+                      : <Trash2 size={12} />
+                    }
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
