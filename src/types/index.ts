@@ -81,5 +81,18 @@ export interface BodyMeasurements {
   updated_at: string;
 }
 
+export interface AIInsight {
+  id: string;
+  user_id: string;
+  type: 'nutrition' | 'workout' | 'body' | 'behavior';
+  priority: 'informativo' | 'atencao' | 'positivo' | 'recomendacao';
+  title: string;
+  message: string;
+  cta: string | null;
+  metadata: Record<string, unknown> | null;
+  generated_at: string;
+  read_at: string | null;
+}
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type ActivityLevel = 'sedentary' | 'moderate' | 'active';

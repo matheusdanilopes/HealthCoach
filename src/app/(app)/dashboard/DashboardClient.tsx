@@ -8,6 +8,7 @@ import { Scale, Plus, Dumbbell, Flame, TrendingDown, ChevronLeft, ChevronRight }
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
+import AIInsightCard from '@/components/dashboard/AIInsightCard';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
@@ -181,6 +182,9 @@ export default function DashboardClient({
           burned={workoutBurned}
           target={profile?.target_calories ?? 2000}
         />
+
+        {/* AI Insights — only on today's view */}
+        {isToday && <AIInsightCard userId={userId} />}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3">
