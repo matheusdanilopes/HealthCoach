@@ -64,6 +64,7 @@ export default function AIFoodLogger({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editBuffer, setEditBuffer] = useState<FoodItem | null>(null);
   const [bufferAnalyzing, setBufferAnalyzing] = useState(false);
+  const [bufferNeedsReanalysis, setBufferNeedsReanalysis] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +84,7 @@ export default function AIFoodLogger({
       setEditedFoods([]);
       setEditingIndex(null);
       setEditBuffer(null);
+      setBufferNeedsReanalysis(false);
       setConfirmClose(false);
       setError(null);
       setSaving(false);
@@ -124,6 +126,7 @@ export default function AIFoodLogger({
   function enterEditMode(i: number) {
     setEditBuffer({ ...editedFoods[i] });
     setEditingIndex(i);
+    setBufferNeedsReanalysis(false);
   }
 
   // Apply buffer to editedFoods only when user clicks Confirmar
@@ -141,6 +144,7 @@ export default function AIFoodLogger({
   function cancelEdit() {
     setEditingIndex(null);
     setEditBuffer(null);
+    setBufferNeedsReanalysis(false);
   }
 
   // Re-analyze the item using the buffered name + quantity
@@ -169,6 +173,7 @@ export default function AIFoodLogger({
             }
           : null
       );
+      setBufferNeedsReanalysis(false);
     } catch {
       // error shown inline via the buffer state staying unchanged
     } finally {
@@ -551,7 +556,7 @@ export default function AIFoodLogger({
                           <input
                             type="text"
                             value={editBuffer.name}
-                            onChange={(e) => setEditBuffer((p) => p ? { ...p, name: e.target.value } : null)}
+                            onChange={(e) => { setEditBuffer((p) => p ? { ...p, name: e.target.value } : null); setBufferNeedsReanalysis(true); }}
                             className={inputCls}
                           />
                         </label>
@@ -563,7 +568,7 @@ export default function AIFoodLogger({
                             <input
                               type="text"
                               value={editBuffer.quantity}
-                              onChange={(e) => setEditBuffer((p) => p ? { ...p, quantity: e.target.value } : null)}
+                              onChange={(e) => { setEditBuffer((p) => p ? { ...p, quantity: e.target.value } : null); setBufferNeedsReanalysis(true); }}
                               className={inputCls}
                             />
                           </label>
@@ -571,7 +576,11 @@ export default function AIFoodLogger({
                             type="button"
                             onClick={reanalyzeBuffer}
                             disabled={bufferAnalyzing || !editBuffer.name.trim()}
-                            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap"
+                            className={`flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border text-[11px] font-semibold transition-all disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap ${
+                              bufferNeedsReanalysis
+                                ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-400/40'
+                                : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                            }`}
                           >
                             {bufferAnalyzing
                               ? <span className="h-3 w-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
@@ -622,6 +631,11 @@ export default function AIFoodLogger({
                         </div>
 
                         {/* Cancel / Confirm — changes only applied here */}
+                        {bufferNeedsReanalysis && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center -mb-1">
+                            Re-analise com IA antes de confirmar
+                          </p>
+                        )}
                         <div className="flex gap-2 pt-0.5">
                           <button
                             type="button"
@@ -632,8 +646,9 @@ export default function AIFoodLogger({
                           </button>
                           <button
                             type="button"
-                            onClick={commitEdit}
-                            className="flex-1 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all flex items-center justify-center gap-1"
+                            onClick={bufferNeedsReanalysis ? undefined : commitEdit}
+                            disabled={bufferNeedsReanalysis}
+                            className="flex-1 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all flex items-center justify-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
                           >
                             <Check size={12} />
                             Confirmar
