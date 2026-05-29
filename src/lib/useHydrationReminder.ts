@@ -85,12 +85,14 @@ async function notify(title: string, body: string): Promise<void> {
   }
 }
 
-export function useHydrationReminder(logs: WaterLogEntry[], target: number): void {
-  const logsRef   = useRef(logs);
-  const targetRef = useRef(target);
+export function useHydrationReminder(logs: WaterLogEntry[], target: number, mealHydrationMl = 0): void {
+  const logsRef            = useRef(logs);
+  const targetRef          = useRef(target);
+  const mealHydrationRef   = useRef(mealHydrationMl);
 
   useEffect(() => { logsRef.current = logs; }, [logs]);
   useEffect(() => { targetRef.current = target; }, [target]);
+  useEffect(() => { mealHydrationRef.current = mealHydrationMl; }, [mealHydrationMl]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -98,7 +100,7 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number): voi
     function check(): void {
       const currentLogs   = logsRef.current;
       const currentTarget = targetRef.current;
-      const total = currentLogs.reduce((s, l) => s + l.amount_ml, 0);
+      const total = currentLogs.reduce((s, l) => s + l.amount_ml, 0) + mealHydrationRef.current;
 
       if (isQuietHour()) return;
 

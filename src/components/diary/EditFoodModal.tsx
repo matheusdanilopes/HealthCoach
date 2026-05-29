@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
-import { Sparkles, AlertTriangle } from 'lucide-react';
+import { Sparkles, AlertTriangle, Droplets } from 'lucide-react';
+import { detectBeverage } from '@/lib/beverages';
 import type { FoodLog } from '@/types';
 
 interface EditFoodModalProps {
@@ -24,6 +25,8 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
   const [protein, setProtein] = useState(0);
   const [carbs, setCarbs] = useState(0);
   const [fat, setFat] = useState(0);
+  const [hydrationMl, setHydrationMl] = useState(0);
+  const [isBeverageField, setIsBeverageField] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,17 +34,18 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
   const [confirmClose, setConfirmClose] = useState(false);
   const [needsReanalysis, setNeedsReanalysis] = useState(false);
 
-  // Snapshot of initial values for dirty comparison
-  const initialRef = useRef({ foodName: '', calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const initialRef = useRef({ foodName: '', calories: 0, protein: 0, carbs: 0, fat: 0, hydrationMl: 0 });
 
   useEffect(() => {
     if (open && log) {
+      const isBev = (log.hydration_ml ?? 0) > 0 || detectBeverage(log.food_name).isBeverage;
       const init = {
         foodName: log.food_name,
         calories: log.calories,
         protein: log.protein ?? 0,
         carbs: log.carbs ?? 0,
         fat: log.fat ?? 0,
+        hydrationMl: log.hydration_ml ?? 0,
       };
       initialRef.current = init;
       setFoodName(init.foodName);
@@ -49,6 +53,8 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
       setProtein(init.protein);
       setCarbs(init.carbs);
       setFat(init.fat);
+      setHydrationMl(init.hydrationMl);
+      setIsBeverageField(isBev);
       setError(null);
       setIsDirty(false);
       setConfirmClose(false);
@@ -56,16 +62,26 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
     }
   }, [open, log]);
 
-  function markDirty() {
-    setIsDirty(true);
-  }
+  function markDirty() { setIsDirty(true); }
 
-  // Guard close: ask for confirmation when there are unsaved changes
   function handleClose() {
     if (isDirty) {
       setConfirmClose(true);
     } else {
       onClose();
+    }
+  }
+
+  function handleFoodNameChange(name: string) {
+    setFoodName(name);
+    setError(null);
+    markDirty();
+    setNeedsReanalysis(true);
+    // Update beverage field visibility when name changes
+    const det = detectBeverage(name);
+    setIsBeverageField(det.isBeverage || hydrationMl > 0);
+    if (det.isBeverage && hydrationMl === 0) {
+      setHydrationMl(det.estimatedMl);
     }
   }
 
@@ -85,6 +101,17 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
       setProtein(+(data.totalProtein ?? 0).toFixed(1));
       setCarbs(+(data.totalCarbs ?? 0).toFixed(1));
       setFat(+(data.totalFat ?? 0).toFixed(1));
+
+      // Update hydration from AI or local detection
+      const aiHydration = data.foods?.[0]?.hydration_ml;
+      if (typeof aiHydration === 'number') {
+        setHydrationMl(aiHydration);
+      } else {
+        const det = detectBeverage(foodName.trim());
+        setHydrationMl(det.estimatedMl);
+        setIsBeverageField(det.isBeverage || hydrationMl > 0);
+      }
+
       setIsDirty(true);
       setNeedsReanalysis(false);
     } catch (e) {
@@ -113,12 +140,15 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
           protein: Number(protein) || null,
           carbs: Number(carbs) || null,
           fat: Number(fat) || null,
+          hydration_ml: Math.min(Math.max(0, Math.round(Number(hydrationMl) || 0)), 2000),
+          hydration_source: hydrationMl > 0 ? (log.hydration_source ?? 'meal') : null,
+          hydration_confidence: hydrationMl > 0 ? (log.hydration_confidence ?? 'medium') : null,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? 'Erro ao salvar');
       onUpdated(data as FoodLog);
-      onClose(); // direct close — no dirty state after successful save
+      onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar. Tente novamente.');
     } finally {
@@ -129,7 +159,6 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
   return (
     <Modal open={open} onClose={handleClose} title="Editar alimento">
       {confirmClose ? (
-        /* ── Abandonment confirmation ── */
         <div className="flex flex-col items-center gap-5 py-3">
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="h-10 w-10 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
@@ -160,7 +189,6 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
           </div>
         </div>
       ) : (
-        /* ── Edit form ── */
         <div className="flex flex-col gap-4">
           {/* Food name */}
           <div className="flex flex-col gap-1.5">
@@ -168,7 +196,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
             <input
               type="text"
               value={foodName}
-              onChange={(e) => { setFoodName(e.target.value); setError(null); markDirty(); setNeedsReanalysis(true); }}
+              onChange={(e) => handleFoodNameChange(e.target.value)}
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3 text-[14px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400/60 transition-all"
             />
           </div>
@@ -230,6 +258,24 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
               />
             </label>
           </div>
+
+          {/* Hydration field — shown for beverages */}
+          {isBeverageField && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-teal-500 dark:text-teal-400 flex items-center gap-1">
+                <Droplets size={10} /> Hidratação contabilizada (ml)
+              </span>
+              <input
+                type="number" min={0} max={2000} step={10}
+                value={hydrationMl}
+                onChange={(e) => { setHydrationMl(Math.min(Number(e.target.value) || 0, 2000)); markDirty(); }}
+                className="w-full rounded-xl border border-teal-200 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/20 px-3 py-2.5 text-[14px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400/60 transition-all"
+              />
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                Ajuste os ml que contam para a sua meta diária de hidratação (0 para remover)
+              </p>
+            </label>
+          )}
 
           {error && (
             <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>

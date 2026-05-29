@@ -10,13 +10,25 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date') ?? brazilToday();
 
-  const [{ data: foodData }, { data: waterData }] = await Promise.all([
-    supabase
+  let { data: foodData, error: foodError } = await supabase
+    .from('food_logs')
+    .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at')
+    .eq('user_id', session.user.id)
+    .eq('log_date', date)
+    .order('created_at');
+
+  if (foodError) {
+    // Migration not yet applied — fall back to legacy schema
+    const { data: legacyFood } = await supabase
       .from('food_logs')
       .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
       .eq('user_id', session.user.id)
       .eq('log_date', date)
-      .order('created_at'),
+      .order('created_at');
+    foodData = legacyFood as unknown as typeof foodData;
+  }
+
+  const [{ data: waterData }] = await Promise.all([
     supabase
       .from('water_logs')
       .select('id, amount_ml, created_at')

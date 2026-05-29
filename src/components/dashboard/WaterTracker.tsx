@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState, useCallback, useEffect } from 'react';
-import { Droplets, Bell, BellOff, Clock } from 'lucide-react';
+import { Droplets, Bell, BellOff, Clock, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { requestAndSubscribePush } from '@/components/ServiceWorkerRegistration';
 import type { WaterLogEntry } from '@/types';
@@ -11,13 +11,14 @@ interface WaterTrackerProps {
   target: number;
   date: string;
   onAdded: (ml: number, createdAt: string) => void;
+  mealHydrationMl?: number;
 }
 
 const AMOUNTS = [200, 300, 500, 750];
 const RADIUS  = 46;
 const STROKE  = 7;
 const CIRC    = 2 * Math.PI * RADIUS;
-const SIZE    = 112; // SVG viewport
+const SIZE    = 112;
 
 function timeSince(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -28,8 +29,9 @@ function timeSince(iso: string): string {
   return m > 0 ? `${h}h${m}min atrás` : `${h}h atrás`;
 }
 
-function smartStatus(pct: number, lastLog: WaterLogEntry | undefined): string {
+function smartStatus(pct: number, lastLog: WaterLogEntry | undefined, mealMl: number): string {
   if (pct >= 100) return 'Meta atingida! 🎉';
+  if (mealMl > 0 && pct >= 80) return 'Quase lá! Suas refeições ajudaram muito ✨';
   if (!lastLog) {
     return new Date().getHours() < 10
       ? 'Comece o dia bem hidratado 💧'
@@ -43,25 +45,24 @@ function smartStatus(pct: number, lastLog: WaterLogEntry | undefined): string {
   return 'Beba água com frequência para manter a saúde';
 }
 
-export default memo(function WaterTracker({ logs, target, date, onAdded }: WaterTrackerProps) {
+export default memo(function WaterTracker({ logs, target, date, onAdded, mealHydrationMl = 0 }: WaterTrackerProps) {
   const [loading, setLoading]           = useState<number | null>(null);
   const [notifSupported, setNotifSupp]  = useState(false);
   const [notifGranted, setNotifGranted] = useState(false);
-  const [tick, setTick]                 = useState(0); // forces re-render each minute
+  const [tick, setTick]                 = useState(0);
 
-  const current = logs.reduce((s, l) => s + l.amount_ml, 0);
-  const pct     = target > 0 ? Math.min((current / target) * 100, 100) : 0;
-  const isDone  = pct >= 100;
-  const lastLog = logs.length > 0 ? logs[logs.length - 1] : undefined;
-  const dashOff = CIRC * (1 - pct / 100);
+  const directMl  = logs.reduce((s, l) => s + l.amount_ml, 0);
+  const current   = directMl + mealHydrationMl;
+  const pct       = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+  const isDone    = pct >= 100;
+  const lastLog   = logs.length > 0 ? logs[logs.length - 1] : undefined;
+  const dashOff   = CIRC * (1 - pct / 100);
 
-  // Tick every minute so "Xmin atrás" stays live
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // Check notification API support
   useEffect(() => {
     if ('Notification' in window) {
       setNotifSupp(true);
@@ -123,7 +124,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
       <div className="flex flex-col items-center gap-2">
         <div className="relative" style={{ width: SIZE, height: SIZE }}>
           <svg width={SIZE} height={SIZE} className="-rotate-90" aria-hidden>
-            {/* Track ring */}
             <circle
               cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
               fill="none"
@@ -131,7 +131,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
               className="text-zinc-100 dark:text-zinc-800"
               stroke="currentColor"
             />
-            {/* Progress ring */}
             <circle
               cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
               fill="none"
@@ -144,7 +143,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
             />
           </svg>
 
-          {/* Center text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
             <span className={cn('text-[20px] font-bold tabular-nums leading-none tracking-tight', colorDark)}>
               {current >= 1000 ? `${(current / 1000).toFixed(1)}L` : `${current}`}
@@ -158,11 +156,22 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
           </div>
         </div>
 
-        {/* Meta label */}
         <p className="text-[11px] text-zinc-400 dark:text-zinc-500 -mt-1">
           meta {(target / 1000).toFixed(1)}L
         </p>
       </div>
+
+      {/* Meal hydration badge */}
+      {mealHydrationMl > 0 && (
+        <div className="flex items-center justify-center gap-1.5 -mt-2 bg-teal-50 dark:bg-teal-950/30 rounded-xl px-3 py-1.5 border border-teal-100 dark:border-teal-900/40">
+          <Utensils size={10} className="text-teal-500 flex-shrink-0" />
+          <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">
+            +{mealHydrationMl >= 1000
+              ? `${(mealHydrationMl / 1000).toFixed(1)}L`
+              : `${mealHydrationMl}ml`} via refeições
+          </span>
+        </div>
+      )}
 
       {/* Last log + status */}
       <div className="text-center space-y-1">
@@ -175,7 +184,7 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
           </div>
         )}
         <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-snug">
-          {smartStatus(pct, lastLog)}
+          {smartStatus(pct, lastLog, mealHydrationMl)}
         </p>
       </div>
 
@@ -201,7 +210,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
           );
         })}
       </div>
-
     </div>
   );
 });

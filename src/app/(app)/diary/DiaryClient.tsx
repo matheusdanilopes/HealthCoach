@@ -7,7 +7,7 @@ import MealSection from '@/components/diary/MealSection';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import EditFoodModal from '@/components/diary/EditFoodModal';
-import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles, Droplets, Clock } from 'lucide-react';
+import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles, Droplets, Clock, Utensils } from 'lucide-react';
 import { cn, todayISO } from '@/lib/utils';
 import type { FoodLog, MealType, WaterLogEntry } from '@/types';
 
@@ -90,7 +90,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
     navigateTo(d.toISOString().split('T')[0]);
   }
 
-  const { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs } = useMemo(() => {
+  const { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs, mealHydrationMl } = useMemo(() => {
     const positiveLogs = logs.filter((l) => l.calories > 0);
     const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
     const workouts = logs.filter((l) => l.calories < 0);
@@ -105,7 +105,8 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
       dinner:    positiveLogs.filter((l) => l.meal_type === 'dinner'),
       snack:     positiveLogs.filter((l) => l.meal_type === 'snack'),
     };
-    return { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs };
+    const mealHydrationMl = positiveLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
+    return { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs, mealHydrationMl };
   }, [logs, targetCalories]);
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
@@ -291,7 +292,9 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
 
       {/* Water history */}
       {(() => {
-        const totalWater = waterLogs.reduce((s, l) => s + l.amount_ml, 0);
+        const directWater = waterLogs.reduce((s, l) => s + l.amount_ml, 0);
+        const mealHydration = mealHydrationMl;
+        const totalWater = directWater + mealHydration;
         const pct = targetWater > 0 ? Math.min((totalWater / targetWater) * 100, 100) : 0;
         return (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
@@ -383,7 +386,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
             )}
 
             {/* Log list */}
-            {waterLogs.length === 0 ? (
+            {waterLogs.length === 0 && mealHydration === 0 ? (
               <div className="px-5 py-5 flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
                 <Droplets size={13} className="text-zinc-300 dark:text-zinc-700" />
                 <p className="text-[12px]">Nenhum registro de água neste dia</p>
@@ -417,6 +420,17 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
                     )}
                   </div>
                 ))}
+                {mealHydration > 0 && (
+                  <div className="flex items-center gap-3 px-5 py-3 bg-teal-50/50 dark:bg-teal-950/20">
+                    <Utensils size={11} className="text-teal-400 dark:text-teal-500 flex-shrink-0" />
+                    <span className="text-[12px] text-teal-600 dark:text-teal-400 flex-1">
+                      Via refeições
+                    </span>
+                    <span className="text-[13px] font-semibold tabular-nums text-teal-600 dark:text-teal-400 flex-shrink-0">
+                      +{mealHydration}ml
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
