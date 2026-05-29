@@ -4,21 +4,23 @@ import { useEffect } from 'react';
 
 const SUBSCRIBE_URL = '/api/notifications/subscribe';
 
-// Converts VAPID base64url key to Uint8Array<ArrayBuffer>.
-// iOS Safari requires a BufferSource — it rejects a raw base64url string.
-// Must use `new Uint8Array(n)` (not Uint8Array.from) to get ArrayBuffer, not ArrayBufferLike.
-function urlBase64ToUint8Array(base64: string): Uint8Array {
+// Converts VAPID base64url key to ArrayBuffer.
+// iOS Safari requires a BufferSource (ArrayBuffer | ArrayBufferView) — it rejects a raw base64url string.
+// Returns ArrayBuffer (not Uint8Array) to satisfy the strict BufferSource type used by pushManager.
+function vapidKeyToBuffer(base64: string): ArrayBuffer {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(b64);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes;
+  // .buffer cast: new Uint8Array() always allocates a plain ArrayBuffer, never SharedArrayBuffer
+  return bytes.buffer as ArrayBuffer;
 }
 
-function buffersMatch(a: Uint8Array, b: ArrayBuffer): boolean {
+function buffersMatch(a: ArrayBuffer, b: ArrayBuffer): boolean {
+  const aArr = new Uint8Array(a);
   const bArr = new Uint8Array(b);
-  return a.length === bArr.length && a.every((v, i) => v === bArr[i]);
+  return aArr.length === bArr.length && aArr.every((v, i) => v === bArr[i]);
 }
 
 async function saveSubscription(sub: PushSubscription, retries = 3): Promise<boolean> {
@@ -58,8 +60,8 @@ async function subscribeToPush(reg: ServiceWorkerRegistration, fromUserGesture =
     // Wrapped in its own try-catch so a comparison error never blocks the happy path.
     if (existing?.options?.applicationServerKey) {
       try {
-        const currentKey  = urlBase64ToUint8Array(vapidKey);
-        const existingKey = existing.options.applicationServerKey;
+        const currentKey  = vapidKeyToBuffer(vapidKey);
+        const existingKey = existing.options.applicationServerKey as ArrayBuffer;
         if (!buffersMatch(currentKey, existingKey)) {
           console.info('[sw] VAPID key mismatch — removing stale subscription');
           await existing.unsubscribe();
@@ -83,10 +85,10 @@ async function subscribeToPush(reg: ServiceWorkerRegistration, fromUserGesture =
         console.info('[sw] no subscription — waiting for user gesture to create one (iOS safe)');
         return;
       }
-      // Pass key as Uint8Array — iOS Safari rejects the raw base64url string form
+      // Pass key as ArrayBuffer — iOS Safari rejects the raw base64url string form
       sub = await reg.pushManager.subscribe({
         userVisibleOnly:      true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: vapidKeyToBuffer(vapidKey),
       });
     }
 
