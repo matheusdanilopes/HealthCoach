@@ -3,11 +3,11 @@
 import { useEffect, useRef } from 'react';
 import type { WaterLogEntry } from '@/types';
 
-const COOLDOWN_MS        = 90 * 60 * 1000;  // 90 min between notifications
-const MAX_DAILY          = 5;               // max browser notifications per day
-const CHECK_INTERVAL_MS  = 10 * 60 * 1000; // check every 10 min while tab is open
-const QUIET_START        = 22;             // no notifications 22:00–07:00
-const QUIET_END          = 7;
+const COOLDOWN_MS       = 90 * 60 * 1000; // 90 min between notifications
+const MAX_DAILY         = 5;
+const CHECK_INTERVAL_MS = 10 * 60 * 1000; // check every 10 min while tab is open
+const QUIET_START       = 22;             // quiet hours 22:00–07:00
+const QUIET_END         = 7;
 
 function isQuietHour(): boolean {
   const h = new Date().getHours();
@@ -37,29 +37,51 @@ function saveNotifTime(): void {
 
 function canNotify(): boolean {
   if (typeof window === 'undefined') return false;
-  if (!('Notification' in window)) return false;
-  if (Notification.permission !== 'granted') return false;
   if (isQuietHour()) return false;
   if (Date.now() - lastNotifTime() < COOLDOWN_MS) return false;
   if (dailyCount() >= MAX_DAILY) return false;
   return true;
 }
 
-function notify(title: string, body: string): void {
+// Sends notification via Web Push (server → push service → device, works in background)
+// Falls back to browser Notification API if push not configured
+async function notify(title: string, body: string): Promise<void> {
   if (!canNotify()) return;
+
+  saveNotifTime();
+  bumpDailyCount();
+
+  // Try server-side Web Push first (works even with app in background)
   try {
-    new Notification(title, {
-      body,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-96x96.png',
-      tag: 'hc-hydration',
-      silent: false,
+    const res = await fetch('/api/notifications/send', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title, body, tag: 'hc-hydration', url: '/dashboard' }),
     });
-    saveNotifTime();
-    bumpDailyCount();
-    console.log('[hydration] Notification sent:', title);
-  } catch (e) {
-    console.warn('[hydration] Notification error:', e);
+    const data = await res.json();
+    if (data.sent > 0) {
+      console.log('[hydration] Push sent via server:', title);
+      return;
+    }
+  } catch { /**/ }
+
+  // Fallback: browser Notification API (requires tab to be in focus on some browsers)
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      // Show via service worker so it works in background on supported browsers
+      await reg.showNotification(title, {
+        body,
+        icon:   '/icons/icon-192x192.png',
+        badge:  '/icons/icon-96x96.png',
+        tag:    'hc-hydration',
+        data:   { url: '/dashboard' },
+      });
+      console.log('[hydration] Notification shown via SW:', title);
+    } catch {
+      try { new Notification(title, { body, icon: '/icons/icon-192x192.png', tag: 'hc-hydration' }); }
+      catch { /**/ }
+    }
   }
 }
 
@@ -72,7 +94,6 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number): voi
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!('Notification' in window)) return;
 
     function check(): void {
       const currentLogs   = logsRef.current;
@@ -81,14 +102,14 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number): voi
 
       if (isQuietHour()) return;
 
-      const lastLog   = currentLogs.length > 0 ? currentLogs[currentLogs.length - 1] : null;
-      const minSince  = lastLog
+      const lastLog  = currentLogs.length > 0 ? currentLogs[currentLogs.length - 1] : null;
+      const minSince = lastLog
         ? Math.floor((Date.now() - new Date(lastLog.created_at).getTime()) / 60_000)
         : 999;
       const pct = currentTarget > 0 ? total / currentTarget : 0;
       const h   = new Date().getHours();
 
-      // Goal achieved — positive reinforcement (once per day)
+      // Goal achieved — positive reinforcement once per day
       if (total >= currentTarget) {
         const key = `hc_congrats_${new Date().toDateString()}`;
         try {
@@ -100,42 +121,26 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number): voi
         return;
       }
 
-      // > 2h without water
       if (minSince > 120) {
         const remaining = currentTarget - total;
-        notify(
-          'Hora de beber água 💧',
-          `Você está há mais de 2h sem se hidratar. Faltam ${remaining}ml para sua meta.`,
-        );
+        notify('Hora de beber água 💧', `Você está há mais de 2h sem se hidratar. Faltam ${remaining}ml para a meta.`);
         return;
       }
 
-      // Afternoon check: below 50% after 15h
       if (h >= 15 && pct < 0.5) {
-        notify(
-          'Seu consumo de água está baixo hoje 💧',
-          `Você consumiu apenas ${Math.round(pct * 100)}% da sua meta diária.`,
-        );
+        notify('Consumo de água baixo hoje 💧', `Você consumiu apenas ${Math.round(pct * 100)}% da meta diária.`);
         return;
       }
 
-      // Evening check: below 75% after 19h
       if (h >= 19 && pct < 0.75) {
         const remaining = currentTarget - total;
-        notify(
-          'Hidratação do dia quase completa 💧',
-          `Ainda faltam ${remaining}ml para você completar a meta de hoje.`,
-        );
+        notify('Hidratação do dia quase completa 💧', `Ainda faltam ${remaining}ml para completar a meta de hoje.`);
       }
     }
 
-    // Check on mount
     check();
-
-    // Check every 10 min while tab is open
     const interval = setInterval(check, CHECK_INTERVAL_MS);
 
-    // Re-check when tab becomes visible again
     function onVisibility() { if (!document.hidden) check(); }
     document.addEventListener('visibilitychange', onVisibility);
 
@@ -143,5 +148,5 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number): voi
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []); // stable: uses refs internally
+  }, []);
 }

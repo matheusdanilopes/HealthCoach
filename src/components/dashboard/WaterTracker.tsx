@@ -3,6 +3,7 @@
 import { memo, useState, useCallback, useEffect } from 'react';
 import { Droplets, Bell, BellOff, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { requestAndSubscribePush } from '@/components/ServiceWorkerRegistration';
 import type { WaterLogEntry } from '@/types';
 
 interface WaterTrackerProps {
@@ -74,13 +75,9 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
   }, []);
 
   async function handleBell() {
-    if (!notifSupported) return;
-    if (notifGranted) {
-      // Already granted — tap again shows brief tooltip but no action
-      return;
-    }
-    const perm = await Notification.requestPermission();
-    setNotifGranted(perm === 'granted');
+    if (!notifSupported || notifGranted) return;
+    const granted = await requestAndSubscribePush();
+    setNotifGranted(granted);
   }
 
   const addWater = useCallback(async (ml: number) => {
