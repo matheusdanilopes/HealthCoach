@@ -43,11 +43,6 @@ function smartStatus(pct: number, lastLog: WaterLogEntry | undefined): string {
   return 'Beba água com frequência para manter a saúde';
 }
 
-function hm(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 export default memo(function WaterTracker({ logs, target, date, onAdded }: WaterTrackerProps) {
   const [loading, setLoading]           = useState<number | null>(null);
   const [notifSupported, setNotifSupp]  = useState(false);
@@ -207,25 +202,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
         })}
       </div>
 
-      {/* Recent log timeline — last 3 entries */}
-      {logs.length > 0 && (
-        <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-3 space-y-1.5">
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-300 dark:text-zinc-600 mb-2">
-            Registros de hoje
-          </p>
-          {[...logs].reverse().slice(0, 3).map((l, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500 w-9 text-right flex-shrink-0">
-                {hm(l.created_at)}
-              </span>
-              <div className="flex-1 h-px bg-zinc-100 dark:bg-zinc-800" />
-              <span className={cn('text-[10px] font-semibold tabular-nums flex-shrink-0', colorDark)}>
-                +{l.amount_ml}ml
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 });

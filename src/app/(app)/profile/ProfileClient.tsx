@@ -19,6 +19,9 @@ import {
   Pencil,
   Calculator,
   RotateCcw,
+  Bell,
+  BellOff,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -88,6 +91,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     userChoice: Promise<{ outcome: string }>;
   } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
+  const [notifTest, setNotifTest] = useState<'idle' | 'sending' | 'sent' | 'no-device' | 'error'>('idle');
 
   // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
   useEffect(() => {
@@ -189,6 +193,31 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
     router.refresh();
+  }
+
+  async function handleNotifTest() {
+    setNotifTest('sending');
+    try {
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Teste de notificação 🔔',
+          body: 'Tudo certo! As notificações push estão funcionando.',
+          tag: 'hc-test',
+          url: '/dashboard',
+        }),
+      });
+      const data = await res.json();
+      if (data.sent > 0) {
+        setNotifTest('sent');
+      } else {
+        setNotifTest('no-device');
+      }
+    } catch {
+      setNotifTest('error');
+    }
+    setTimeout(() => setNotifTest('idle'), 4000);
   }
 
   async function handleSignOut() {
@@ -475,6 +504,55 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           {saved ? 'Salvo com sucesso!' : 'Salvar alterações'}
         </Button>
       </form>
+
+      {/* Notificações */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            Notificações
+          </p>
+        </div>
+        <div className="p-3">
+          <button
+            type="button"
+            onClick={handleNotifTest}
+            disabled={notifTest === 'sending'}
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors group disabled:opacity-60"
+          >
+            <div className="h-8 w-8 rounded-lg bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center flex-shrink-0">
+              {notifTest === 'sending'
+                ? <Loader2 size={14} className="text-teal-500 animate-spin" />
+                : notifTest === 'sent'
+                  ? <Bell size={14} className="text-teal-500" />
+                  : <BellOff size={14} className="text-teal-500" />
+              }
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
+                Testar notificação push
+              </p>
+              {notifTest !== 'idle' && (
+                <p className={cn(
+                  'text-[11px] mt-0.5',
+                  notifTest === 'sent' ? 'text-teal-600 dark:text-teal-400' :
+                  notifTest === 'no-device' ? 'text-amber-600 dark:text-amber-400' :
+                  notifTest === 'error' ? 'text-red-500' :
+                  'text-zinc-400'
+                )}>
+                  {notifTest === 'sending' && 'Enviando…'}
+                  {notifTest === 'sent' && '✓ Notificação enviada com sucesso!'}
+                  {notifTest === 'no-device' && 'Nenhum dispositivo registrado — ative as notificações no dashboard.'}
+                  {notifTest === 'error' && 'Falha ao enviar — verifique as configurações do servidor.'}
+                </p>
+              )}
+            </div>
+            <ChevronRight
+              size={13}
+              className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0"
+            />
+          </button>
+        </div>
+      </div>
 
       {/* Conta */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">

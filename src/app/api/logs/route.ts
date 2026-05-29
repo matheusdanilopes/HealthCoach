@@ -19,13 +19,13 @@ export async function GET(req: Request) {
       .order('created_at'),
     supabase
       .from('water_logs')
-      .select('amount_ml, created_at')
+      .select('id, amount_ml, created_at')
       .eq('user_id', session.user.id)
       .eq('log_date', date)
       .order('created_at'),
   ]);
 
-  const waterLogs = (waterData ?? []) as { amount_ml: number; created_at: string }[];
+  const waterLogs = (waterData ?? []) as { id: string; amount_ml: number; created_at: string }[];
   const totalWater = waterLogs.reduce((s, r) => s + r.amount_ml, 0);
 
   return NextResponse.json({ foodLogs: foodData ?? [], water: totalWater, waterLogs });

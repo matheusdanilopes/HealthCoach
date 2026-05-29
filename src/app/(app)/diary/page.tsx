@@ -13,7 +13,7 @@ export default async function DiaryPage() {
 
   const { data: profileData } = await supabase
     .from('users')
-    .select('target_calories')
+    .select('target_calories, target_water_ml')
     .eq('id', userId)
     .single();
 
@@ -22,6 +22,7 @@ export default async function DiaryPage() {
       userId={userId}
       serverDate={serverDate}
       targetCalories={profileData?.target_calories ?? 2000}
+      targetWater={profileData?.target_water_ml ?? 2000}
     />
   );
 }

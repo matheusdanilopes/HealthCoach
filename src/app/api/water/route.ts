@@ -25,15 +25,36 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { amount_ml, log_date } = await req.json();
+  const { amount_ml, log_date, created_at } = await req.json();
   const date = log_date ?? brazilToday();
+
+  const insertData: Record<string, unknown> = { user_id: session.user.id, amount_ml, log_date: date };
+  if (created_at) insertData.created_at = created_at;
 
   const { data, error } = await supabase
     .from('water_logs')
-    .insert({ user_id: session.user.id, amount_ml, log_date: date })
+    .insert(insertData)
     .select('id, amount_ml, created_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, log: data });
+}
+
+export async function DELETE(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  const { error } = await supabase
+    .from('water_logs')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', session.user.id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

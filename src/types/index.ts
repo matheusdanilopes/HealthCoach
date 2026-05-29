@@ -31,6 +31,7 @@ export interface WaterLog {
 }
 
 export interface WaterLogEntry {
+  id?: string;
   amount_ml: number;
   created_at: string;
 }
