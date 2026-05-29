@@ -240,20 +240,33 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   async function handleNotifTest() {
     setNotifTest('sending');
     try {
-      // Ensure push subscription is registered/refreshed before testing
       await requestAndSubscribePush().catch(() => {});
 
-      const res = await fetch('/api/notifications/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Teste de notificação 🔔',
-          body: 'Tudo certo! As notificações push estão funcionando.',
-          tag: 'hc-test',
-          url: '/dashboard',
-        }),
+      // Delay after subscription registration — iOS APNs endpoint takes a few seconds
+      // to propagate. Without this, an immediate send to a freshly registered endpoint
+      // arrives before APNs is ready and fails silently.
+      await new Promise(r => setTimeout(r, 2000));
+
+      const payload = JSON.stringify({
+        title:   'Teste de notificação 🔔',
+        body:    'Tudo certo! As notificações push estão funcionando.',
+        tag:     'hc-test',
+        url:     '/dashboard',
+        urgency: 'high',   // apns-priority 10 = immediate delivery with sound on iOS
       });
-      const data = await res.json();
+
+      const sendOnce = () => fetch('/api/notifications/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
+      }).then(r => r.json());
+
+      let data = await sendOnce();
+
+      // If subscription was just saved but not yet reflected (race), retry once after 3s
+      if (data.sent === 0 && data.reason === 'no_subscriptions') {
+        await new Promise(r => setTimeout(r, 3000));
+        data = await sendOnce();
+      }
+
       if (data.sent > 0) {
         setNotifTest('sent');
       } else if (data.reason === 'vapid_not_configured') {
@@ -264,7 +277,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     } catch {
       setNotifTest('error');
     }
-    setTimeout(() => setNotifTest('idle'), 6000);
+    setTimeout(() => setNotifTest('idle'), 8000);
   }
 
   async function handleSignOut() {
@@ -682,6 +695,18 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                 </p>
               </div>
             </button>
+          )}
+
+          {/* iOS sound hint */}
+          {notifPerm === 'granted' && (
+            <div className="mx-1 mb-1 px-4 py-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                <span className="font-semibold">Notificações silenciosas no iPhone?</span>{' '}
+                Vá em <span className="font-medium">Ajustes → Notificações → HealthCoach</span> e ative
+                {' '}<span className="font-medium">Sons</span> e <span className="font-medium">Alertas</span>.
+                O app precisa estar instalado na tela de início.
+              </p>
+            </div>
           )}
         </div>
       </div>

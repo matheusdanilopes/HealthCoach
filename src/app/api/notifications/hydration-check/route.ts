@@ -56,14 +56,14 @@ function buildNotification(
     return {
       title: 'Hidratação do dia quase completa 💧',
       body:  `Faltam apenas ${remaining}ml para completar a meta de hoje.`,
-      opts:  { urgency: 'normal', topic: 'hc-hydration', ttl: 4 * 3600 },
+      opts:  { urgency: 'high', topic: 'hc-hydration', ttl: 4 * 3600 },
     };
   }
 
   return {
     title: 'Hora de beber água 💧',
     body:  `Você está há mais de 2h sem se hidratar. Faltam ${remaining}ml para a meta diária.`,
-    opts:  { urgency: 'normal', topic: 'hc-hydration', ttl: 8 * 3600 },
+    opts:  { urgency: 'high', topic: 'hc-hydration', ttl: 8 * 3600 },
   };
 }
 
