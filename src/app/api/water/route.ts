@@ -1,20 +1,39 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
+import { brazilToday } from '@/lib/timezone';
+
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const date = searchParams.get('date') ?? brazilToday();
+
+  const { data } = await supabase
+    .from('water_logs')
+    .select('id, amount_ml, created_at')
+    .eq('user_id', session.user.id)
+    .eq('log_date', date)
+    .order('created_at', { ascending: true });
+
+  const totalMl = (data ?? []).reduce((s: number, r: { amount_ml: number }) => s + r.amount_ml, 0);
+  return NextResponse.json({ logs: data ?? [], totalMl });
+}
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { amount_ml, log_date } = await req.json();
-  const today = new Date().toISOString().split('T')[0];
-  const date = log_date ?? today;
+  const date = log_date ?? brazilToday();
 
-  await supabase.from('water_logs').insert({
-    user_id: session.user.id,
-    amount_ml,
-    log_date: date,
-  });
+  const { data, error } = await supabase
+    .from('water_logs')
+    .insert({ user_id: session.user.id, amount_ml, log_date: date })
+    .select('id, amount_ml, created_at')
+    .single();
 
-  return NextResponse.json({ ok: true });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, log: data });
 }
