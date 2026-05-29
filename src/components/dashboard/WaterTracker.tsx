@@ -71,8 +71,15 @@ export default memo(function WaterTracker({ logs, target, date, onAdded }: Water
 
   async function handleBell() {
     if (!notifSupported || notifGranted) return;
-    const granted = await requestAndSubscribePush();
-    setNotifGranted(granted);
+    // iOS Safari consumes the user gesture on the first await, so requestPermission
+    // must be the very first await in this handler — not buried in a nested async call.
+    const perm = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
+    if (perm !== 'granted') return;
+    setNotifGranted(true);
+    // Push subscription no longer needs user gesture — run in background
+    requestAndSubscribePush().catch(() => {});
   }
 
   const addWater = useCallback(async (ml: number) => {
