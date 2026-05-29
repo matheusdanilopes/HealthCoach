@@ -3,11 +3,12 @@
 import { useEffect } from 'react';
 
 // iOS Safari requires Uint8Array — Chrome/Android accepts raw base64url string
-function vapidKeyToUint8Array(base64url: string): Uint8Array {
+function vapidKeyToUint8Array(base64url: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
   const base64  = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw     = window.atob(base64);
-  const arr     = new Uint8Array(raw.length);
+  const buf     = new ArrayBuffer(raw.length);
+  const arr     = new Uint8Array(buf);
   for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
   return arr;
 }
