@@ -93,6 +93,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
   const [notifTest, setNotifTest] = useState<'idle' | 'sending' | 'sent' | 'no-device' | 'no-vapid' | 'error'>('idle');
+  const [isIOSBrowser, setIsIOSBrowser] = useState(false);
 
   // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
   useEffect(() => {
@@ -123,6 +124,13 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as { standalone?: boolean }).standalone === true;
+    setIsIOSBrowser(isIOS && !isPWA);
   }, []);
 
   useEffect(() => {
@@ -519,10 +527,22 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           </p>
         </div>
         <div className="p-3">
+          {isIOSBrowser && (
+            <div className="mb-2 mx-1 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
+              <p className="text-[12px] font-semibold text-amber-700 dark:text-amber-400 mb-0.5">
+                iOS: instale o app primeiro
+              </p>
+              <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-snug">
+                Notificações push no iPhone exigem que o app esteja instalado. Toque em{' '}
+                <span className="font-semibold">Compartilhar → Adicionar à Tela Inicial</span>{' '}
+                no Safari e abra o app pelo ícone.
+              </p>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleNotifTest}
-            disabled={notifTest === 'sending'}
+            disabled={notifTest === 'sending' || isIOSBrowser}
             className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors group disabled:opacity-60"
           >
             <div className="h-8 w-8 rounded-lg bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center flex-shrink-0">

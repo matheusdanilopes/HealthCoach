@@ -2,6 +2,16 @@
 
 import { useEffect } from 'react';
 
+// iOS Safari requires Uint8Array — Chrome/Android accepts raw base64url string
+function vapidKeyToUint8Array(base64url: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+  const base64  = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw     = window.atob(base64);
+  const arr     = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
 async function subscribeToPush(reg: ServiceWorkerRegistration): Promise<void> {
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidKey) return;
@@ -10,7 +20,7 @@ async function subscribeToPush(reg: ServiceWorkerRegistration): Promise<void> {
     const existing = await reg.pushManager.getSubscription();
     const sub = existing ?? await reg.pushManager.subscribe({
       userVisibleOnly:      true,
-      applicationServerKey: vapidKey,
+      applicationServerKey: vapidKeyToUint8Array(vapidKey),
     });
 
     const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
