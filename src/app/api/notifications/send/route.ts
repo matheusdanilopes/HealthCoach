@@ -47,5 +47,9 @@ export async function POST(req: Request) {
   }
 
   console.info('[push] sent', result.sent, 'push(es) for user', session.user.id, 'failed:', result.failed);
+  // Include reason when sent=0 so client can show a useful message
+  if (result.sent === 0 && result.failed > 0) {
+    return NextResponse.json({ sent: 0, failed: result.failed, reason: 'send_failed' });
+  }
   return NextResponse.json({ sent: result.sent, failed: result.failed });
 }

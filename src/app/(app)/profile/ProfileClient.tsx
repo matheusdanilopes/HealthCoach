@@ -269,7 +269,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
 
       if (data.sent > 0) {
         setNotifTest('sent');
-      } else if (data.reason === 'vapid_not_configured') {
+      } else if (data.reason === 'vapid_not_configured' || data.reason === 'send_failed') {
         setNotifTest('no-vapid');
       } else {
         setNotifTest('no-device');
@@ -666,8 +666,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                 )}>
                   {notifTest === 'sending'   && 'Registrando dispositivo e enviando…'}
                   {notifTest === 'sent'      && '✓ Notificação enviada com sucesso!'}
-                  {notifTest === 'no-device' && 'Nenhum dispositivo registrado. Ative as notificações primeiro.'}
-                  {notifTest === 'no-vapid'  && 'Chaves VAPID não configuradas no servidor.'}
+                  {notifTest === 'no-device' && 'Dispositivo não encontrado. Toque em "Forçar re-registro" e tente novamente.'}
+                  {notifTest === 'no-vapid'  && 'Falha no envio — verifique as chaves VAPID no servidor.'}
                   {notifTest === 'error'     && 'Erro de conexão — tente novamente.'}
                 </p>
               )}

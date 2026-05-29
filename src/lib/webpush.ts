@@ -25,9 +25,14 @@ export type PushSendOptions = {
   topic?:   string;                                    // dedup key for queued messages
 };
 
-// Subscriptions to remove from DB:
-// 404/410 = endpoint gone, 401/403 = VAPID key mismatch (subscription can't be reached with current keys)
-const GONE_CODES = new Set([401, 403, 404, 410]);
+// 404 = endpoint not found, 410 = subscription explicitly unsubscribed.
+// These are the only codes that definitively mean the subscription is permanently gone.
+//
+// 401 is intentionally excluded: for APNs (iOS Safari Web Push), 401 means the VAPID JWT
+// was rejected — a server-side auth issue, NOT that the subscription is invalid.
+// Deleting on 401 would silently wipe valid iOS subscriptions whenever the VAPID JWT
+// has any issue. 403 is similarly ambiguous across push services.
+const GONE_CODES = new Set([404, 410]);
 
 export async function sendPushToSubscriptions(
   subs: PushSubscriptionData[],
@@ -58,7 +63,11 @@ export async function sendPushToSubscriptions(
       const code = typeof err?.statusCode === 'number' ? err.statusCode : 0;
       if (GONE_CODES.has(code)) {
         expired.push(subs[i].endpoint);
-        console.info(`[webpush] subscription expired endpoint=…${subs[i].endpoint.slice(-16)} status=${code}`);
+        console.info(`[webpush] subscription gone endpoint=…${subs[i].endpoint.slice(-16)} status=${code}`);
+      } else if (code === 401 || code === 403) {
+        // 401/403: VAPID JWT rejected by push service — server config issue, subscription kept
+        failed++;
+        console.error(`[webpush] VAPID auth rejected status=${code} — check VAPID keys/email config. endpoint=…${subs[i].endpoint.slice(-16)}`);
       } else {
         failed++;
         console.error(`[webpush] send failed endpoint=…${subs[i].endpoint.slice(-16)} status=${code} msg=${err?.message ?? String(err)}`);
