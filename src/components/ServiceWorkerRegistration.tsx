@@ -2,6 +2,29 @@
 
 import { useEffect } from 'react';
 
+const SUBSCRIBE_URL = '/api/notifications/subscribe';
+
+async function saveSubscription(sub: PushSubscription, retries = 3): Promise<void> {
+  const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(SUBSCRIBE_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(json),
+      });
+      if (res.ok) { console.info('[sw] push subscription saved'); return; }
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, attempt * 1000));
+      } else {
+        console.warn('[sw] failed to save push subscription after', retries, 'attempts:', err);
+      }
+    }
+  }
+}
+
 async function subscribeToPush(reg: ServiceWorkerRegistration): Promise<void> {
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidKey) return;
@@ -12,16 +35,9 @@ async function subscribeToPush(reg: ServiceWorkerRegistration): Promise<void> {
       userVisibleOnly:      true,
       applicationServerKey: vapidKey,
     });
-
-    const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-    await fetch('/api/notifications/subscribe', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(json),
-    });
-    console.log('[sw] Push subscription saved');
+    await saveSubscription(sub);
   } catch (err) {
-    console.warn('[sw] Push subscribe failed:', err);
+    console.warn('[sw] push subscribe failed:', err);
   }
 }
 
@@ -33,7 +49,7 @@ async function registerPeriodicSync(reg: ServiceWorkerRegistration): Promise<voi
       minInterval: 2 * 60 * 60 * 1000,
     });
   } catch {
-    // Needs site engagement on Chrome Android
+    // Requires site engagement on Chrome Android — silently skip
   }
 }
 
@@ -46,12 +62,12 @@ export function ServiceWorkerRegistration() {
       .then(async (reg) => {
         await registerPeriodicSync(reg);
 
-        // If notifications already granted, ensure we have a push subscription
+        // Ensure push subscription is active if permission was already granted
         if ('Notification' in window && Notification.permission === 'granted') {
           await subscribeToPush(reg);
         }
 
-        // Listen for future permission grants (e.g. user clicks bell in WaterTracker)
+        // Re-subscribe when the user grants permission from the bell icon
         navigator.serviceWorker.addEventListener('message', async (event) => {
           if (event.data?.type === 'SUBSCRIBE_PUSH') {
             await subscribeToPush(reg);
@@ -64,7 +80,7 @@ export function ServiceWorkerRegistration() {
   return null;
 }
 
-// Call this after user grants notification permission to register push subscription
+// Call after user grants notification permission
 export async function requestAndSubscribePush(): Promise<boolean> {
   if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
 
@@ -77,4 +93,25 @@ export async function requestAndSubscribePush(): Promise<boolean> {
   const reg = await navigator.serviceWorker.ready;
   await subscribeToPush(reg);
   return true;
+}
+
+// Removes subscription from this device and backend
+export async function unsubscribeFromPush(): Promise<boolean> {
+  if (!('serviceWorker' in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return true;
+    const endpoint = sub.endpoint;
+    await sub.unsubscribe();
+    await fetch(SUBSCRIBE_URL, {
+      method:  'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ endpoint }),
+    });
+    return true;
+  } catch (err) {
+    console.warn('[sw] unsubscribe failed:', err);
+    return false;
+  }
 }

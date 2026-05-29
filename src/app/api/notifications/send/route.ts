@@ -7,11 +7,13 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, body, tag, url } = await req.json() as {
-    title: string;
-    body:  string;
-    tag?:  string;
-    url?:  string;
+  const { title, body, tag, url, urgency, ttl } = await req.json() as {
+    title:    string;
+    body:     string;
+    tag?:     string;
+    url?:     string;
+    urgency?: 'very-low' | 'low' | 'normal' | 'high';
+    ttl?:     number;
   };
 
   const { data: subs } = await supabase
@@ -23,27 +25,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ sent: 0, reason: 'no_subscriptions' });
   }
 
-  let result = { sent: 0, expired: [] as string[] };
+  let result = { sent: 0, expired: [] as string[], failed: 0 };
   try {
     result = await sendPushToSubscriptions(
       subs.map((s) => ({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })),
-      { title, body, tag: tag ?? 'hc-hydration', url: url ?? '/dashboard' }
+      { title, body, tag: tag ?? 'hc-hydration', url: url ?? '/dashboard' },
+      { urgency, ttl },
     );
   } catch (err) {
-    console.error('[push] Send error:', err instanceof Error ? err.message : err);
+    console.error('[push] send error:', err instanceof Error ? err.message : err);
     return NextResponse.json({ sent: 0, reason: 'vapid_not_configured' });
   }
 
-  // Remove expired/invalid subscriptions
   if (result.expired.length > 0) {
     await supabase
       .from('push_subscriptions')
       .delete()
       .in('endpoint', result.expired)
       .eq('user_id', session.user.id);
-    console.log('[push] Removed', result.expired.length, 'expired subscriptions');
+    console.info('[push] removed', result.expired.length, 'expired subscriptions for user', session.user.id);
   }
 
-  console.log('[push] Sent', result.sent, 'push(es) for user', session.user.id);
-  return NextResponse.json({ sent: result.sent });
+  console.info('[push] sent', result.sent, 'push(es) for user', session.user.id, 'failed:', result.failed);
+  return NextResponse.json({ sent: result.sent, failed: result.failed });
 }
