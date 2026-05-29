@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
@@ -138,7 +138,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
     setDeletingWaterId(null);
   }
 
-  async function handleAddWater(e: React.FormEvent) {
+  async function handleAddWater(e: FormEvent) {
     e.preventDefault();
     const ml = parseInt(addWaterAmount, 10);
     if (!ml || ml <= 0) return;
