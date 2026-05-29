@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ sent: 0, reason: 'no_subscriptions' });
   }
 
-  let result = { sent: 0, expired: [] as string[] };
+  let result = { sent: 0, expired: [] as string[], lastError: undefined as string | undefined };
   try {
     result = await sendPushToSubscriptions(
       subs.map((s) => ({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })),
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ sent: 0, reason: 'vapid_not_configured' });
   }
 
-  // Remove expired/invalid subscriptions
+  // Only remove truly expired subscriptions (410/404 from push service)
   if (result.expired.length > 0) {
     await supabase
       .from('push_subscriptions')
@@ -45,5 +45,5 @@ export async function POST(req: Request) {
   }
 
   console.log('[push] Sent', result.sent, 'push(es) for user', session.user.id);
-  return NextResponse.json({ sent: result.sent });
+  return NextResponse.json({ sent: result.sent, lastError: result.lastError });
 }

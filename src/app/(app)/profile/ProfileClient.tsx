@@ -239,7 +239,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       } else if (data.reason === 'vapid_not_configured') {
         setNotifTest('no-vapid');
       } else {
-        setNotifTest('no-device');
+        setNotifError(data.lastError ? `Envio rejeitado pelo serviço push: ${data.lastError}` : 'Dispositivo registrado mas envio falhou.');
+        setNotifTest('error');
       }
     } catch (err) {
       setNotifError(err instanceof Error ? err.message : 'Erro desconhecido');
