@@ -58,8 +58,14 @@ export default function DashboardClient({
   // Derive water total from logs list
   const water = useMemo(() => waterLogs.reduce((s, l) => s + l.amount_ml, 0), [waterLogs]);
 
+  // Meal-sourced hydration (from beverages logged as food)
+  const mealHydrationMl = useMemo(
+    () => foodLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0),
+    [foodLogs]
+  );
+
   // Hydration reminders (browser notifications when tab is open)
-  useHydrationReminder(waterLogs, profile?.target_water_ml ?? 2500);
+  useHydrationReminder(waterLogs, profile?.target_water_ml ?? 2500, mealHydrationMl);
 
   useEffect(() => {
     const today = todayISO();
@@ -262,6 +268,7 @@ export default function DashboardClient({
               target={profile?.target_water_ml ?? 2500}
               date={selectedDate}
               onAdded={handleWaterAdded}
+              mealHydrationMl={mealHydrationMl}
             />
           </div>
         </div>

@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const [{ data: foodData }, { data: waterData }] = await Promise.all([
     supabase
       .from('food_logs')
-      .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+      .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at')
       .eq('user_id', session.user.id)
       .eq('log_date', date)
       .order('created_at'),

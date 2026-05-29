@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle } from 'lucide-react';
+import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets } from 'lucide-react';
+import { detectBeverage } from '@/lib/beverages';
 import type { FoodLog, MealType } from '@/types';
 
 const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
@@ -21,6 +22,8 @@ interface FoodItem {
   protein: number;
   carbs: number;
   fat: number;
+  hydration_ml?: number;        // ml that counts toward hydration (0 = not a beverage)
+  hydration_confidence?: string;
 }
 
 interface AnalysisResult {
@@ -44,6 +47,14 @@ interface AIFoodLoggerProps {
 
 const inputCls =
   'w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400';
+
+function resolveItemHydration(item: FoodItem): number {
+  // Use AI-returned value if present and positive
+  if (typeof item.hydration_ml === 'number' && item.hydration_ml > 0) return item.hydration_ml;
+  // Fall back to local detection using name + quantity
+  const text = item.quantity ? `${item.name} ${item.quantity}` : item.name;
+  return detectBeverage(text).estimatedMl;
+}
 
 export default function AIFoodLogger({
   open,
@@ -100,7 +111,11 @@ export default function AIFoodLogger({
 
   useEffect(() => {
     if (result) {
-      setEditedFoods(result.foods.map((f) => ({ ...f })));
+      // Merge AI hydration with local fallback detection
+      setEditedFoods(result.foods.map((f) => ({
+        ...f,
+        hydration_ml: resolveItemHydration(f),
+      })));
       setEditingIndex(null);
       setEditBuffer(null);
     } else {
@@ -122,14 +137,17 @@ export default function AIFoodLogger({
     [editedFoods]
   );
 
-  // Enter edit mode for a food card — copies to local buffer, changes don't apply until commitEdit()
+  const totalHydration = useMemo(
+    () => editedFoods.reduce((s, f) => s + (f.hydration_ml ?? 0), 0),
+    [editedFoods]
+  );
+
   function enterEditMode(i: number) {
     setEditBuffer({ ...editedFoods[i] });
     setEditingIndex(i);
     setBufferNeedsReanalysis(false);
   }
 
-  // Apply buffer to editedFoods only when user clicks Confirmar
   function commitEdit() {
     if (editingIndex !== null && editBuffer !== null) {
       setEditedFoods((prev) =>
@@ -140,14 +158,12 @@ export default function AIFoodLogger({
     setEditBuffer(null);
   }
 
-  // Discard buffer without applying changes
   function cancelEdit() {
     setEditingIndex(null);
     setEditBuffer(null);
     setBufferNeedsReanalysis(false);
   }
 
-  // Re-analyze the item using the buffered name + quantity
   async function reanalyzeBuffer() {
     if (!editBuffer) return;
     setBufferAnalyzing(true);
@@ -162,6 +178,8 @@ export default function AIFoodLogger({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? 'Erro');
+      const aiHydration = data.foods?.[0]?.hydration_ml;
+      const localHydration = detectBeverage(description).estimatedMl;
       setEditBuffer((prev) =>
         prev
           ? {
@@ -170,6 +188,7 @@ export default function AIFoodLogger({
               protein: +(data.totalProtein ?? prev.protein).toFixed(1),
               carbs: +(data.totalCarbs ?? prev.carbs).toFixed(1),
               fat: +(data.totalFat ?? prev.fat).toFixed(1),
+              hydration_ml: typeof aiHydration === 'number' ? aiHydration : localHydration,
             }
           : null
       );
@@ -181,7 +200,6 @@ export default function AIFoodLogger({
     }
   }
 
-  // Guard close: if there are unsaved analyzed foods or an open edit, ask for confirmation
   function handleClose() {
     if (result !== null || editingIndex !== null) {
       setConfirmClose(true);
@@ -301,12 +319,15 @@ export default function AIFoodLogger({
             carbs: Number(food.carbs) || null,
             fat: Number(food.fat) || null,
             log_date: date,
+            hydration_ml: food.hydration_ml ?? 0,
+            hydration_source: (food.hydration_ml ?? 0) > 0 ? 'meal' : null,
+            hydration_confidence: food.hydration_confidence ?? null,
           }),
         }).then((r) => r.json() as Promise<FoodLog>)
       );
       const logs = await Promise.all(promises);
       logs.forEach((log) => onAdded(log));
-      onClose(); // direct close after successful save — no unsaved state
+      onClose();
     } catch {
       setError('Erro ao salvar. Tente novamente.');
     } finally {
@@ -318,7 +339,6 @@ export default function AIFoodLogger({
 
   return (
     <Modal open={open} onClose={handleClose} title="Registrar refeição com IA">
-      {/* Abandonment confirmation overlay */}
       {confirmClose ? (
         <div className="flex flex-col items-center gap-5 py-3">
           <div className="flex flex-col items-center gap-2 text-center">
@@ -548,7 +568,6 @@ export default function AIFoodLogger({
                     className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40"
                   >
                     {editingIndex === i && editBuffer ? (
-                      /* ── Edit mode: all changes go to editBuffer, not editedFoods ── */
                       <div className="flex flex-col gap-2.5">
                         {/* Name */}
                         <label className="flex flex-col gap-0.5">
@@ -630,7 +649,21 @@ export default function AIFoodLogger({
                           </label>
                         </div>
 
-                        {/* Cancel / Confirm — changes only applied here */}
+                        {/* Hydration field (only shown for beverages) */}
+                        {((editBuffer.hydration_ml ?? 0) > 0 || detectBeverage(`${editBuffer.name} ${editBuffer.quantity}`).isBeverage) && (
+                          <label className="flex flex-col gap-0.5">
+                            <span className="text-[10px] text-teal-500 uppercase tracking-wide flex items-center gap-1">
+                              <Droplets size={9} /> Hidratação (ml)
+                            </span>
+                            <input
+                              type="number" min={0} max={2000} step={10}
+                              value={editBuffer.hydration_ml ?? 0}
+                              onChange={(e) => setEditBuffer((p) => p ? { ...p, hydration_ml: Math.min(Number(e.target.value) || 0, 2000), hydration_confidence: 'medium' } : null)}
+                              className={cn(inputCls, 'border-teal-200 dark:border-teal-800/60 focus:ring-teal-400')}
+                            />
+                          </label>
+                        )}
+
                         {bufferNeedsReanalysis && (
                           <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center -mb-1">
                             Re-analise com IA antes de confirmar
@@ -656,17 +689,26 @@ export default function AIFoodLogger({
                         </div>
                       </div>
                     ) : (
-                      /* ── View mode ── */
                       <>
                         <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug flex-1">
-                            {food.name}
-                            {food.quantity && (
-                              <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
-                                · {food.quantity}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug">
+                              {food.name}
+                              {food.quantity && (
+                                <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
+                                  · {food.quantity}
+                                </span>
+                              )}
+                            </p>
+                            {(food.hydration_ml ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 border border-teal-100 dark:border-teal-900/40">
+                                <Droplets size={8} className="text-teal-500" />
+                                <span className="text-[9px] font-semibold text-teal-600 dark:text-teal-400">
+                                  +{food.hydration_ml}ml hidratação
+                                </span>
                               </span>
                             )}
-                          </p>
+                          </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                               {food.calories} kcal
@@ -724,6 +766,14 @@ export default function AIFoodLogger({
                     </div>
                   ))}
                 </div>
+                {totalHydration > 0 && (
+                  <div className="mt-2.5 pt-2.5 border-t border-emerald-100 dark:border-emerald-900/40 flex items-center gap-1.5">
+                    <Droplets size={11} className="text-teal-500 flex-shrink-0" />
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">
+                      +{totalHydration}ml contabilizados na hidratação
+                    </span>
+                  </div>
+                )}
               </div>
 
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center -mt-1">

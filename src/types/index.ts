@@ -21,6 +21,9 @@ export interface FoodLog {
   protein: number | null;
   carbs: number | null;
   fat: number | null;
+  hydration_ml: number;
+  hydration_source: 'meal' | 'manual' | null;
+  hydration_confidence: 'high' | 'medium' | 'low' | null;
 }
 
 export interface WaterLog {

@@ -2,13 +2,47 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
+import { detectBeverage } from '@/lib/beverages';
+
+const FOOD_FIELDS = 'id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at';
+
+function resolveHydration(
+  foodName: string,
+  hydrationMl: number | undefined | null,
+  hydrationSource: string | undefined | null,
+  hydrationConfidence: string | undefined | null,
+) {
+  // Client-supplied value takes priority (user may have edited in UI)
+  if (typeof hydrationMl === 'number' && hydrationMl >= 0) {
+    return {
+      hydration_ml: Math.min(Math.round(hydrationMl), 5000),
+      hydration_source: hydrationSource ?? 'meal',
+      hydration_confidence: hydrationConfidence ?? 'medium',
+    };
+  }
+  // Fall back to local heuristic detection
+  const detected = detectBeverage(foodName);
+  if (detected.isBeverage && detected.estimatedMl > 0) {
+    return {
+      hydration_ml: detected.estimatedMl,
+      hydration_source: 'meal' as const,
+      hydration_confidence: detected.confidence,
+    };
+  }
+  return { hydration_ml: 0, hydration_source: null, hydration_confidence: null };
+}
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { food_name, meal_type, calories, protein, carbs, fat, log_date } = await req.json();
+  const {
+    food_name, meal_type, calories, protein, carbs, fat, log_date,
+    hydration_ml, hydration_source, hydration_confidence,
+  } = await req.json();
   const date = log_date ?? brazilToday();
+
+  const hydration = resolveHydration(food_name, hydration_ml, hydration_source, hydration_confidence);
 
   const { data: row, error } = await supabase
     .from('food_logs')
@@ -21,8 +55,9 @@ export async function POST(req: Request) {
       carbs: carbs ?? null,
       fat: fat ?? null,
       log_date: date,
+      ...hydration,
     })
-    .select('id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+    .select(FOOD_FIELDS)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,8 +69,13 @@ export async function PATCH(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { id, food_name, calories, protein, carbs, fat } = await req.json();
+  const {
+    id, food_name, calories, protein, carbs, fat,
+    hydration_ml, hydration_source, hydration_confidence,
+  } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  const hydration = resolveHydration(food_name, hydration_ml, hydration_source, hydration_confidence);
 
   const { data: row, error } = await supabase
     .from('food_logs')
@@ -45,10 +85,11 @@ export async function PATCH(req: Request) {
       protein: protein ?? null,
       carbs: carbs ?? null,
       fat: fat ?? null,
+      ...hydration,
     })
     .eq('id', id)
     .eq('user_id', session.user.id)
-    .select('id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+    .select(FOOD_FIELDS)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

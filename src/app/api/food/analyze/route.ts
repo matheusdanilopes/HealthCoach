@@ -15,6 +15,20 @@ PRINCÍPIO FUNDAMENTAL: NUNCA assuma 100g automaticamente para porções vagas. 
 Retorne SOMENTE JSON válido sem markdown, sem blocos de código:
 {"foods":[{"name":"Nome","quantity":"30g","calories":62,"protein":0.2,"carbs":10.0,"fat":2.5}],"totalCalories":62,"totalProtein":0.2,"totalCarbs":10.0,"totalFat":2.5,"confidence":"medium","portionAssumption":"small"}
 
+HIDRATAÇÃO — campo opcional "hydration_ml" (inteiro) por item:
+• Adicione "hydration_ml" APENAS para bebidas/líquidos hidratantes
+• Fator de hidratação aplicado ao volume estimado (ml × fator = hydration_ml):
+  - Água pura, água mineral, água com gás: 100%
+  - Água de coco: 95%
+  - Chá, café: 85%
+  - Suco natural, limonada: 80%
+  - Leite, kefir: 80%
+  - Isotônico, kombucha: 75%
+  - Caldo, sopa líquida: 50%
+• NÃO adicionar hydration_ml para: álcool, refrigerantes, milkshakes, energéticos
+• Para alimentos sólidos: omita o campo hydration_ml
+• Exemplo suco (200ml): "hydration_ml": 160 (200×0.80)
+
 TERMOS VAGOS — interprete sempre de forma conservadora:
 • "um pedaço" → 20-35g (frituras, mandioca, carne, bolo)
 • "um pouco" → 5-15g
