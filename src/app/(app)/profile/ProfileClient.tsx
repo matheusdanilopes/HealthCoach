@@ -205,9 +205,14 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   }
 
   async function handleNotifTest() {
+    // iOS Safari: requestPermission must be the first await in a user gesture handler
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') return;
+    }
     setNotifTest('sending');
     try {
-      // Ensure push subscription is registered/refreshed before testing
+      // Re-subscribe push (no user gesture needed after permission granted)
       await requestAndSubscribePush().catch(() => {});
 
       const res = await fetch('/api/notifications/send', {
