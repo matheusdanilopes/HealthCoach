@@ -89,3 +89,51 @@ export async function requestAndSubscribePush(): Promise<boolean> {
   await subscribeToPush(reg);
   return true;
 }
+
+// Returns detailed diagnostics — used by the Profile test button
+export async function tryRegisterPush(): Promise<{ ok: boolean; reason: string }> {
+  if (!('serviceWorker' in navigator))
+    return { ok: false, reason: 'Service Worker não suportado neste navegador' };
+
+  if (!('PushManager' in window))
+    return { ok: false, reason: 'Push API não suportada — use Chrome (Android) ou Safari no iOS 16.4+ com o app instalado' };
+
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!vapidKey)
+    return { ok: false, reason: 'VAPID: NEXT_PUBLIC_VAPID_PUBLIC_KEY não configurada no Vercel' };
+
+  let reg: ServiceWorkerRegistration;
+  try {
+    reg = await navigator.serviceWorker.ready;
+  } catch (err) {
+    return { ok: false, reason: `Service Worker não está ativo: ${err instanceof Error ? err.message : err}` };
+  }
+
+  let sub: PushSubscription;
+  try {
+    const existing = await reg.pushManager.getSubscription();
+    sub = existing ?? await reg.pushManager.subscribe({
+      userVisibleOnly:      true,
+      applicationServerKey: vapidKeyToUint8Array(vapidKey),
+    });
+  } catch (err) {
+    return { ok: false, reason: `Erro ao criar subscription push: ${err instanceof Error ? err.message : err}` };
+  }
+
+  try {
+    const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+    const res  = await fetch('/api/notifications/subscribe', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(json),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, reason: `Erro ao salvar no servidor (${res.status}): ${data.error ?? 'verifique se a tabela push_subscriptions existe no Supabase'}` };
+    }
+  } catch (err) {
+    return { ok: false, reason: `Falha na requisição ao servidor: ${err instanceof Error ? err.message : err}` };
+  }
+
+  return { ok: true, reason: 'Dispositivo registrado com sucesso' };
+}

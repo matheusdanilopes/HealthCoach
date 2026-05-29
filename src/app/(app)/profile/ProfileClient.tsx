@@ -24,7 +24,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { requestAndSubscribePush } from '@/components/ServiceWorkerRegistration';
+import { requestAndSubscribePush, tryRegisterPush } from '@/components/ServiceWorkerRegistration';
 import {
   calculateTMB,
   calculateTDEE,
@@ -93,6 +93,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
   const [notifTest, setNotifTest] = useState<'idle' | 'sending' | 'sent' | 'no-device' | 'no-vapid' | 'error'>('idle');
+  const [notifError, setNotifError] = useState('');
   const [isIOSBrowser, setIsIOSBrowser] = useState(false);
 
   // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
@@ -211,9 +212,16 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       if (perm !== 'granted') return;
     }
     setNotifTest('sending');
+    setNotifError('');
     try {
-      // Re-subscribe push (no user gesture needed after permission granted)
-      await requestAndSubscribePush().catch(() => {});
+      // Register/refresh device subscription with detailed error reporting
+      const reg = await tryRegisterPush();
+      if (!reg.ok) {
+        setNotifError(reg.reason);
+        setNotifTest('error');
+        setTimeout(() => setNotifTest('idle'), 10000);
+        return;
+      }
 
       const res = await fetch('/api/notifications/send', {
         method: 'POST',
@@ -233,7 +241,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       } else {
         setNotifTest('no-device');
       }
-    } catch {
+    } catch (err) {
+      setNotifError(err instanceof Error ? err.message : 'Erro desconhecido');
       setNotifTest('error');
     }
     setTimeout(() => setNotifTest('idle'), 6000);
@@ -572,9 +581,9 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                 )}>
                   {notifTest === 'sending' && 'Registrando dispositivo e enviando…'}
                   {notifTest === 'sent' && '✓ Notificação enviada com sucesso!'}
-                  {notifTest === 'no-device' && 'Dispositivo não registrado — toque no ícone de sino no dashboard e permita as notificações.'}
-                  {notifTest === 'no-vapid' && 'Chaves VAPID não configuradas — adicione NEXT_PUBLIC_VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Vercel.'}
-                  {notifTest === 'error' && 'Erro de conexão — tente novamente.'}
+                  {notifTest === 'no-device' && 'Subscription salva mas o envio retornou 0 — verifique VAPID_PRIVATE_KEY no Vercel.'}
+                  {notifTest === 'no-vapid' && 'NEXT_PUBLIC_VAPID_PUBLIC_KEY não configurada no Vercel.'}
+                  {notifTest === 'error' && (notifError || 'Erro desconhecido')}
                 </p>
               )}
             </div>
