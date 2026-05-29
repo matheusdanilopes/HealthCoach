@@ -274,6 +274,12 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       } else {
         setNotifTest('no-device');
       }
+
+      // Refresh device count — subscription state may have changed during the test flow
+      fetch('/api/notifications/status')
+        .then(r => r.ok ? r.json() : null)
+        .then((d: { devices?: number } | null) => { if (d) setNotifDevices(d.devices ?? 0); })
+        .catch(() => {});
     } catch {
       setNotifTest('error');
     }

@@ -6,21 +6,15 @@ const SUBSCRIBE_URL = '/api/notifications/subscribe';
 
 // Converts VAPID base64url key to ArrayBuffer.
 // iOS Safari requires a BufferSource (ArrayBuffer | ArrayBufferView) — it rejects a raw base64url string.
-// Returns ArrayBuffer (not Uint8Array) to satisfy the strict BufferSource type used by pushManager.
+// Returns ArrayBuffer to satisfy the strict BufferSource type used by pushManager.subscribe().
 function vapidKeyToBuffer(base64: string): ArrayBuffer {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(b64);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  // .buffer cast: new Uint8Array() always allocates a plain ArrayBuffer, never SharedArrayBuffer
+  // new Uint8Array() always allocates a plain ArrayBuffer, never SharedArrayBuffer — cast is safe
   return bytes.buffer as ArrayBuffer;
-}
-
-function buffersMatch(a: ArrayBuffer, b: ArrayBuffer): boolean {
-  const aArr = new Uint8Array(a);
-  const bArr = new Uint8Array(b);
-  return aArr.length === bArr.length && aArr.every((v, i) => v === bArr[i]);
 }
 
 async function saveSubscription(sub: PushSubscription, retries = 3): Promise<boolean> {
@@ -56,27 +50,11 @@ async function subscribeToPush(reg: ServiceWorkerRegistration, fromUserGesture =
     const existing = await reg.pushManager.getSubscription();
     let sub = existing;
 
-    // Validate that the existing subscription was created with the current VAPID key.
-    // Wrapped in its own try-catch so a comparison error never blocks the happy path.
-    if (existing?.options?.applicationServerKey) {
-      try {
-        const currentKey  = vapidKeyToBuffer(vapidKey);
-        const existingKey = existing.options.applicationServerKey as ArrayBuffer;
-        if (!buffersMatch(currentKey, existingKey)) {
-          console.info('[sw] VAPID key mismatch — removing stale subscription');
-          await existing.unsubscribe();
-          await fetch(SUBSCRIBE_URL, {
-            method:  'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ endpoint: existing.endpoint }),
-          }).catch(() => {});
-          sub = null;
-        }
-      } catch (compareErr) {
-        // Comparison failed (e.g. malformed key) — keep existing subscription and move on
-        console.warn('[sw] VAPID key comparison failed, keeping existing subscription:', compareErr);
-      }
-    }
+    // Note: we intentionally do NOT compare applicationServerKey here.
+    // The VAPID key format stored by the browser (may be compressed EC point, 33 bytes)
+    // differs from the uncompressed form we pass to subscribe() (65 bytes), causing
+    // false-positive mismatches that would delete valid subscriptions.
+    // VAPID key rotation is an edge case covered by the "Forçar re-registro" button.
 
     if (!sub) {
       // iOS Safari does not allow pushManager.subscribe() outside a user-gesture stack.
