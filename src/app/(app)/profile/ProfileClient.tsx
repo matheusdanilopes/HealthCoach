@@ -24,6 +24,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { requestAndSubscribePush } from '@/components/ServiceWorkerRegistration';
 import {
   calculateTMB,
   calculateTDEE,
@@ -91,7 +92,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     userChoice: Promise<{ outcome: string }>;
   } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
-  const [notifTest, setNotifTest] = useState<'idle' | 'sending' | 'sent' | 'no-device' | 'error'>('idle');
+  const [notifTest, setNotifTest] = useState<'idle' | 'sending' | 'sent' | 'no-device' | 'no-vapid' | 'error'>('idle');
 
   // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
   useEffect(() => {
@@ -198,6 +199,9 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   async function handleNotifTest() {
     setNotifTest('sending');
     try {
+      // Ensure push subscription is registered/refreshed before testing
+      await requestAndSubscribePush().catch(() => {});
+
       const res = await fetch('/api/notifications/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,13 +215,15 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       const data = await res.json();
       if (data.sent > 0) {
         setNotifTest('sent');
+      } else if (data.reason === 'vapid_not_configured') {
+        setNotifTest('no-vapid');
       } else {
         setNotifTest('no-device');
       }
     } catch {
       setNotifTest('error');
     }
-    setTimeout(() => setNotifTest('idle'), 4000);
+    setTimeout(() => setNotifTest('idle'), 6000);
   }
 
   async function handleSignOut() {
@@ -539,10 +545,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
                   notifTest === 'error' ? 'text-red-500' :
                   'text-zinc-400'
                 )}>
-                  {notifTest === 'sending' && 'Enviando…'}
+                  {notifTest === 'sending' && 'Registrando dispositivo e enviando…'}
                   {notifTest === 'sent' && '✓ Notificação enviada com sucesso!'}
-                  {notifTest === 'no-device' && 'Nenhum dispositivo registrado — ative as notificações no dashboard.'}
-                  {notifTest === 'error' && 'Falha ao enviar — verifique as configurações do servidor.'}
+                  {notifTest === 'no-device' && 'Dispositivo não registrado — toque no ícone de sino no dashboard e permita as notificações.'}
+                  {notifTest === 'no-vapid' && 'Chaves VAPID não configuradas — adicione NEXT_PUBLIC_VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Vercel.'}
+                  {notifTest === 'error' && 'Erro de conexão — tente novamente.'}
                 </p>
               )}
             </div>
