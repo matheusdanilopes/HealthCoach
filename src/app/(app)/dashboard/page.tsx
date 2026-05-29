@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { todayISO } from '@/lib/utils';
+import { brazilToday } from '@/lib/timezone';
 import DashboardClient from './DashboardClient';
 import type { Profile, FoodLog } from '@/types';
 
@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const today = todayISO();
+  const today = brazilToday();
   const userId = session.user.id;
 
   const [

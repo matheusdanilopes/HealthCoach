@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
@@ -28,6 +28,16 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
   const [selectedDate, setSelectedDate] = useState(serverDate);
   const [loadingDate, setLoadingDate] = useState(true);
   const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
+  const insightDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced invalidation of the AI insight cache so the dashboard shows
+  // fresh data on next visit without triggering expensive AI calls on every action.
+  const scheduleInsightInvalidation = useCallback(() => {
+    if (insightDebounceRef.current) clearTimeout(insightDebounceRef.current);
+    insightDebounceRef.current = setTimeout(() => {
+      fetch('/api/ai-insights?invalidate=1').catch(() => {});
+    }, 3000);
+  }, []);
 
   const isToday = selectedDate === todayISO();
 
@@ -83,21 +93,25 @@ export default function DiaryClient({ userId, serverDate, targetCalories }: Diar
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setLogs((prev) => [...prev, log]);
-  }, []);
+    scheduleInsightInvalidation();
+  }, [scheduleInsightInvalidation]);
 
   const handleDelete = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
-  }, []);
+    scheduleInsightInvalidation();
+  }, [scheduleInsightInvalidation]);
 
   const handleUpdated = useCallback((updated: FoodLog) => {
     setLogs((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
-  }, []);
+    scheduleInsightInvalidation();
+  }, [scheduleInsightInvalidation]);
 
   async function handleDeleteWorkout(id: string) {
     setDeletingWorkoutId(id);
     await fetch(`/api/food?id=${id}`, { method: 'DELETE' });
     setLogs((prev) => prev.filter((l) => l.id !== id));
     setDeletingWorkoutId(null);
+    scheduleInsightInvalidation();
   }
 
   function openAddForMeal(meal: MealType) {

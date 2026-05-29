@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
+import { brazilToday } from '@/lib/timezone';
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { food_name, meal_type, calories, protein, carbs, fat, log_date } = await req.json();
-  const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const date = log_date ?? today;
+  const date = log_date ?? brazilToday();
 
   const { data: row, error } = await supabase
     .from('food_logs')

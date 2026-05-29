@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
+import { brazilToday } from '@/lib/timezone';
 
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const d = new Date();
-  const localToday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const date = searchParams.get('date') ?? localToday;
+  const date = searchParams.get('date') ?? brazilToday();
 
   const [{ data: foodData }, { data: waterData }] = await Promise.all([
     supabase

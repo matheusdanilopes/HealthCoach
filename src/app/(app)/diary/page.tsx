@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { todayISO } from '@/lib/utils';
+import { brazilToday } from '@/lib/timezone';
 import DiaryClient from './DiaryClient';
 
 export default async function DiaryPage() {
@@ -9,7 +9,7 @@ export default async function DiaryPage() {
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
-  const serverDate = todayISO();
+  const serverDate = brazilToday();
 
   const { data: profileData } = await supabase
     .from('users')
