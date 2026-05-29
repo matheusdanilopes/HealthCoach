@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/notifications/hydration-check?cron=1",
-      "schedule": "0 9,12,15,18,20 * * *"
+      "schedule": "0 15 * * *"
     }
   ]
 }
