@@ -4,7 +4,20 @@ import { useEffect } from 'react';
 
 const SUBSCRIBE_URL = '/api/notifications/subscribe';
 
-async function saveSubscription(sub: PushSubscription, retries = 3): Promise<void> {
+// Converts VAPID base64url key to Uint8Array for applicationServerKey comparison
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+function buffersMatch(a: Uint8Array, b: ArrayBuffer): boolean {
+  const bArr = new Uint8Array(b);
+  return a.length === bArr.length && a.every((v, i) => v === bArr[i]);
+}
+
+async function saveSubscription(sub: PushSubscription, retries = 3): Promise<boolean> {
   const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -13,7 +26,9 @@ async function saveSubscription(sub: PushSubscription, retries = 3): Promise<voi
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(json),
       });
-      if (res.ok) { console.info('[sw] push subscription saved'); return; }
+      // 401 = session expired — not a transient error, don't retry
+      if (res.status === 401) { console.warn('[sw] session expired, subscription not saved'); return false; }
+      if (res.ok) { console.info('[sw] push subscription saved'); return true; }
       throw new Error(`HTTP ${res.status}`);
     } catch (err) {
       if (attempt < retries) {
@@ -23,6 +38,7 @@ async function saveSubscription(sub: PushSubscription, retries = 3): Promise<voi
       }
     }
   }
+  return false;
 }
 
 async function subscribeToPush(reg: ServiceWorkerRegistration): Promise<void> {
@@ -31,10 +47,34 @@ async function subscribeToPush(reg: ServiceWorkerRegistration): Promise<void> {
 
   try {
     const existing = await reg.pushManager.getSubscription();
-    const sub = existing ?? await reg.pushManager.subscribe({
-      userVisibleOnly:      true,
-      applicationServerKey: vapidKey,
-    });
+    let sub = existing;
+
+    // If there's an existing subscription, validate it was created with the current VAPID key.
+    // A mismatch means the key was rotated — the server will get 401 on every send attempt
+    // and the subscription will sit in the DB permanently invalid. Force a fresh subscription.
+    if (existing?.options?.applicationServerKey) {
+      const currentKey  = urlBase64ToUint8Array(vapidKey);
+      const existingKey = existing.options.applicationServerKey;
+      if (!buffersMatch(currentKey, existingKey)) {
+        console.info('[sw] VAPID key mismatch — unsubscribing stale subscription');
+        await existing.unsubscribe();
+        // Remove the stale endpoint from the backend
+        await fetch(SUBSCRIBE_URL, {
+          method:  'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ endpoint: existing.endpoint }),
+        }).catch(() => {});
+        sub = null;
+      }
+    }
+
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: vapidKey,
+      });
+    }
+
     await saveSubscription(sub);
   } catch (err) {
     console.warn('[sw] push subscribe failed:', err);
@@ -62,7 +102,7 @@ export function ServiceWorkerRegistration() {
       .then(async (reg) => {
         await registerPeriodicSync(reg);
 
-        // Ensure push subscription is active if permission was already granted
+        // Ensure push subscription is active and uses current VAPID key
         if ('Notification' in window && Notification.permission === 'granted') {
           await subscribeToPush(reg);
         }
@@ -93,6 +133,30 @@ export async function requestAndSubscribePush(): Promise<boolean> {
   const reg = await navigator.serviceWorker.ready;
   await subscribeToPush(reg);
   return true;
+}
+
+// Force-unsubscribes and re-subscribes — resets any stale or invalid subscription state
+export async function forceResubscribePush(): Promise<boolean> {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
+  if (Notification.permission !== 'granted') return false;
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await fetch(SUBSCRIBE_URL, {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ endpoint: existing.endpoint }),
+      }).catch(() => {});
+      await existing.unsubscribe();
+    }
+    await subscribeToPush(reg);
+    return true;
+  } catch (err) {
+    console.warn('[sw] force resubscribe failed:', err);
+    return false;
+  }
 }
 
 // Removes subscription from this device and backend

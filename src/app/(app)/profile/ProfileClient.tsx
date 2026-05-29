@@ -24,7 +24,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { requestAndSubscribePush, unsubscribeFromPush } from '@/components/ServiceWorkerRegistration';
+import { requestAndSubscribePush, unsubscribeFromPush, forceResubscribePush } from '@/components/ServiceWorkerRegistration';
 import {
   calculateTMB,
   calculateTDEE,
@@ -96,6 +96,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | 'unsupported'>('unsupported');
   const [notifDevices, setNotifDevices] = useState<number | null>(null);
   const [notifToggling, setNotifToggling] = useState(false);
+  const [notifForcing, setNotifForcing] = useState(false);
 
   // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
   useEffect(() => {
@@ -222,10 +223,18 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   async function handleNotifDisable() {
     setNotifToggling(true);
     const ok = await unsubscribeFromPush();
-    if (ok) {
-      setNotifDevices(0);
-    }
+    if (ok) setNotifDevices(0);
     setNotifToggling(false);
+  }
+
+  async function handleForceResubscribe() {
+    setNotifForcing(true);
+    const ok = await forceResubscribePush();
+    if (ok) {
+      const d = await fetch('/api/notifications/status').then(r => r.ok ? r.json() : null).catch(() => null);
+      if (d) setNotifDevices(d.devices ?? 0);
+    }
+    setNotifForcing(false);
   }
 
   async function handleNotifTest() {
@@ -649,6 +658,31 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0"
             />
           </button>
+
+          {/* Force re-register — fixes stale/invalid subscriptions */}
+          {notifPerm === 'granted' && (
+            <button
+              type="button"
+              onClick={handleForceResubscribe}
+              disabled={notifForcing}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                {notifForcing
+                  ? <Loader2 size={14} className="text-zinc-400 animate-spin" />
+                  : <RefreshCw size={14} className="text-zinc-400 dark:text-zinc-500" />
+                }
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
+                  {notifForcing ? 'Registrando…' : 'Forçar re-registro'}
+                </p>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                  Use se as notificações não chegam com o app fechado
+                </p>
+              </div>
+            </button>
+          )}
         </div>
       </div>
 

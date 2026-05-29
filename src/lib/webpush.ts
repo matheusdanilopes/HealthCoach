@@ -25,8 +25,9 @@ export type PushSendOptions = {
   topic?:   string;                                    // dedup key for queued messages
 };
 
-// Only these status codes mean the subscription is truly gone — not transient errors
-const GONE_CODES = new Set([404, 410]);
+// Subscriptions to remove from DB:
+// 404/410 = endpoint gone, 401/403 = VAPID key mismatch (subscription can't be reached with current keys)
+const GONE_CODES = new Set([401, 403, 404, 410]);
 
 export async function sendPushToSubscriptions(
   subs: PushSubscriptionData[],
