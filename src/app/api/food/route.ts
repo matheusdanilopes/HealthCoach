@@ -64,11 +64,13 @@ export async function POST(req: Request) {
 
   if (error) {
     // Migration not yet applied — retry without hydration columns
-    ({ data: row, error } = await supabase
+    const { data: legacyRow, error: legacyError } = await supabase
       .from('food_logs')
       .insert(baseInsert)
       .select(FOOD_FIELDS_LEGACY)
-      .single());
+      .single();
+    row = legacyRow as unknown as typeof row;
+    error = legacyError;
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -106,13 +108,15 @@ export async function PATCH(req: Request) {
 
   if (error) {
     // Migration not yet applied — retry without hydration columns
-    ({ data: row, error } = await supabase
+    const { data: legacyRow, error: legacyError } = await supabase
       .from('food_logs')
       .update(baseUpdate)
       .eq('id', id)
       .eq('user_id', session.user.id)
       .select(FOOD_FIELDS_LEGACY)
-      .single());
+      .single();
+    row = legacyRow as unknown as typeof row;
+    error = legacyError;
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

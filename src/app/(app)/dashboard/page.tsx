@@ -41,12 +41,13 @@ export default async function DashboardPage() {
 
   if (foodError) {
     // Migration not yet applied — fall back to legacy schema
-    ({ data: foodData } = await supabase
+    const { data: legacyFood } = await supabase
       .from('food_logs')
       .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
       .eq('user_id', userId)
       .eq('log_date', today)
-      .order('created_at'));
+      .order('created_at');
+    foodData = legacyFood as unknown as typeof foodData;
   }
 
   const latestWeight = parseFloat(

@@ -21,12 +21,13 @@ export async function GET(req: Request) {
 
   if (foodError) {
     // Migration not yet applied — fall back to legacy schema
-    ({ data: foodData } = await supabase
+    const { data: legacyFood } = await supabase
       .from('food_logs')
       .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
       .eq('user_id', session.user.id)
       .eq('log_date', date)
-      .order('created_at'));
+      .order('created_at');
+    foodData = legacyFood as unknown as typeof foodData;
   }
 
   const [{ data: waterData }] = await Promise.all([
