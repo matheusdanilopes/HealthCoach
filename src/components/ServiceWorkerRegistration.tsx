@@ -4,13 +4,16 @@ import { useEffect } from 'react';
 
 const SUBSCRIBE_URL = '/api/notifications/subscribe';
 
-// Converts VAPID base64url key to Uint8Array.
+// Converts VAPID base64url key to Uint8Array<ArrayBuffer>.
 // iOS Safari requires a BufferSource — it rejects a raw base64url string.
+// Must use `new Uint8Array(n)` (not Uint8Array.from) to get ArrayBuffer, not ArrayBufferLike.
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(b64);
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
 }
 
 function buffersMatch(a: Uint8Array, b: ArrayBuffer): boolean {
