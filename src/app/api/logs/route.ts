@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
+import { brazilToday } from '@/lib/timezone';
 
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const d = new Date();
-  const localToday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const date = searchParams.get('date') ?? localToday;
+  const date = searchParams.get('date') ?? brazilToday();
 
   const [{ data: foodData }, { data: waterData }] = await Promise.all([
     supabase
@@ -20,15 +19,14 @@ export async function GET(req: Request) {
       .order('created_at'),
     supabase
       .from('water_logs')
-      .select('amount_ml')
+      .select('id, amount_ml, created_at')
       .eq('user_id', session.user.id)
-      .eq('log_date', date),
+      .eq('log_date', date)
+      .order('created_at'),
   ]);
 
-  const totalWater = (waterData ?? []).reduce(
-    (sum: number, r: { amount_ml: number }) => sum + r.amount_ml,
-    0
-  );
+  const waterLogs = (waterData ?? []) as { id: string; amount_ml: number; created_at: string }[];
+  const totalWater = waterLogs.reduce((s, r) => s + r.amount_ml, 0);
 
-  return NextResponse.json({ foodLogs: foodData ?? [], water: totalWater });
+  return NextResponse.json({ foodLogs: foodData ?? [], water: totalWater, waterLogs });
 }

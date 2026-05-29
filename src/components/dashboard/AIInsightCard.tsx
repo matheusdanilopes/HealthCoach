@@ -63,7 +63,30 @@ function InsightSkeleton() {
   );
 }
 
-const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+function InsightError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none overflow-hidden">
+      <div className="h-[2px] bg-gradient-to-r from-zinc-300 via-zinc-200 to-zinc-300 dark:from-zinc-700 dark:via-zinc-600 dark:to-zinc-700" />
+      <div className="p-5 flex items-center gap-3">
+        <div className="h-9 w-9 rounded-xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+          <Brain size={16} className="text-zinc-300 dark:text-zinc-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] text-zinc-400 dark:text-zinc-500">Insights temporariamente indisponíveis</p>
+        </div>
+        <button
+          onClick={onRetry}
+          className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline whitespace-nowrap"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Debounce delay for auto-refresh triggered by data changes (ms)
+const AUTO_REFRESH_DEBOUNCE_MS = 1_500;
 
 interface AIInsightCardProps {
   userId: string;
@@ -82,36 +105,58 @@ const AIInsightCard = memo(function AIInsightCard({
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const lastAutoRefresh             = useRef(0);
+  const debounceRef                 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchInsight = useCallback(async (force = false) => {
-    if (force) setRefreshing(true); else setLoading(true);
-    setError(false);
+    // During a forced refresh, don't clear the existing insight — show it as stale
+    if (force) {
+      setRefreshing(true);
+    } else {
+      // Only show skeleton on the very first load (no insight yet)
+      setLoading((prev) => prev || true);
+    }
     try {
       const res = await fetch(force ? '/api/ai-insights?refresh=1' : '/api/ai-insights');
-      if (!res.ok) throw new Error('fetch failed');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: AIInsight = await res.json();
-      setInsight(data);
-    } catch {
+      if (data && data.id) {
+        setInsight(data);
+        setError(false);
+      } else {
+        throw new Error('Invalid response');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[AIInsightCard] fetch failed:', msg);
       setError(true);
+      // Do NOT clear the existing insight — stale data is better than nothing
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+  // Initial load
   useEffect(() => { fetchInsight(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Debounced auto-refresh when meals/workouts are logged.
+  // Show spinner immediately so the user sees feedback right away;
+  // the actual AI call fires after a short debounce to coalesce rapid actions.
   useEffect(() => {
     if (refreshKey === 0) return;
-    const now = Date.now();
-    if (now - lastAutoRefresh.current < AUTO_REFRESH_INTERVAL_MS) return;
-    lastAutoRefresh.current = now;
-    fetchInsight(true);
-  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    setRefreshing(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchInsight(true), AUTO_REFRESH_DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  // fetchInsight is stable (useCallback with []), safe to exclude from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
-  if (loading) return <InsightSkeleton />;
-  if (error || !insight) return null;
+  if (loading && !insight) return <InsightSkeleton />;
+  if (error && !insight) return <InsightError onRetry={() => fetchInsight()} />;
+  if (!insight) return null;
 
   const typeConfig = TYPE_CONFIG[insight.type as keyof typeof TYPE_CONFIG]           ?? TYPE_CONFIG.behavior;
   const prioConfig = PRIORITY_CONFIG[insight.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.informativo;
@@ -119,7 +164,6 @@ const AIInsightCard = memo(function AIInsightCard({
 
   function handleCTA() {
     if (!onOpenChat) return;
-    // Build a natural opening message from the insight context
     const msg = `Quero saber mais sobre: "${insight!.title}". ${insight!.message}`;
     onOpenChat(msg);
   }

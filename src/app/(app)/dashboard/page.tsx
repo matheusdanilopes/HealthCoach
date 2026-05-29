@@ -1,15 +1,15 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { todayISO } from '@/lib/utils';
+import { brazilToday } from '@/lib/timezone';
 import DashboardClient from './DashboardClient';
-import type { Profile, FoodLog } from '@/types';
+import type { Profile, FoodLog, WaterLogEntry } from '@/types';
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const today = todayISO();
+  const today = brazilToday();
   const userId = session.user.id;
 
   const [
@@ -33,19 +33,17 @@ export default async function DashboardPage() {
       .order('created_at'),
     supabase
       .from('water_logs')
-      .select('amount_ml')
+      .select('amount_ml, created_at')
       .eq('user_id', userId)
-      .eq('log_date', today),
+      .eq('log_date', today)
+      .order('created_at'),
   ]);
 
   const latestWeight = parseFloat(
     String(weightRows?.[0]?.weight_kg ?? (profile as Profile | null)?.current_weight ?? 0)
   );
 
-  const initialWater = (waterData ?? []).reduce(
-    (sum: number, r: { amount_ml: number }) => sum + r.amount_ml,
-    0
-  );
+  const initialWaterLogs = (waterData ?? []) as WaterLogEntry[];
 
   return (
     <DashboardClient
@@ -54,7 +52,7 @@ export default async function DashboardPage() {
       latestWeight={latestWeight}
       userId={userId}
       initialFoodLogs={(foodData ?? []) as FoodLog[]}
-      initialWater={initialWater}
+      initialWaterLogs={initialWaterLogs}
     />
   );
 }

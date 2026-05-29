@@ -30,6 +30,12 @@ export interface WaterLog {
   amount_ml: number;
 }
 
+export interface WaterLogEntry {
+  id?: string;
+  amount_ml: number;
+  created_at: string;
+}
+
 export interface WeightLog {
   id: string;
   user_id: string;

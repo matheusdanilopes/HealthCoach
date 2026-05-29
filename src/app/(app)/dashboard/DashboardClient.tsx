@@ -13,8 +13,9 @@ import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
+import { useHydrationReminder } from '@/lib/useHydrationReminder';
 import { cn, todayISO } from '@/lib/utils';
-import type { FoodLog, Profile } from '@/types';
+import type { FoodLog, Profile, WaterLogEntry } from '@/types';
 
 interface DashboardClientProps {
   profile: Profile | null;
@@ -22,7 +23,7 @@ interface DashboardClientProps {
   latestWeight: number;
   userId: string;
   initialFoodLogs: FoodLog[];
-  initialWater: number;
+  initialWaterLogs: WaterLogEntry[];
 }
 
 function getGreeting() {
@@ -38,11 +39,11 @@ export default function DashboardClient({
   latestWeight,
   userId,
   initialFoodLogs,
-  initialWater,
+  initialWaterLogs,
 }: DashboardClientProps) {
   const router = useRouter();
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>(initialFoodLogs);
-  const [water, setWater] = useState(initialWater);
+  const [waterLogs, setWaterLogs] = useState<WaterLogEntry[]>(initialWaterLogs);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
@@ -52,19 +53,26 @@ export default function DashboardClient({
   const [chatTrigger, setChatTrigger]     = useState(0);
   const [chatInitialInput, setChatInitialInput] = useState('');
 
-  // Stable greeting - computed once on mount
   const greetingText = useMemo(() => getGreeting(), []);
+
+  // Derive water total from logs list
+  const water = useMemo(() => waterLogs.reduce((s, l) => s + l.amount_ml, 0), [waterLogs]);
+
+  // Hydration reminders (browser notifications when tab is open)
+  useHydrationReminder(waterLogs, profile?.target_water_ml ?? 2500);
 
   useEffect(() => {
     const today = todayISO();
-    // Handle timezone edge case where server date differs from client date
     if (today !== serverDate) {
       setSelectedDate(today);
       setLoadingDate(true);
       fetch(`/api/logs?date=${today}`)
         .then((r) => r.json())
-        .then((data) => { setFoodLogs(data.foodLogs ?? []); setWater(data.water ?? 0); })
-        .catch(() => { setFoodLogs([]); setWater(0); })
+        .then((data) => {
+          setFoodLogs(data.foodLogs ?? []);
+          setWaterLogs(data.waterLogs ?? []);
+        })
+        .catch(() => { setFoodLogs([]); setWaterLogs([]); })
         .finally(() => setLoadingDate(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +88,7 @@ export default function DashboardClient({
       const res = await fetch(`/api/logs?date=${date}`);
       const data = await res.json();
       setFoodLogs(data.foodLogs ?? []);
-      setWater(data.water ?? 0);
+      setWaterLogs(data.waterLogs ?? []);
     } finally {
       setLoadingDate(false);
     }
@@ -92,7 +100,6 @@ export default function DashboardClient({
     navigateTo(d.toISOString().split('T')[0]);
   }
 
-  // Memoize all derived stats to avoid redundant filter/reduce on every render
   const { workoutBurned, stats } = useMemo(() => {
     const positiveLogs = foodLogs.filter((l) => l.calories > 0);
     const workoutBurned = Math.abs(
@@ -114,10 +121,13 @@ export default function DashboardClient({
     setInsightKey((k) => k + 1);
   }, []);
 
-  // Optimistic update from AI chat - avoids router.refresh() full re-render
   const handleFoodLoggedFromChat = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
     setInsightKey((k) => k + 1);
+  }, []);
+
+  const handleWaterAdded = useCallback((ml: number, createdAt: string) => {
+    setWaterLogs((prev) => [...prev, { amount_ml: ml, created_at: createdAt }]);
   }, []);
 
   const firstName = profile?.full_name?.split(' ')[0];
@@ -133,7 +143,6 @@ export default function DashboardClient({
               ? `${greetingText}${firstName ? `, ${firstName}` : ''}`
               : `Diário${firstName ? `, ${firstName}` : ''}`}
           </h1>
-          {/* Date navigation */}
           <div className="flex items-center gap-2">
             <div className={cn(
               'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
@@ -180,7 +189,6 @@ export default function DashboardClient({
         )}
       </div>
 
-      {/* Layout: calorie card full-width, then 2-col for macros/water */}
       <div className="flex flex-col gap-4">
         <CalorieCard
           consumed={stats.calories}
@@ -188,7 +196,6 @@ export default function DashboardClient({
           target={profile?.target_calories ?? 2000}
         />
 
-        {/* AI Insights — only on today's view */}
         {isToday && (
           <AIInsightCard
             userId={userId}
@@ -200,7 +207,6 @@ export default function DashboardClient({
           />
         )}
 
-        {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setAddFoodOpen(true)}
@@ -218,7 +224,6 @@ export default function DashboardClient({
           </button>
         </div>
 
-        {/* TDEE / deficit info */}
         {profile?.tdee && (
           <div className="flex items-center justify-between px-1 py-0.5">
             <div className="flex items-center gap-1.5">
@@ -242,7 +247,6 @@ export default function DashboardClient({
           </div>
         )}
 
-        {/* Macros + Water — side by side on sm+ */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <MacroProgress
@@ -252,13 +256,12 @@ export default function DashboardClient({
               targetCalories={profile?.target_calories ?? 2000}
             />
           </div>
-          <div className="sm:w-52 flex-shrink-0">
+          <div className="sm:w-56 flex-shrink-0">
             <WaterTracker
-              current={water}
+              logs={waterLogs}
               target={profile?.target_water_ml ?? 2500}
-              userId={userId}
               date={selectedDate}
-              onUpdate={setWater}
+              onAdded={handleWaterAdded}
             />
           </div>
         </div>

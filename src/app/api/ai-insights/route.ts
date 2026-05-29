@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
+import { brazilToday, brazilDayOfWeek, brazilNDaysAgo } from '@/lib/timezone';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -67,6 +68,13 @@ export async function GET(req: Request) {
     const userId = session.user.id;
     const { searchParams } = new URL(req.url);
     const forceRefresh = searchParams.get('refresh') === '1';
+    const invalidate   = searchParams.get('invalidate') === '1';
+
+    if (invalidate) {
+      await supabase.from('ai_insights').delete().eq('user_id', userId);
+      console.log(`[insights] Cache invalidated for user ${userId}`);
+      return NextResponse.json({ ok: true });
+    }
 
     // 2-hour cache — short enough to reflect meals added during the day
     if (!forceRefresh) {
@@ -82,9 +90,9 @@ export async function GET(req: Request) {
       if (cached) return NextResponse.json(cached);
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
-      .toISOString().split('T')[0];
+    const today = brazilToday();
+    const fourteenDaysAgo = brazilNDaysAgo(14, today);
+    console.log(`[insights] Generating for user ${userId} | Brazil date: ${today} | UTC: ${new Date().toISOString().split('T')[0]}`);
 
     // Fetch all context data in parallel
     const [
@@ -208,7 +216,7 @@ export async function GET(req: Request) {
       : 'não informado';
 
     const firstName = profile?.full_name?.split(' ')[0] ?? 'Usuário';
-    const dow       = new Date().getDay();
+    const dow       = brazilDayOfWeek();
 
     // ── Urgency overrides — take priority over day-based focus ─────────────
     let urgentNote = '';
@@ -245,6 +253,7 @@ FOCO: ${focusText}
 Retorne APENAS JSON válido (sem markdown):
 {"type":"nutrition|workout|body|behavior","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras","message":"1-2 frases específicas com dados reais","cta":"rótulo do botão que abre o chat (ex: 'Ver sugestões', 'Me ajude', 'Saiba mais') ou null"}`;
 
+    console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'}`);
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
         model: 'gemini-2.5-flash',
@@ -288,8 +297,14 @@ REGRAS:
         .insert(insightData)
         .select()
         .single();
-      if (!error && saved) return NextResponse.json(saved);
-    } catch { /* table not yet migrated */ }
+      if (!error && saved) {
+        console.log(`[insights] Saved for user ${userId} | type=${insightData.type} | priority=${insightData.priority}`);
+        return NextResponse.json(saved);
+      }
+      if (error) console.error('[insights] Save error:', error.message);
+    } catch (saveErr) {
+      console.error('[insights] Save failed:', saveErr);
+    }
 
     return NextResponse.json({
       ...insightData,
@@ -300,11 +315,13 @@ REGRAS:
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('AI Insights error:', msg);
+    console.error('[insights] Error:', msg);
     if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand'))
       return NextResponse.json({ error: 'O modelo de IA está com alta demanda. Tente em instantes.' }, { status: 503 });
     if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota'))
       return NextResponse.json({ error: 'Limite de requisições atingido. Aguarde e tente novamente.' }, { status: 429 });
+    if (msg.includes('timezone') || msg.includes('date'))
+      console.error('[insights] Timezone/date error — check Brazil TZ computation');
     return NextResponse.json({ error: 'Erro ao gerar insight.' }, { status: 500 });
   }
 }
