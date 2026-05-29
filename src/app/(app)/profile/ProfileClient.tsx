@@ -239,11 +239,47 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       } else if (data.reason === 'vapid_not_configured') {
         setNotifTest('no-vapid');
       } else {
-        setNotifError(data.lastError ? `Envio rejeitado pelo serviço push: ${data.lastError}` : 'Dispositivo registrado mas envio falhou.');
+        const code = data.lastError ? parseInt(data.lastError) : 0;
+        if (code === 403 || code === 401) {
+          setNotifError('Chaves VAPID não conferem (403). Use "Resetar subscription" abaixo para recriar com as chaves atuais.');
+        } else {
+          setNotifError(data.lastError ? `Serviço push rejeitou: ${data.lastError}` : 'Envio falhou sem detalhes.');
+        }
         setNotifTest('error');
       }
     } catch (err) {
       setNotifError(err instanceof Error ? err.message : 'Erro desconhecido');
+      setNotifTest('error');
+    }
+    setTimeout(() => setNotifTest('idle'), 6000);
+  }
+
+  async function handleResetPush() {
+    setNotifTest('sending');
+    setNotifError('');
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          await fetch('/api/notifications/subscribe', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: existing.endpoint }),
+          }).catch(() => {});
+          await existing.unsubscribe();
+        }
+      }
+      const result = await tryRegisterPush();
+      if (!result.ok) {
+        setNotifError(result.reason);
+        setNotifTest('error');
+      } else {
+        setNotifError('Subscription recriada. Tente testar novamente.');
+        setNotifTest('error'); // reuse error style for info
+      }
+    } catch (err) {
+      setNotifError(err instanceof Error ? err.message : 'Erro ao resetar');
       setNotifTest('error');
     }
     setTimeout(() => setNotifTest('idle'), 6000);
@@ -592,6 +628,19 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               size={13}
               className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0"
             />
+          </button>
+          <button
+            type="button"
+            onClick={handleResetPush}
+            disabled={notifTest === 'sending' || isIOSBrowser}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group disabled:opacity-40"
+          >
+            <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <RotateCcw size={13} className="text-zinc-400 dark:text-zinc-500" />
+            </div>
+            <p className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 flex-1 text-left">
+              Resetar subscription push
+            </p>
           </button>
         </div>
       </div>
