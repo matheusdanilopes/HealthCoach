@@ -25,13 +25,6 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
         ],
       },
-      // Long-lived cache for versioned static assets (Next.js adds content hash to filenames)
-      {
-        source: '/_next/static/:path*',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-        ],
-      },
       // Cache PWA icons (they change rarely)
       {
         source: '/icons/:path*',
