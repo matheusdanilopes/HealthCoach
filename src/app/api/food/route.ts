@@ -5,6 +5,7 @@ import { brazilToday } from '@/lib/timezone';
 import { detectBeverage } from '@/lib/beverages';
 
 const FOOD_FIELDS = 'id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at';
+const FOOD_FIELDS_LEGACY = 'id, food_name, meal_type, calories, protein, carbs, fat, created_at';
 
 function resolveHydration(
   foodName: string,
@@ -44,21 +45,31 @@ export async function POST(req: Request) {
 
   const hydration = resolveHydration(food_name, hydration_ml, hydration_source, hydration_confidence);
 
-  const { data: row, error } = await supabase
+  const baseInsert = {
+    user_id: session.user.id,
+    food_name,
+    meal_type,
+    calories,
+    protein: protein ?? null,
+    carbs: carbs ?? null,
+    fat: fat ?? null,
+    log_date: date,
+  };
+
+  let { data: row, error } = await supabase
     .from('food_logs')
-    .insert({
-      user_id: session.user.id,
-      food_name,
-      meal_type,
-      calories,
-      protein: protein ?? null,
-      carbs: carbs ?? null,
-      fat: fat ?? null,
-      log_date: date,
-      ...hydration,
-    })
+    .insert({ ...baseInsert, ...hydration })
     .select(FOOD_FIELDS)
     .single();
+
+  if (error) {
+    // Migration not yet applied — retry without hydration columns
+    ({ data: row, error } = await supabase
+      .from('food_logs')
+      .insert(baseInsert)
+      .select(FOOD_FIELDS_LEGACY)
+      .single());
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -77,20 +88,32 @@ export async function PATCH(req: Request) {
 
   const hydration = resolveHydration(food_name, hydration_ml, hydration_source, hydration_confidence);
 
-  const { data: row, error } = await supabase
+  const baseUpdate = {
+    food_name,
+    calories,
+    protein: protein ?? null,
+    carbs: carbs ?? null,
+    fat: fat ?? null,
+  };
+
+  let { data: row, error } = await supabase
     .from('food_logs')
-    .update({
-      food_name,
-      calories,
-      protein: protein ?? null,
-      carbs: carbs ?? null,
-      fat: fat ?? null,
-      ...hydration,
-    })
+    .update({ ...baseUpdate, ...hydration })
     .eq('id', id)
     .eq('user_id', session.user.id)
     .select(FOOD_FIELDS)
     .single();
+
+  if (error) {
+    // Migration not yet applied — retry without hydration columns
+    ({ data: row, error } = await supabase
+      .from('food_logs')
+      .update(baseUpdate)
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .select(FOOD_FIELDS_LEGACY)
+      .single());
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
