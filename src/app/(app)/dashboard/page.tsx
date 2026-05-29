@@ -27,7 +27,7 @@ export default async function DashboardPage() {
       .limit(1),
     supabase
       .from('food_logs')
-      .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
+      .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at')
       .eq('user_id', userId)
       .eq('log_date', today)
       .order('created_at'),
