@@ -86,7 +86,7 @@ function InsightError({ onRetry }: { onRetry: () => void }) {
 }
 
 // Debounce delay for auto-refresh triggered by data changes (ms)
-const AUTO_REFRESH_DEBOUNCE_MS = 5_000;
+const AUTO_REFRESH_DEBOUNCE_MS = 1_500;
 
 interface AIInsightCardProps {
   userId: string;
@@ -139,17 +139,20 @@ const AIInsightCard = memo(function AIInsightCard({
   // Initial load
   useEffect(() => { fetchInsight(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced auto-refresh when meals/workouts are logged
+  // Debounced auto-refresh when meals/workouts are logged.
+  // Show spinner immediately so the user sees feedback right away;
+  // the actual AI call fires after a short debounce to coalesce rapid actions.
   useEffect(() => {
     if (refreshKey === 0) return;
+    setRefreshing(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetchInsight(true);
-    }, AUTO_REFRESH_DEBOUNCE_MS);
+    debounceRef.current = setTimeout(() => fetchInsight(true), AUTO_REFRESH_DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [refreshKey, fetchInsight]);
+  // fetchInsight is stable (useCallback with []), safe to exclude from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   if (loading && !insight) return <InsightSkeleton />;
   if (error && !insight) return <InsightError onRetry={() => fetchInsight()} />;
