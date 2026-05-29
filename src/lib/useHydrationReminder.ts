@@ -6,9 +6,10 @@ import type { WaterLogEntry } from '@/types';
 const COOLDOWN_MS       = 90 * 60 * 1000; // 90 min between notifications
 const MAX_DAILY         = 5;
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // check every 10 min while tab is open
-const QUIET_START       = 22;             // quiet hours 22:00–07:00
+const QUIET_START       = 22;
 const QUIET_END         = 7;
 
+// Use device local time — acceptable because the user is actively using the device
 function isQuietHour(): boolean {
   const h = new Date().getHours();
   return h >= QUIET_START || h < QUIET_END;
@@ -43,52 +44,47 @@ function canNotify(): boolean {
   return true;
 }
 
-// Sends notification via Web Push (server → push service → device, works in background)
-// Falls back to browser Notification API if push not configured
 async function notify(title: string, body: string): Promise<void> {
   if (!canNotify()) return;
 
   saveNotifTime();
   bumpDailyCount();
 
-  // Try server-side Web Push first (works even with app in background)
+  // Try server-side Web Push first — reaches the device even when the tab loses focus
   try {
-    const res = await fetch('/api/notifications/send', {
+    const res  = await fetch('/api/notifications/send', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ title, body, tag: 'hc-hydration', url: '/dashboard' }),
     });
     const data = await res.json();
-    if (data.sent > 0) {
-      console.log('[hydration] Push sent via server:', title);
-      return;
-    }
+    if (data.sent > 0) return;
   } catch { /**/ }
 
-  // Fallback: browser Notification API (requires tab to be in focus on some browsers)
+  // Fallback: show via registered service worker
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       const reg = await navigator.serviceWorker.ready;
-      // Show via service worker so it works in background on supported browsers
       await reg.showNotification(title, {
         body,
-        icon:   '/icons/icon-192x192.png',
-        badge:  '/icons/icon-96x96.png',
-        tag:    'hc-hydration',
-        data:   { url: '/dashboard' },
+        icon:  '/icons/icon-192x192.png',
+        badge: '/icons/icon-96x96.png',
+        tag:   'hc-hydration',
+        data:  { url: '/dashboard' },
       });
-      console.log('[hydration] Notification shown via SW:', title);
-    } catch {
-      try { new Notification(title, { body, icon: '/icons/icon-192x192.png', tag: 'hc-hydration' }); }
-      catch { /**/ }
-    }
+      return;
+    } catch { /**/ }
+
+    // Last resort: browser Notification API (foreground only)
+    try { new Notification(title, { body, icon: '/icons/icon-192x192.png', tag: 'hc-hydration' }); }
+    catch { /**/ }
   }
 }
 
 export function useHydrationReminder(logs: WaterLogEntry[], target: number, mealHydrationMl = 0): void {
-  const logsRef            = useRef(logs);
-  const targetRef          = useRef(target);
-  const mealHydrationRef   = useRef(mealHydrationMl);
+  const logsRef          = useRef(logs);
+  const targetRef        = useRef(target);
+  const mealHydrationRef = useRef(mealHydrationMl);
 
   useEffect(() => { logsRef.current = logs; }, [logs]);
   useEffect(() => { targetRef.current = target; }, [target]);
@@ -106,7 +102,7 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number, meal
 
       const lastLog  = currentLogs.length > 0 ? currentLogs[currentLogs.length - 1] : null;
       const minSince = lastLog
-        ? Math.floor((Date.now() - new Date(lastLog.created_at).getTime()) / 60_000)
+        ? Math.max(0, Math.floor((Date.now() - new Date(lastLog.created_at).getTime()) / 60_000))
         : 999;
       const pct = currentTarget > 0 ? total / currentTarget : 0;
       const h   = new Date().getHours();
@@ -146,9 +142,16 @@ export function useHydrationReminder(logs: WaterLogEntry[], target: number, meal
     function onVisibility() { if (!document.hidden) check(); }
     document.addEventListener('visibilitychange', onVisibility);
 
+    // Respond to SW periodic sync messages when the app is open
+    function onSwMessage(event: MessageEvent) {
+      if (event.data?.type === 'HYDRATION_CHECK') check();
+    }
+    navigator.serviceWorker?.addEventListener('message', onSwMessage);
+
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
+      navigator.serviceWorker?.removeEventListener('message', onSwMessage);
     };
   }, []);
 }
