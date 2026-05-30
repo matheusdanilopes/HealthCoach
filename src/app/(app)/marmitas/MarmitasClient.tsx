@@ -77,7 +77,7 @@ function MarmitaCard({ marmita, index }: MarmitaCardProps) {
               Ingredientes
             </p>
             <ul className="flex flex-col gap-1">
-              {marmita.ingredientes.map((item, i) => (
+              {marmita.ingredientes?.map((item, i) => (
                 <li key={i} className="flex items-start gap-2 text-[13px] text-zinc-700 dark:text-zinc-300">
                   <span className="text-emerald-500 mt-0.5">•</span>
                   {item}
@@ -116,7 +116,7 @@ export default function MarmitasClient({ targetCalories, proteinGoal, carbsGoal,
       });
       if (!res.ok) throw new Error('Erro ao gerar marmitas');
       const data = await res.json();
-      setMarmitas(data.marmitas ?? []);
+      setMarmitas(data?.marmitas ?? []);
     } catch {
       setError('Não foi possível gerar as sugestões. Tente novamente.');
     } finally {
