@@ -1,3 +1,5 @@
+import type { MealType } from '@/types';
+
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ');
 }
@@ -15,22 +17,43 @@ export function todayISO(): string {
 
 export function getMealLabel(mealType: string): string {
   const labels: Record<string, string> = {
-    breakfast: 'Café da Manhã',
-    lunch: 'Almoço',
-    dinner: 'Jantar',
-    snack: 'Lanches',
+    breakfast:       'Café da Manhã',
+    morning_snack:   'Lanche da Manhã',
+    lunch:           'Almoço',
+    afternoon_snack: 'Lanche da Tarde',
+    dinner:          'Jantar',
+    supper:          'Ceia',
+    pre_workout:     'Pré-Treino',
+    post_workout:    'Pós-Treino',
+    other:           'Livre / Outro',
+    snack:           'Lanches',
   };
   return labels[mealType] ?? mealType;
 }
 
 export function getMealIcon(mealType: string): string {
   const icons: Record<string, string> = {
-    breakfast: '☀️',
-    lunch: '🍽️',
-    dinner: '🌙',
-    snack: '🍎',
+    breakfast:       '☀️',
+    morning_snack:   '🥐',
+    lunch:           '🍽️',
+    afternoon_snack: '🍎',
+    dinner:          '🌙',
+    supper:          '🌛',
+    pre_workout:     '⚡',
+    post_workout:    '💪',
+    other:           '🍴',
+    snack:           '🍎',
   };
   return icons[mealType] ?? '🍴';
+}
+
+export function suggestMealType(hour: number): MealType {
+  if (hour >= 5  && hour < 10) return 'breakfast';
+  if (hour >= 10 && hour < 12) return 'morning_snack';
+  if (hour >= 12 && hour < 15) return 'lunch';
+  if (hour >= 15 && hour < 18) return 'afternoon_snack';
+  if (hour >= 18 && hour < 22) return 'dinner';
+  return 'supper';
 }
 
 export function formatCalories(cal: number): string {

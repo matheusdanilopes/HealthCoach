@@ -1,4 +1,4 @@
-const CACHE = 'hc-v6';
+const CACHE = 'hc-v7';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
@@ -25,32 +25,74 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// Push from server (VAPID)
+// Push from server (VAPID) — works with app closed, minimized, or in background
 self.addEventListener('push', e => {
-  const defaults = { title: 'HealthCoach', body: 'Você tem uma nova notificação.', tag: 'hc-general', url: '/dashboard' };
+  const defaults = {
+    title:    'HealthCoach',
+    body:     'Você tem uma nova notificação.',
+    tag:      'hc-general',
+    url:      '/dashboard',
+    logId:    null,
+    actions:  [],
+  };
+
   let data = defaults;
-  try { if (e.data) data = { ...defaults, ...e.data.json() }; } catch { /**/ }
+  try {
+    if (e.data) data = { ...defaults, ...e.data.json() };
+  } catch { /**/ }
+
+  const notifOptions = {
+    body:     data.body,
+    icon:     '/icons/icon-192x192.png',
+    badge:    '/icons/icon-96x96.png',
+    tag:      data.tag ?? 'hc-general',
+    renotify: true,
+    vibrate:  [100, 50, 100],
+    data:     { url: data.url ?? '/dashboard', logId: data.logId },
+  };
+
+  // Add action buttons based on notification type
+  if (data.tag?.startsWith('hc-hydration')) {
+    notifOptions.actions = [
+      { action: 'log-water', title: '💧 Registrar água' },
+      { action: 'dismiss',   title: 'Dispensar' },
+    ];
+  } else if (data.tag?.startsWith('hc-meal')) {
+    notifOptions.actions = [
+      { action: 'log-meal', title: '🍽️ Registrar refeição' },
+      { action: 'dismiss',  title: 'Dispensar' },
+    ];
+  }
 
   e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body:     data.body,
-      icon:     '/icons/icon-192x192.png',
-      badge:    '/icons/icon-96x96.png',
-      tag:      data.tag ?? 'hc-general',
-      renotify: true,
-      vibrate:  [100, 50, 100],
-      data:     { url: data.url ?? '/dashboard' },
-    })
+    self.registration.showNotification(data.title, notifOptions)
   );
 });
 
-// Notification tap — open the URL carried in notification data
+// Notification tap — open the URL and log the open event
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url ?? '/dashboard';
+
+  const notifData = e.notification.data ?? {};
+  const action    = e.action;
+
+  // Route action button presses
+  let url = notifData.url ?? '/dashboard';
+  if (action === 'log-water') url = '/dashboard#water';
+  if (action === 'log-meal')  url = '/diary';
+  if (action === 'dismiss')   return;
+
+  // Fire-and-forget: log the open
+  if (notifData.logId) {
+    fetch('/api/notifications/log', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ logId: notifData.logId }),
+    }).catch(() => {});
+  }
+
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      // Navigate an existing window if one is open
       const existing = list.find(c => 'navigate' in c);
       if (existing) return existing.navigate(url);
       return clients.openWindow(url);
@@ -79,23 +121,31 @@ self.addEventListener('pushsubscriptionchange', e => {
   );
 });
 
-// Periodic background sync — Chrome Android only
+// Periodic background sync — Chrome Android only, used as supplemental layer
+// Primary delivery is handled by Vercel Cron (server-side push).
 self.addEventListener('periodicsync', e => {
   if (e.tag !== 'hc-hydration-check') return;
 
   e.waitUntil((async () => {
-    // Respect quiet hours using local device time
     const hour = new Date().getHours();
     if (hour >= 22 || hour < 7) return;
 
-    // If the app is open, let the client-side hook handle it
+    // If app is open, let the client-side hook handle it to avoid duplicates
     const openWindows = await clients.matchAll({ type: 'window' });
     if (openWindows.length > 0) {
       openWindows.forEach(c => c.postMessage({ type: 'HYDRATION_CHECK' }));
       return;
     }
 
-    // App is closed — show a gentle offline reminder
+    // App is closed — attempt server-side check first (has user context)
+    try {
+      const res = await fetch('/api/notifications/hydration-check', {
+        credentials: 'include',
+      });
+      if (res.ok) return; // server handled it
+    } catch { /**/ }
+
+    // Fallback: generic offline reminder when server call fails
     await self.registration.showNotification('Hora de beber água 💧', {
       body:     'Não esqueça de se hidratar!',
       icon:     '/icons/icon-192x192.png',
@@ -104,6 +154,7 @@ self.addEventListener('periodicsync', e => {
       renotify: true,
       vibrate:  [100, 50, 100],
       data:     { url: '/dashboard' },
+      actions:  [{ action: 'log-water', title: '💧 Registrar água' }],
     });
   })());
 });

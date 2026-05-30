@@ -1,0 +1,116 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
+import { cn, getMealLabel, getMealIcon } from '@/lib/utils';
+import type { MealType } from '@/types';
+
+export const ALL_MEAL_TYPES: MealType[] = [
+  'breakfast',
+  'morning_snack',
+  'lunch',
+  'afternoon_snack',
+  'dinner',
+  'supper',
+  'pre_workout',
+  'post_workout',
+  'other',
+];
+
+interface MealTypeSelectorProps {
+  value: MealType | null;
+  onChange: (meal: MealType) => void;
+  suggestedType?: MealType;
+  error?: boolean;
+  errorMessage?: string;
+}
+
+export default function MealTypeSelector({
+  value,
+  onChange,
+  suggestedType,
+  error,
+  errorMessage = 'Selecione a refeição para continuar.',
+}: MealTypeSelectorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shaking, setShaking] = useState(false);
+
+  useEffect(() => {
+    if (!error) return;
+    // Scroll the selector into view inside the modal's overflow container
+    containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Trigger shake — re-arm on every new error trigger
+    setShaking(false);
+    const raf = requestAnimationFrame(() => {
+      setShaking(true);
+      const t = setTimeout(() => setShaking(false), 500);
+      return () => clearTimeout(t);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [error]);
+
+  return (
+    <div ref={containerRef} className="flex flex-col gap-2">
+      {/* Chips grid */}
+      <div
+        className={cn(
+          'rounded-2xl border p-2 transition-all duration-200',
+          shaking && 'animate-shake',
+          error
+            ? 'border-red-300 dark:border-red-700/60 bg-red-50/40 dark:bg-red-950/20 ring-2 ring-red-300/50 dark:ring-red-800/40'
+            : 'border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30'
+        )}
+      >
+        <div className="grid grid-cols-3 gap-1.5">
+          {ALL_MEAL_TYPES.map((meal) => {
+            const isSelected = value === meal;
+            const isSuggested = suggestedType === meal && !isSelected;
+            return (
+              <button
+                key={meal}
+                type="button"
+                onClick={() => onChange(meal)}
+                className={cn(
+                  'relative flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border text-[10px] font-semibold transition-all duration-150 active:scale-95',
+                  isSelected
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-400 shadow-sm ring-1 ring-emerald-200 dark:ring-emerald-800/40'
+                    : isSuggested
+                    ? 'bg-amber-50/70 dark:bg-amber-950/25 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400'
+                    : 'bg-white dark:bg-zinc-800/50 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/70'
+                )}
+              >
+                {isSuggested && (
+                  <Sparkles
+                    size={7}
+                    className="absolute top-1.5 right-1.5 text-amber-400 dark:text-amber-500"
+                  />
+                )}
+                <span className="text-[17px] leading-none">{getMealIcon(meal)}</span>
+                <span className="leading-tight text-center">{getMealLabel(meal)}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {suggestedType && !value && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center mt-1.5 flex items-center justify-center gap-1">
+            <Sparkles size={9} />
+            Sugestão pelo horário — toque para confirmar
+          </p>
+        )}
+      </div>
+
+      {/* Error banner — appears below the grid, prominent */}
+      {error && (
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 animate-scale-in">
+          <div className="h-5 w-5 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={11} className="text-red-500" />
+          </div>
+          <p className="text-[12px] font-semibold text-red-600 dark:text-red-400 leading-snug">
+            {errorMessage}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

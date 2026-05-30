@@ -1,0 +1,27 @@
+name: Hydration Reminders
+
+on:
+  schedule:
+    # 12:00 UTC = 09:00 Brasil (lembrete manhã/meio-dia)
+    - cron: '0 12 * * *'
+    # 16:00 UTC = 13:00 Brasil (lembrete tarde)
+    - cron: '0 16 * * *'
+    # 20:00 UTC = 17:00 Brasil (lembrete fim da tarde)
+    - cron: '0 20 * * *'
+  workflow_dispatch: # permite disparo manual
+
+jobs:
+  hydration-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Chamar endpoint de hidratação
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/notifications/hydration-check?cron=1")
+          echo "Status HTTP: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Falha no endpoint (status $STATUS)"
+            exit 1
+          fi

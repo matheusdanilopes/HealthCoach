@@ -4,15 +4,10 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { cn } from '@/lib/utils';
+import MealTypeSelector from '@/components/diary/MealTypeSelector';
+import { AlertTriangle } from 'lucide-react';
+import { suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
-
-const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
-  { value: 'breakfast', label: 'Café',   icon: '☀️' },
-  { value: 'lunch',     label: 'Almoço', icon: '🍽️' },
-  { value: 'dinner',    label: 'Jantar',  icon: '🌙' },
-  { value: 'snack',     label: 'Lanche',  icon: '🍎' },
-];
 
 interface AddFoodModalProps {
   open: boolean;
@@ -26,28 +21,38 @@ export default function AddFoodModal({
   open,
   onClose,
   userId,
-  defaultMeal = 'lunch',
+  defaultMeal,
   onAdded,
 }: AddFoodModalProps) {
-  const [mealType, setMealType] = useState<MealType>(defaultMeal);
+  const [mealType, setMealType] = useState<MealType | null>(defaultMeal ?? null);
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mealError, setMealError] = useState(false);
+
+  const suggestedType = suggestMealType(new Date().getHours());
 
   function reset() {
+    setMealType(defaultMeal ?? null);
     setFoodName('');
     setCalories('');
     setProtein('');
     setCarbs('');
     setFat('');
+    setMealError(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!foodName || !calories) return;
+    if (!mealType) {
+      setMealError(true);
+      return;
+    }
+    setMealError(false);
     setLoading(true);
 
     const res = await fetch('/api/food', {
@@ -72,28 +77,20 @@ export default function AddFoodModal({
     onClose();
   }
 
+  function handleMealChange(meal: MealType) {
+    setMealType(meal);
+    setMealError(false);
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title="Adicionar alimento">
+    <Modal open={open} onClose={() => { reset(); onClose(); }} title="Adicionar alimento">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* Meal type selector */}
-        <div className="flex gap-1.5">
-          {MEAL_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setMealType(opt.value)}
-              className={cn(
-                'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-[11px] font-semibold transition-all duration-150',
-                mealType === opt.value
-                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
-              )}
-            >
-              <span className="text-base leading-none">{opt.icon}</span>
-              <span>{opt.label}</span>
-            </button>
-          ))}
-        </div>
+        <MealTypeSelector
+          value={mealType}
+          onChange={handleMealChange}
+          suggestedType={suggestedType}
+          error={mealError}
+        />
 
         <Input
           label="Alimento"
@@ -142,6 +139,15 @@ export default function AddFoodModal({
             min="0"
           />
         </div>
+
+        {mealError && (
+          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 animate-scale-in">
+            <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
+            <p className="text-[12px] font-semibold text-red-600 dark:text-red-400">
+              Selecione a refeição acima para continuar.
+            </p>
+          </div>
+        )}
 
         <Button type="submit" loading={loading} className="w-full">
           Adicionar

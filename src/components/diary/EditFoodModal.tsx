@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
+import MealTypeSelector from '@/components/diary/MealTypeSelector';
 import { Sparkles, AlertTriangle, Droplets } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
-import type { FoodLog } from '@/types';
+import type { FoodLog, MealType } from '@/types';
 
 interface EditFoodModalProps {
   open: boolean;
@@ -20,6 +21,7 @@ const inputCls =
 const labelCls = 'text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500';
 
 export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoodModalProps) {
+  const [mealType, setMealType] = useState<MealType | null>(null);
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState(0);
   const [protein, setProtein] = useState(0);
@@ -34,12 +36,17 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
   const [confirmClose, setConfirmClose] = useState(false);
   const [needsReanalysis, setNeedsReanalysis] = useState(false);
 
-  const initialRef = useRef({ foodName: '', calories: 0, protein: 0, carbs: 0, fat: 0, hydrationMl: 0 });
+  const initialRef = useRef({ mealType: null as MealType | null, foodName: '', calories: 0, protein: 0, carbs: 0, fat: 0, hydrationMl: 0 });
 
   useEffect(() => {
     if (open && log) {
       const isBev = (log.hydration_ml ?? 0) > 0 || detectBeverage(log.food_name).isBeverage;
+      // Map legacy 'snack' to 'afternoon_snack'; treat null as null so user selects
+      const logMealType: MealType | null = log.meal_type === 'snack'
+        ? 'afternoon_snack'
+        : (log.meal_type as MealType | null) ?? null;
       const init = {
+        mealType: logMealType,
         foodName: log.food_name,
         calories: log.calories,
         protein: log.protein ?? 0,
@@ -48,6 +55,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
         hydrationMl: log.hydration_ml ?? 0,
       };
       initialRef.current = init;
+      setMealType(init.mealType);
       setFoodName(init.foodName);
       setCalories(init.calories);
       setProtein(init.protein);
@@ -135,6 +143,7 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: log.id,
+          meal_type: mealType ?? log.meal_type,
           food_name: foodName.trim() || log.food_name,
           calories: Math.round(Number(calories) || 0),
           protein: Number(protein) || null,
@@ -190,6 +199,15 @@ export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoo
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* Meal type selector */}
+          <div className="flex flex-col gap-1">
+            <span className={labelCls}>Refeição</span>
+            <MealTypeSelector
+              value={mealType}
+              onChange={(meal) => { setMealType(meal); markDirty(); }}
+            />
+          </div>
+
           {/* Food name */}
           <div className="flex flex-col gap-1.5">
             <span className={labelCls}>Alimento</span>
