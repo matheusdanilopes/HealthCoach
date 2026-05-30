@@ -328,6 +328,9 @@ export async function POST(req: Request) {
     }
 
     const config:           { mealCount: number; budget: BudgetType; goal: GoalType } = body.config;
+    if (typeof config.mealCount !== 'number' || config.mealCount <= 0) {
+      return NextResponse.json({ error: 'Quantidade de marmitas inválida' }, { status: 400 });
+    }
     const existingMealNames: string[] = body.existingMealNames ?? [];
     const planIndex:         number   = body.planIndex ?? 0;
 

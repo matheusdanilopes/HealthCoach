@@ -134,15 +134,19 @@ export default function NotificationsClient() {
 
   async function togglePref(key: PrefKey) {
     if (!prefs) return;
-    const updated = { ...prefs, [key]: !prefs[key] };
+    const previous = prefs;
+    const updated  = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     setSavingPrefs(true);
     try {
-      await fetch('/api/notifications/preferences', {
+      const res = await fetch('/api/notifications/preferences', {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error();
+    } catch {
+      setPrefs(previous);
     } finally {
       setSavingPrefs(false);
     }

@@ -188,22 +188,26 @@ export async function GET(req: Request) {
   const users = await getUsersWithSubscriptions();
   const counts = { hydration: { notified: 0, ok: 0, skipped: 0, error: 0 }, meal: { notified: 0, ok: 0, skipped: 0, error: 0 }, workout: { notified: 0, ok: 0, skipped: 0, error: 0 }, insight: { notified: 0, ok: 0, skipped: 0, error: 0 } };
 
-  await Promise.allSettled(users.map(async (uid) => {
-    const [h, m, w, i] = await Promise.allSettled([
-      runHydrationCheck(uid),
-      runMealReminders(uid),
-      runWorkoutReminders(uid),
-      runInsightsPush(uid),
-    ]);
-    for (const [key, res] of [['hydration', h], ['meal', m], ['workout', w], ['insight', i]] as const) {
-      const val = res.status === 'fulfilled' ? res.value : 'error';
-      const bucket = counts[key];
-      if (val === 'notified') bucket.notified++;
-      else if (val === 'ok')  bucket.ok++;
-      else if (val === 'skipped' || val === 'opt_out' || val === 'no_sub') bucket.skipped++;
-      else bucket.error++;
-    }
-  }));
+  const chunkSize = 50;
+  for (let ci = 0; ci < users.length; ci += chunkSize) {
+    const chunk = users.slice(ci, ci + chunkSize);
+    await Promise.allSettled(chunk.map(async (uid) => {
+      const [h, m, w, i] = await Promise.allSettled([
+        runHydrationCheck(uid),
+        runMealReminders(uid),
+        runWorkoutReminders(uid),
+        runInsightsPush(uid),
+      ]);
+      for (const [key, res] of [['hydration', h], ['meal', m], ['workout', w], ['insight', i]] as const) {
+        const val = res.status === 'fulfilled' ? res.value : 'error';
+        const bucket = counts[key];
+        if (val === 'notified') bucket.notified++;
+        else if (val === 'ok')  bucket.ok++;
+        else if (val === 'skipped' || val === 'opt_out' || val === 'no_sub') bucket.skipped++;
+        else bucket.error++;
+      }
+    }));
+  }
 
   const retry   = await runRetryQueue();
   const cleanup = await runCleanup();
