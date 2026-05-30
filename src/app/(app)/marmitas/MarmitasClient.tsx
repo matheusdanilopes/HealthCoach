@@ -244,19 +244,24 @@ function PlanCard({
           )}
         </div>
 
-        {/* Macros */}
-        <div className="grid grid-cols-4 gap-1.5 mb-3">
-          {[
-            { label: 'kcal', value: plan.avg_calories, color: '#10b981' },
-            { label: 'prot', value: `${plan.avg_protein}g`, color: '#6366f1' },
-            { label: 'carbs', value: `${plan.avg_carbs}g`, color: '#f59e0b' },
-            { label: 'gord', value: `${plan.avg_fat}g`, color: '#ef4444' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="flex flex-col items-center px-2 py-2 rounded-xl border border-zinc-100 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/60">
-              <span className="text-[15px] font-bold tabular-nums leading-tight" style={{ color }}>{value}</span>
-              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5">{label}</span>
-            </div>
-          ))}
+        {/* Macros per meal box */}
+        <div className="mb-1">
+          <p className="text-[9px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">
+            Por marmita
+          </p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: 'kcal', value: plan.avg_calories, color: '#10b981' },
+              { label: 'prot', value: `${plan.avg_protein}g`, color: '#6366f1' },
+              { label: 'carbs', value: `${plan.avg_carbs}g`, color: '#f59e0b' },
+              { label: 'gord', value: `${plan.avg_fat}g`, color: '#ef4444' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="flex flex-col items-center px-2 py-2 rounded-xl border border-zinc-100 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/60">
+                <span className="text-[15px] font-bold tabular-nums leading-tight" style={{ color }}>{value}</span>
+                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5">{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* AI explanation */}
@@ -266,10 +271,15 @@ function PlanCard({
           </p>
         )}
 
-        {/* Approved: view step-by-step */}
-        {plan.approved && plan.steps?.length > 0 && (
+        {/* View step-by-step — always visible when steps exist */}
+        {plan.steps?.length > 0 && (
           <button onClick={onViewSteps}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-semibold transition-all bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-100 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-300">
+            className={cn(
+              'w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-semibold transition-all border',
+              plan.approved
+                ? 'bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border-zinc-100 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-300'
+                : 'bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-700 border-zinc-100 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400'
+            )}>
             <BookOpen size={13} />
             Ver passo a passo completo
           </button>
@@ -318,6 +328,7 @@ export default function MarmitasClient() {
   const [activeRecipe, setActiveRecipe] = useState<RecipeModalData | null>(null);
   const [shoppingItems, setShoppingItems] = useState<ConsolidatedItem[]>([]);
   const [newItemName,  setNewItemName]  = useState('');
+  const [newItemQty,   setNewItemQty]   = useState('');
   const [newItemCat,   setNewItemCat]   = useState<ShoppingCat>('outros');
   const [copied,       setCopied]       = useState(false);
   const [sendState,    setSendState]    = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
@@ -360,7 +371,9 @@ export default function MarmitasClient() {
   }
 
   function getExistingMeals(currentPlans: MealPlan[]): string[] {
-    return currentPlans.flatMap((p) => p.meals.map((m) => m.protein_source));
+    const proteins = currentPlans.flatMap((p) => p.meals.map((m) => m.protein_source));
+    const titles   = currentPlans.filter((p) => p.title).map((p) => p.title);
+    return [...new Set([...proteins, ...titles])];
   }
 
   function planToModal(plan: MealPlan): RecipeModalData {
@@ -443,14 +456,27 @@ export default function MarmitasClient() {
     setActingId(planId);
     setActingType('reject');
     const remaining = plans.filter((p) => p.id !== planId);
-    setPlans(remaining);
-
     const idx = planCounterRef.current++;
+    const loadingLabel = PLAN_LABELS[idx % 26];
+    const loadingId = `loading-${idx}`;
+
+    // Replace rejected plan with a loading card immediately for smooth UX
+    setPlans([
+      ...remaining,
+      {
+        id: loadingId, label: loadingLabel, title: '', meals: [], avg_calories: 0,
+        avg_protein: 0, avg_carbs: 0, avg_fat: 0, estimated_cost: 0, cost_per_meal: 0,
+        shopping_list: [], ingredients: [], steps: [], approved: false, isLoading: true,
+      },
+    ]);
+
     setAddingNew(true);
     try {
       const newPlan = await callAPI(getExistingMeals(remaining), idx);
-      setPlans((prev) => [...prev.filter((p) => p.id !== planId), newPlan]);
-    } catch { /* ignore */ }
+      setPlans((prev) => prev.map((p) => (p.id === loadingId ? newPlan : p)));
+    } catch {
+      setPlans((prev) => prev.filter((p) => p.id !== loadingId));
+    }
     setActingId(null);
     setActingType(null);
     setAddingNew(false);
@@ -481,11 +507,13 @@ export default function MarmitasClient() {
   function handleAddItem() {
     const name = newItemName.trim();
     if (!name) return;
+    const qty = newItemQty.trim();
     setShoppingItems((prev) => [
       ...prev,
-      { name, amount: '', amountValue: 0, unit: '', category: newItemCat, total_cost: 0, checked: false, isManual: true },
+      { name, amount: qty, amountValue: 0, unit: '', category: newItemCat, total_cost: 0, checked: false, isManual: true },
     ]);
     setNewItemName('');
+    setNewItemQty('');
   }
 
   function handleCopyList() {
@@ -593,6 +621,25 @@ export default function MarmitasClient() {
         {/* ── CONFIG ──────────────────────────────────────────────────────── */}
         {step === 'config' && (
           <div className="flex flex-col gap-4">
+            {/* How it works */}
+            <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-4">
+              <p className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 mb-1.5">
+                Como funciona
+              </p>
+              <ol className="space-y-1">
+                {[
+                  'Configure objetivo, orçamento e quantidade de marmitas.',
+                  'A IA gera opções de cardápios variados — aprove ou peça uma nova.',
+                  'Com 1 cardápio aprovado, gere a lista de compras consolidada.',
+                ].map((text, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[12px] text-emerald-700 dark:text-emerald-400">
+                    <span className="font-bold flex-shrink-0">{i + 1}.</span>
+                    <span>{text}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
             {genError && (
               <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 text-[13px] text-red-600 dark:text-red-400">
                 {genError}
@@ -729,6 +776,26 @@ export default function MarmitasClient() {
               />
             ))}
 
+            {/* Empty state — all generations failed */}
+            {plans.length === 0 && !addingNew && (
+              <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                <div className="text-3xl">😔</div>
+                <div>
+                  <p className="text-[14px] font-semibold text-zinc-600 dark:text-zinc-400">
+                    Não foi possível gerar opções
+                  </p>
+                  <p className="text-[12px] text-zinc-400 dark:text-zinc-500 mt-1 max-w-[240px] leading-relaxed">
+                    Todas as tentativas falharam. Verifique a conexão e tente recomeçar.
+                  </p>
+                </div>
+                <button onClick={handleReset}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors">
+                  <ArrowLeft size={13} />
+                  Recomeçar
+                </button>
+              </div>
+            )}
+
             {addingNew && (
               <div className="flex items-center justify-center gap-2 py-3 text-[12px] text-zinc-400 dark:text-zinc-500">
                 <Loader2 size={13} className="animate-spin text-emerald-500" />
@@ -845,30 +912,42 @@ export default function MarmitasClient() {
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
                 Adicionar item
               </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
-                  placeholder="Nome do item..."
-                  className="flex-1 px-3 py-2 rounded-xl text-[13px] border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-                />
-                <select
-                  value={newItemCat}
-                  onChange={(e) => setNewItemCat(e.target.value as ShoppingCat)}
-                  className="px-2 py-2 rounded-xl text-[12px] border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:outline-none"
-                >
-                  <option value="proteinas">Proteínas</option>
-                  <option value="carboidratos">Carboidratos</option>
-                  <option value="hortifruti">Hortifruti</option>
-                  <option value="temperos">Temperos</option>
-                  <option value="outros">Outros</option>
-                </select>
-                <button onClick={handleAddItem} disabled={!newItemName.trim()}
-                  className="flex items-center justify-center h-[42px] w-[42px] rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0">
-                  <Plus size={16} />
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+                    placeholder="Nome do item..."
+                    className="flex-1 px-3 py-2 rounded-xl text-[13px] border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                  />
+                  <input
+                    type="text"
+                    value={newItemQty}
+                    onChange={(e) => setNewItemQty(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+                    placeholder="Qtd."
+                    className="w-20 px-3 py-2 rounded-xl text-[13px] border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={newItemCat}
+                    onChange={(e) => setNewItemCat(e.target.value as ShoppingCat)}
+                    className="flex-1 px-2 py-2 rounded-xl text-[12px] border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:outline-none"
+                  >
+                    <option value="proteinas">Proteínas</option>
+                    <option value="carboidratos">Carboidratos</option>
+                    <option value="hortifruti">Hortifruti</option>
+                    <option value="temperos">Temperos</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                  <button onClick={handleAddItem} disabled={!newItemName.trim()}
+                    className="flex items-center justify-center h-[42px] w-[42px] rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0">
+                    <Plus size={16} />
+                  </button>
+                </div>
               </div>
             </div>
 

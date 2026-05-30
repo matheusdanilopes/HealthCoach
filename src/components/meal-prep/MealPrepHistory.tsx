@@ -144,7 +144,27 @@ export default function MealPrepHistory() {
     );
   }
 
-  if (recipes.length === 0) return null;
+  if (recipes.length === 0) {
+    return (
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="flex items-center gap-2 mb-3">
+          <ChefHat size={13} className="text-emerald-500" />
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            Minhas Marmitas Aprovadas
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <span className="text-2xl">🍱</span>
+          <p className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">
+            Nenhuma marmita aprovada ainda
+          </p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-[220px] leading-relaxed">
+            Gere e aprove cardápios acima para salvá-los aqui.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const favorites = recipes.filter((r) => r.is_favorite);
   const rest      = recipes.filter((r) => !r.is_favorite);
