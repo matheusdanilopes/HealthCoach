@@ -16,6 +16,8 @@ import {
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
+import SmartMealPrepWidget from '@/components/meal-prep/SmartMealPrepWidget';
+import MealPrepHistory from '@/components/meal-prep/MealPrepHistory';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -687,6 +689,12 @@ export default function HistoryClient({
           </>
         )}
       </SectionCard>
+
+      {/* ── Smart Meal Prep Widget ───────────────────────────────────── */}
+      <SmartMealPrepWidget />
+
+      {/* ── Approved Meal Prep History ───────────────────────────────── */}
+      <MealPrepHistory />
 
       {/* ── Hydration ────────────────────────────────────────────────── */}
       {fwat.length > 0 && (
