@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ChefHat, Sparkles, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import Link from 'next/link';
+import { ChefHat, Sparkles, Loader2, RefreshCw, ChevronDown, ChevronUp, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -126,6 +127,13 @@ export default function MarmitasClient({ targetCalories, proteinGoal, carbsGoal,
 
   return (
     <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
+      <Link
+        href="/saude"
+        className="flex items-center gap-1 text-[13px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors w-fit -mt-2 mb-0"
+      >
+        <ChevronLeft size={15} />
+        Saúde
+      </Link>
       <div>
         <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
           Marmitas Inteligentes
