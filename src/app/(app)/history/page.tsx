@@ -56,7 +56,7 @@ export default async function HistoryPage() {
       .order('date'),
     supabase
       .from('body_measurements')
-      .select('date, waist, abdomen, hips, chest, right_arm, left_arm, right_thigh, left_thigh')
+      .select('date, waist, neck, hips, chest, right_arm, left_arm, right_thigh, left_thigh')
       .eq('user_id', userId)
       .order('date'),
   ]);
@@ -115,7 +115,7 @@ export default async function HistoryPage() {
     return {
       date:     r.date,
       waist:    r.waist   != null ? Number(r.waist)   : null,
-      abdomen:  r.abdomen != null ? Number(r.abdomen) : null,
+      neck:     r.neck    != null ? Number(r.neck)    : null,
       hips:     r.hips    != null ? Number(r.hips)    : null,
       chest:    r.chest   != null ? Number(r.chest)   : null,
       avgArm:   rArm != null && lArm != null ? (rArm + lArm) / 2 : (rArm ?? lArm),

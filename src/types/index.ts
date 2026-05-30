@@ -77,7 +77,7 @@ export interface BodyMeasurements {
   user_id: string;
   date: string;
   waist: number | null;
-  abdomen: number | null;
+  neck: number | null;
   hips: number | null;
   chest: number | null;
   right_arm: number | null;

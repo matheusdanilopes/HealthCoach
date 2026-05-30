@@ -30,7 +30,7 @@ interface WeightEntry        { date: string; weight: number }
 interface NutritionEntry     { date: string; calories: number; protein: number }
 interface WaterEntry         { date: string; total: number }
 interface BodyMetricEntry    { date: string; weight: number | null; muscle_mass: number | null; body_fat: number | null; visceral_fat: number | null }
-interface MeasurementEntry   { date: string; waist: number | null; abdomen: number | null; hips: number | null; chest: number | null; avgArm: number | null; avgThigh: number | null }
+interface MeasurementEntry   { date: string; waist: number | null; neck: number | null; hips: number | null; chest: number | null; avgArm: number | null; avgThigh: number | null }
 
 interface HistoryClientProps {
   profile:          Profile;
@@ -595,7 +595,7 @@ export default function HistoryClient({
             {(
               [
                 { label: 'Cintura',  val: kpis.msLast?.waist,   delta: measureDelta(bodyMeasurements, 'waist')   },
-                { label: 'Abdômen', val: kpis.msLast?.abdomen,  delta: measureDelta(bodyMeasurements, 'abdomen') },
+                { label: 'Pescoço', val: kpis.msLast?.neck,     delta: measureDelta(bodyMeasurements, 'neck')    },
                 { label: 'Quadril',  val: kpis.msLast?.hips,    delta: measureDelta(bodyMeasurements, 'hips')    },
                 { label: 'Tórax',   val: kpis.msLast?.chest,   delta: measureDelta(bodyMeasurements, 'chest')   },
                 { label: 'Braço',    val: kpis.msLast?.avgArm,  delta: measureDelta(bodyMeasurements, 'avgArm')  },

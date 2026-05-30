@@ -26,7 +26,7 @@ import type { BodyMeasurements } from '@/types';
 
 /* ─── Types ─── */
 
-type SimpleField = 'waist' | 'abdomen' | 'hips' | 'chest';
+type SimpleField = 'waist' | 'neck' | 'hips' | 'chest';
 type ChartKey = SimpleField | 'arms' | 'thighs' | 'calves';
 type TimeRange = 7 | 30 | 90 | 0;
 
@@ -38,7 +38,7 @@ type MeasurementField = keyof Omit<BodyMeasurements,
 
 const CHART_CONFIGS: { key: ChartKey; label: string; color: string; goodDown: boolean }[] = [
   { key: 'waist',   label: 'Cintura',      color: '#f59e0b', goodDown: true  },
-  { key: 'abdomen', label: 'Abdômen',      color: '#ef4444', goodDown: true  },
+  { key: 'neck',    label: 'Pescoço',       color: '#ef4444', goodDown: true  },
   { key: 'hips',    label: 'Quadril',      color: '#a855f7', goodDown: false },
   { key: 'chest',   label: 'Tórax',        color: '#2563eb', goodDown: false },
   { key: 'arms',    label: 'Braços',       color: '#10b981', goodDown: false },
@@ -54,7 +54,7 @@ const TIME_FILTERS: { value: TimeRange; label: string }[] = [
 ];
 
 const MEASUREMENT_FIELDS: MeasurementField[] = [
-  'waist','abdomen','hips','chest',
+  'waist','neck','hips','chest',
   'right_arm','left_arm',
   'right_thigh','left_thigh',
   'right_calf','left_calf',
@@ -144,7 +144,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 type FormValues = {
   date: string;
-  waist: string; abdomen: string; hips: string; chest: string;
+  waist: string; neck: string; hips: string; chest: string;
   right_arm: string; left_arm: string;
   right_thigh: string; left_thigh: string;
   right_calf: string; left_calf: string;
@@ -153,7 +153,7 @@ type FormValues = {
 function emptyForm(): FormValues {
   return {
     date: today(),
-    waist: '', abdomen: '', hips: '', chest: '',
+    waist: '', neck: '', hips: '', chest: '',
     right_arm: '', left_arm: '',
     right_thigh: '', left_thigh: '',
     right_calf: '', left_calf: '',
@@ -164,7 +164,7 @@ function measurementsToForm(m: BodyMeasurements): FormValues {
   return {
     date: m.date,
     waist:       m.waist       != null ? String(m.waist)       : '',
-    abdomen:     m.abdomen     != null ? String(m.abdomen)     : '',
+    neck:        m.neck        != null ? String(m.neck)        : '',
     hips:        m.hips        != null ? String(m.hips)        : '',
     chest:       m.chest       != null ? String(m.chest)       : '',
     right_arm:   m.right_arm   != null ? String(m.right_arm)   : '',
@@ -205,7 +205,7 @@ function formToMeasurements(result: Record<string, unknown>): BodyMeasurements {
     id: result.id as string,
     user_id: result.user_id as string,
     date: result.date as string,
-    waist: null, abdomen: null, hips: null, chest: null,
+    waist: null, neck: null, hips: null, chest: null,
     right_arm: null, left_arm: null,
     right_thigh: null, left_thigh: null,
     right_calf: null, left_calf: null,
@@ -274,12 +274,12 @@ export default function BodyMeasurementsClient({ initialMeasurements }: Props) {
           : `Sua cintura aumentou ${wChange.toFixed(1)}cm nos últimos 30 dias`);
       }
     }
-    if (latest.abdomen != null && oldest?.abdomen != null && latest.id !== oldest.id) {
-      const aChange = latest.abdomen - oldest.abdomen;
+    if (latest.neck != null && oldest?.neck != null && latest.id !== oldest.id) {
+      const aChange = latest.neck - oldest.neck;
       if (Math.abs(aChange) >= 1.5) {
         out.push(aChange < 0
-          ? `Seu abdômen reduziu ${Math.abs(aChange).toFixed(1)}cm no total`
-          : `Seu abdômen aumentou ${aChange.toFixed(1)}cm no total`);
+          ? `Seu pescoço reduziu ${Math.abs(aChange).toFixed(1)}cm no total`
+          : `Seu pescoço aumentou ${aChange.toFixed(1)}cm no total`);
       }
     }
     const latestArm = avg(latest.right_arm, latest.left_arm);
@@ -296,7 +296,7 @@ export default function BodyMeasurementsClient({ initialMeasurements }: Props) {
     if (!latest) return [];
     return [
       { key: 'waist'   as ChartKey, label: 'Cintura',  color: '#f59e0b', goodDown: true  },
-      { key: 'abdomen' as ChartKey, label: 'Abdômen',  color: '#ef4444', goodDown: true  },
+      { key: 'neck'    as ChartKey, label: 'Pescoço',  color: '#ef4444', goodDown: true  },
       { key: 'hips'    as ChartKey, label: 'Quadril',  color: '#a855f7', goodDown: false },
       { key: 'arms'    as ChartKey, label: 'Braços',   color: '#10b981', goodDown: false },
     ].map(({ key, label, color, goodDown }) => {
@@ -678,7 +678,7 @@ export default function BodyMeasurementsClient({ initialMeasurements }: Props) {
                   const days     = Math.abs(differenceInDays(parseISO(later.date), parseISO(earlier.date)));
                   const compareFields: Array<{ key: ChartKey; label: string; goodDown: boolean }> = [
                     { key: 'waist',   label: 'Cintura',  goodDown: true  },
-                    { key: 'abdomen', label: 'Abdômen',  goodDown: true  },
+                    { key: 'neck',    label: 'Pescoço',  goodDown: true  },
                     { key: 'hips',    label: 'Quadril',  goodDown: false },
                     { key: 'arms',    label: 'Braços',   goodDown: false },
                   ];
@@ -817,7 +817,7 @@ export default function BodyMeasurementsClient({ initialMeasurements }: Props) {
                                   <div className="grid grid-cols-3 gap-x-2 gap-y-1">
                                     {[
                                       { label: 'Cintura', value: m.waist },
-                                      { label: 'Abdômen', value: m.abdomen },
+                                      { label: 'Pescoço', value: m.neck },
                                       { label: 'Quadril',  value: m.hips },
                                       { label: 'Tórax',   value: m.chest },
                                       { label: 'Braços',  value: avg(m.right_arm, m.left_arm) },
@@ -877,31 +877,31 @@ export default function BodyMeasurementsClient({ initialMeasurements }: Props) {
           <Input label="Data" type="date" value={formValues.date} max={today()} onChange={e => setField('date', e.target.value)} error={formErrors.date} />
           <GroupLabel>Tronco</GroupLabel>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Cintura (cm)" type="number" inputMode="decimal" placeholder="72.0" step="0.1" min="1"
+            <Input label="Cintura (cm)" type="number" inputMode="decimal" placeholder="72.00" step="0.01" min="1"
               value={formValues.waist} onChange={e => setField('waist', e.target.value)} error={formErrors.waist} />
-            <Input label="Abdômen (cm)" type="number" inputMode="decimal" placeholder="84.0" step="0.1" min="1"
-              value={formValues.abdomen} onChange={e => setField('abdomen', e.target.value)} error={formErrors.abdomen} />
-            <Input label="Quadril (cm)" type="number" inputMode="decimal" placeholder="98.0" step="0.1" min="1"
+            <Input label="Pescoço (cm)" type="number" inputMode="decimal" placeholder="38.00" step="0.01" min="1"
+              value={formValues.neck} onChange={e => setField('neck', e.target.value)} error={formErrors.neck} />
+            <Input label="Quadril (cm)" type="number" inputMode="decimal" placeholder="98.00" step="0.01" min="1"
               value={formValues.hips} onChange={e => setField('hips', e.target.value)} error={formErrors.hips} />
-            <Input label="Tórax (cm)" type="number" inputMode="decimal" placeholder="94.0" step="0.1" min="1"
+            <Input label="Tórax (cm)" type="number" inputMode="decimal" placeholder="94.00" step="0.01" min="1"
               value={formValues.chest} onChange={e => setField('chest', e.target.value)} error={formErrors.chest} />
           </div>
           <GroupLabel>Braços</GroupLabel>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Braço Direito (cm)" type="number" inputMode="decimal" placeholder="32.0" step="0.1" min="1"
+            <Input label="Braço Direito (cm)" type="number" inputMode="decimal" placeholder="32.00" step="0.01" min="1"
               value={formValues.right_arm} onChange={e => setField('right_arm', e.target.value)} error={formErrors.right_arm} />
-            <Input label="Braço Esquerdo (cm)" type="number" inputMode="decimal" placeholder="31.5" step="0.1" min="1"
+            <Input label="Braço Esquerdo (cm)" type="number" inputMode="decimal" placeholder="31.50" step="0.01" min="1"
               value={formValues.left_arm} onChange={e => setField('left_arm', e.target.value)} error={formErrors.left_arm} />
           </div>
           <GroupLabel>Pernas</GroupLabel>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Coxa Direita (cm)" type="number" inputMode="decimal" placeholder="56.0" step="0.1" min="1"
+            <Input label="Coxa Direita (cm)" type="number" inputMode="decimal" placeholder="56.00" step="0.01" min="1"
               value={formValues.right_thigh} onChange={e => setField('right_thigh', e.target.value)} error={formErrors.right_thigh} />
-            <Input label="Coxa Esquerda (cm)" type="number" inputMode="decimal" placeholder="55.5" step="0.1" min="1"
+            <Input label="Coxa Esquerda (cm)" type="number" inputMode="decimal" placeholder="55.50" step="0.01" min="1"
               value={formValues.left_thigh} onChange={e => setField('left_thigh', e.target.value)} error={formErrors.left_thigh} />
-            <Input label="Panturrilha D (cm)" type="number" inputMode="decimal" placeholder="36.0" step="0.1" min="1"
+            <Input label="Panturrilha D (cm)" type="number" inputMode="decimal" placeholder="36.00" step="0.01" min="1"
               value={formValues.right_calf} onChange={e => setField('right_calf', e.target.value)} error={formErrors.right_calf} />
-            <Input label="Panturrilha E (cm)" type="number" inputMode="decimal" placeholder="35.5" step="0.1" min="1"
+            <Input label="Panturrilha E (cm)" type="number" inputMode="decimal" placeholder="35.50" step="0.01" min="1"
               value={formValues.left_calf} onChange={e => setField('left_calf', e.target.value)} error={formErrors.left_calf} />
           </div>
           <div className="flex gap-2 pt-1">

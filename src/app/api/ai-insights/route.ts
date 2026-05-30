@@ -173,7 +173,7 @@ export async function GET(req: Request) {
         .order('date', { ascending: true }),
       supabase
         .from('body_measurements')
-        .select('date, waist, abdomen, hips, right_arm')
+        .select('date, waist, neck, hips, right_arm')
         .eq('user_id', userId)
         .order('date', { ascending: false })
         .limit(3),
