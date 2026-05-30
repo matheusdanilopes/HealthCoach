@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import {
   UtensilsCrossed, ShoppingCart, CheckCircle2, RefreshCw,
   Copy, Check, Loader2, ChevronDown, ChevronUp, Sparkles,
-  ThumbsUp, ThumbsDown, Package,
+  ThumbsUp, ThumbsDown, Package, Send, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -316,6 +316,8 @@ export default function SmartMealPrepWidget() {
   const [genError,   setGenError]   = useState<string | null>(null);
   const [customCount,setCustomCount]= useState('');
   const [showCustom, setShowCustom] = useState(false);
+  const [sendState,  setSendState]  = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
 
   const planCounterRef = useRef(0);
 
@@ -448,10 +450,34 @@ export default function SmartMealPrepWidget() {
     }).catch(() => {});
   }
 
+  async function handleSendToShoppingList() {
+    const items = consolidate(approvedPlans);
+    if (!items.length) return;
+
+    setSendState('sending');
+    setSendResult(null);
+    try {
+      const res = await fetch('/api/shopping-list/send', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setSendResult({ sent: data.sent ?? 0, failed: data.failed ?? 0 });
+      setSendState(data.failed > 0 ? 'error' : 'success');
+    } catch {
+      setSendState('error');
+      setSendResult(null);
+    }
+  }
+
   function handleReset() {
     setStep('config');
     setPlans([]);
     setGenError(null);
+    setSendState('idle');
+    setSendResult(null);
     planCounterRef.current = 0;
   }
 
@@ -688,20 +714,39 @@ export default function SmartMealPrepWidget() {
             Valores são estimativas de preços médios de mercado.
           </div>
 
+          {/* Send to shopping list */}
+          <button
+            onClick={handleSendToShoppingList}
+            disabled={sendState === 'sending'}
+            className={cn(
+              'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-[14px] transition-all active:scale-[0.98]',
+              sendState === 'success'
+                ? 'bg-emerald-500 text-white'
+                : sendState === 'error'
+                ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400'
+                : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200 dark:shadow-none',
+              sendState === 'sending' && 'opacity-70 cursor-not-allowed'
+            )}>
+            {sendState === 'sending' && <><Loader2 size={15} className="animate-spin" />Enviando itens…</>}
+            {sendState === 'success' && <><Check size={15} />{sendResult?.sent ?? 0} itens enviados para a Lista!</>}
+            {sendState === 'error'   && <><AlertCircle size={15} />{sendResult ? `${sendResult.sent} enviados · ${sendResult.failed} com erro` : 'Erro ao enviar — Tentar novamente'}</>}
+            {sendState === 'idle'    && <><Send size={15} />Enviar para Lista de Compras</>}
+          </button>
+
           {/* Actions */}
           <div className="flex gap-2">
             <button onClick={handleCopyList}
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-[13px] transition-all',
+                'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-[12px] transition-all',
                 copied
                   ? 'bg-emerald-500 text-white'
-                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
+                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
               )}>
-              {copied ? <><Check size={14} />Copiado!</> : <><Copy size={14} />Copiar Lista</>}
+              {copied ? <><Check size={13} />Copiado!</> : <><Copy size={13} />Copiar</>}
             </button>
             <button onClick={() => setStep('reviewing')}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-[13px] transition-all bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white">
-              <ChevronUp size={14} />
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-[12px] transition-all bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
+              <ChevronUp size={13} />
               Cardápios
             </button>
           </div>
