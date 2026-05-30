@@ -1,16 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/notifications/hydration-check?cron=1&t=morning",
-      "schedule": "0 12 * * *"
+      "path": "/api/notifications/run?t=am",
+      "schedule": "0 11 * * *"
     },
     {
-      "path": "/api/notifications/hydration-check?cron=1&t=afternoon",
-      "schedule": "0 18 * * *"
-    },
-    {
-      "path": "/api/notifications/hydration-check?cron=1&t=evening",
-      "schedule": "0 23 * * *"
+      "path": "/api/notifications/run?t=pm",
+      "schedule": "0 21 * * *"
     }
   ]
 }

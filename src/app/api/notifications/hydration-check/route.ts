@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { sendPushToSubscriptions, type PushSendOptions } from '@/lib/webpush';
+import { type PushSendOptions } from '@/lib/webpush';
 import { brazilToday } from '@/lib/timezone';
+import { verifyCronSecret } from '@/lib/cron-auth';
+import { sendNotificationToUser, getUsersWithSubscriptions, isBrazilQuietHour, brazilHour } from '@/lib/notification-sender';
 
 async function getTotalHydration(
   userId: string,
@@ -67,72 +69,38 @@ function buildNotification(
   };
 }
 
-async function checkUserHydration(userId: string): Promise<'notified' | 'ok' | 'no_sub' | 'skipped' | 'error'> {
-  const [{ data: subs }, { data: profile }] = await Promise.all([
-    supabase
-      .from('push_subscriptions')
-      .select('endpoint, p256dh, auth')
-      .eq('user_id', userId),
-    supabase
-      .from('users')
-      .select('target_water_ml, full_name')
-      .eq('id', userId)
-      .single(),
-  ]);
+async function checkUserHydration(userId: string): Promise<'notified' | 'ok' | 'no_sub' | 'skipped' | 'error' | 'opt_out'> {
+  if (isBrazilQuietHour()) return 'skipped';
 
-  if (!subs || subs.length === 0) return 'no_sub';
+  const bHour  = brazilHour();
+  const target_ = await supabase.from('users').select('target_water_ml').eq('id', userId).single();
+  const target  = target_.data?.target_water_ml ?? 2500;
 
-  const bDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const bHour = bDate.getHours();
-
-  // Quiet hours: 22:00–07:00 Brazil time
-  if (bHour >= 22 || bHour < 7) return 'skipped';
-
-  const target = profile?.target_water_ml ?? 2500;
   const { totalMl, lastLogAt } = await getTotalHydration(userId, brazilToday());
 
-  // Already met goal
   if (totalMl >= target) return 'ok';
 
   const minSince = lastLogAt
     ? Math.floor((Date.now() - new Date(lastLogAt).getTime()) / 60_000)
     : 999;
 
-  // Only notify if >2h without any hydration event
   if (minSince <= 120) return 'ok';
 
   const { title, body, opts } = buildNotification(totalMl, target, bHour);
 
-  try {
-    const { sent, expired, failed } = await sendPushToSubscriptions(
-      subs.map((s) => ({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })),
-      { title, body, tag: 'hc-hydration', url: '/dashboard' },
-      opts,
-    );
+  const result = await sendNotificationToUser(
+    userId,
+    { title, body, tag: 'hc-hydration', url: '/dashboard', category: 'hydration' },
+    opts,
+  );
 
-    if (expired.length > 0) {
-      await supabase
-        .from('push_subscriptions')
-        .delete()
-        .in('endpoint', expired)
-        .eq('user_id', userId);
-    }
-
-    if (sent > 0) {
-      console.info(`[hydration-check] notified userId=${userId} sent=${sent} expired=${expired} failed=${failed}`);
-      return 'notified';
-    }
-
-    if (failed > 0) {
-      console.error(`[hydration-check] all sends failed userId=${userId} failed=${failed}`);
-      return 'error';
-    }
-
-    return 'ok';
-  } catch (err) {
-    console.error(`[hydration-check] push error userId=${userId}:`, err instanceof Error ? err.message : err);
-    return 'error';
+  if (result === 'notified') {
+    console.info(`[hydration-check] notified userId=${userId}`);
+  } else if (result === 'error') {
+    console.error(`[hydration-check] push failed userId=${userId}`);
   }
+
+  return result;
 }
 
 // GET /api/notifications/hydration-check?cron=1  — Vercel Cron (requires Authorization header)
@@ -142,24 +110,20 @@ export async function GET(req: Request) {
   const isCron = searchParams.get('cron') === '1';
 
   if (isCron) {
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get('authorization') ?? '';
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authErr = verifyCronSecret(req);
+    if (authErr) return authErr;
 
-    const { data: rows } = await supabase
-      .from('push_subscriptions')
-      .select('user_id')
-      .limit(500);
-
-    const uniqueUsers: string[] = [...new Set((rows ?? []).map((r: { user_id: string }) => r.user_id))];
+    const uniqueUsers = await getUsersWithSubscriptions();
     const results = await Promise.allSettled(uniqueUsers.map((uid) => checkUserHydration(uid)));
 
-    const counts = { notified: 0, ok: 0, skipped: 0, no_sub: 0, error: 0 };
+    const counts = { notified: 0, ok: 0, skipped: 0, no_sub: 0, error: 0, opt_out: 0 };
     results.forEach((r) => {
-      if (r.status === 'fulfilled') counts[r.value]++;
-      else counts.error++;
+      if (r.status === 'fulfilled') {
+        const k = r.value as keyof typeof counts;
+        if (k in counts) counts[k]++;
+      } else {
+        counts.error++;
+      }
     });
 
     console.info(`[hydration-check] cron done users=${uniqueUsers.length}`, counts);
