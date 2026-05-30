@@ -37,16 +37,16 @@
       "schedule": "0 20 * * *"
     },
     {
-      "path": "/api/notifications/insights-push?cron=1",
+      "path": "/api/notifications/insights-push?cron=1&t=afternoon",
       "schedule": "0 13 * * *"
     },
     {
-      "path": "/api/notifications/insights-push?cron=1",
+      "path": "/api/notifications/insights-push?cron=1&t=evening",
       "schedule": "0 19 * * *"
     },
     {
       "path": "/api/notifications/retry?cron=1",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/notifications/cleanup?cron=1",
