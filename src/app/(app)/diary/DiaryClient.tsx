@@ -8,10 +8,11 @@ import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import EditFoodModal from '@/components/diary/EditFoodModal';
 import { Dumbbell, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Sparkles, Droplets, Clock, Utensils } from 'lucide-react';
-import { cn, todayISO } from '@/lib/utils';
+import { cn, todayISO, suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType, WaterLogEntry } from '@/types';
+import { ALL_MEAL_TYPES } from '@/components/diary/MealTypeSelector';
 
-const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+const MEAL_TYPES: MealType[] = ALL_MEAL_TYPES;
 
 function hm(iso: string): string {
   const d = new Date(iso);
@@ -31,7 +32,7 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
-  const [activeMeal, setActiveMeal] = useState<MealType>('lunch');
+  const [activeMeal, setActiveMeal] = useState<MealType>(() => suggestMealType(new Date().getHours()));
   const [selectedDate, setSelectedDate] = useState(serverDate);
   const [loadingDate, setLoadingDate] = useState(true);
   const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
@@ -99,12 +100,16 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
     const remaining = targetCalories - net;
     const pct = targetCalories > 0 ? Math.min((net / targetCalories) * 100, 100) : 0;
     const isOver = net > targetCalories;
-    const mealLogs = {
-      breakfast: positiveLogs.filter((l) => l.meal_type === 'breakfast'),
-      lunch:     positiveLogs.filter((l) => l.meal_type === 'lunch'),
-      dinner:    positiveLogs.filter((l) => l.meal_type === 'dinner'),
-      snack:     positiveLogs.filter((l) => l.meal_type === 'snack'),
-    };
+    const mealLogs = Object.fromEntries(
+      ALL_MEAL_TYPES.map((type) => [
+        type,
+        positiveLogs.filter((l) =>
+          l.meal_type === type ||
+          // legacy 'snack' records appear under afternoon_snack
+          (type === 'afternoon_snack' && l.meal_type === 'snack')
+        ),
+      ])
+    ) as Record<MealType, FoodLog[]>;
     const mealHydrationMl = positiveLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
     return { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs, mealHydrationMl };
   }, [logs, targetCalories]);
