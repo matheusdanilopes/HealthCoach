@@ -16,12 +16,13 @@ export type SendToUserResult = 'notified' | 'no_sub' | 'skipped' | 'error' | 'op
 async function isOptedOut(userId: string, category: NotificationCategory): Promise<boolean> {
   const { data } = await supabase
     .from('notification_preferences')
-    .select(category)
+    .select('hydration, meals, workouts, insights, goals')
     .eq('user_id', userId)
     .single();
   // If no row exists, default is opted-in
   if (!data) return false;
-  return data[category] === false;
+  const prefs = data as Record<string, boolean>;
+  return prefs[category] === false;
 }
 
 // Send a notification to all devices of a user.
