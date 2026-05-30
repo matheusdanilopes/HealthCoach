@@ -524,6 +524,14 @@ Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "tempero
       plan = getFallback(config.goal, config.mealCount, planIndex);
     }
 
+    // Normalize calories from macros (Atwater: P×4 + C×4 + F×9) so the
+    // displayed kcal is always consistent with the protein/carbs/fat values.
+    plan.avg_calories = Math.round(plan.avg_protein * 4 + plan.avg_carbs * 4 + plan.avg_fat * 9);
+    plan.meals = plan.meals.map((m) => ({
+      ...m,
+      calories: Math.round(m.protein_g * 4 + m.carbs_g * 4 + m.fat_g * 9),
+    }));
+
     return NextResponse.json(plan);
 
   } catch (error) {
