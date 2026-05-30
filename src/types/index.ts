@@ -21,6 +21,9 @@ export interface FoodLog {
   protein: number | null;
   carbs: number | null;
   fat: number | null;
+  hydration_ml: number;
+  hydration_source: 'meal' | 'manual' | null;
+  hydration_confidence: 'high' | 'medium' | 'low' | null;
 }
 
 export interface WaterLog {
@@ -28,6 +31,12 @@ export interface WaterLog {
   user_id: string;
   log_date: string;
   amount_ml: number;
+}
+
+export interface WaterLogEntry {
+  id?: string;
+  amount_ml: number;
+  created_at: string;
 }
 
 export interface WeightLog {
@@ -68,7 +77,7 @@ export interface BodyMeasurements {
   user_id: string;
   date: string;
   waist: number | null;
-  abdomen: number | null;
+  neck: number | null;
   hips: number | null;
   chest: number | null;
   right_arm: number | null;
@@ -79,6 +88,19 @@ export interface BodyMeasurements {
   left_calf: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AIInsight {
+  id: string;
+  user_id: string;
+  type: 'nutrition' | 'hydration' | 'workout' | 'body' | 'behavior' | 'motivation';
+  priority: 'informativo' | 'atencao' | 'positivo' | 'recomendacao';
+  title: string;
+  message: string;
+  cta: string | null;
+  metadata: Record<string, unknown> | null;
+  generated_at: string;
+  read_at: string | null;
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';

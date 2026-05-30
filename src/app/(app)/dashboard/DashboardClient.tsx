@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,18 +8,29 @@ import { Scale, Plus, Dumbbell, Flame, TrendingDown, ChevronLeft, ChevronRight }
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
+import AIInsightCard from '@/components/dashboard/AIInsightCard';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
+import { useHydrationReminder } from '@/lib/useHydrationReminder';
 import { cn, todayISO } from '@/lib/utils';
-import type { FoodLog, Profile } from '@/types';
+import type { FoodLog, Profile, WaterLogEntry } from '@/types';
 
 interface DashboardClientProps {
   profile: Profile | null;
   serverDate: string;
   latestWeight: number;
   userId: string;
+  initialFoodLogs: FoodLog[];
+  initialWaterLogs: WaterLogEntry[];
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
 }
 
 export default function DashboardClient({
@@ -27,30 +38,49 @@ export default function DashboardClient({
   serverDate,
   latestWeight,
   userId,
+  initialFoodLogs,
+  initialWaterLogs,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
-  const [water, setWater] = useState(0);
+  const [foodLogs, setFoodLogs] = useState<FoodLog[]>(initialFoodLogs);
+  const [waterLogs, setWaterLogs] = useState<WaterLogEntry[]>(initialWaterLogs);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(serverDate);
-  const [loadingDate, setLoadingDate] = useState(true);
-  const [greetingText, setGreetingText] = useState('');
+  const [loadingDate, setLoadingDate] = useState(false);
+  const [insightKey, setInsightKey]       = useState(0);
+  const [chatTrigger, setChatTrigger]     = useState(0);
+  const [chatInitialInput, setChatInitialInput] = useState('');
+
+  const greetingText = useMemo(() => getGreeting(), []);
+
+  // Derive water total from logs list
+  const water = useMemo(() => waterLogs.reduce((s, l) => s + l.amount_ml, 0), [waterLogs]);
+
+  // Meal-sourced hydration (from beverages logged as food)
+  const mealHydrationMl = useMemo(
+    () => foodLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0),
+    [foodLogs]
+  );
+
+  // Hydration reminders (browser notifications when tab is open)
+  useHydrationReminder(waterLogs, profile?.target_water_ml ?? 2500, mealHydrationMl);
 
   useEffect(() => {
-    const h = new Date().getHours();
-    if (h < 12) setGreetingText('Bom dia');
-    else if (h < 18) setGreetingText('Boa tarde');
-    else setGreetingText('Boa noite');
-
     const today = todayISO();
-    setSelectedDate(today);
-    fetch(`/api/logs?date=${today}`)
-      .then((r) => r.json())
-      .then((data) => { setFoodLogs(data.foodLogs ?? []); setWater(data.water ?? 0); })
-      .catch(() => { setFoodLogs([]); setWater(0); })
-      .finally(() => setLoadingDate(false));
+    if (today !== serverDate) {
+      setSelectedDate(today);
+      setLoadingDate(true);
+      fetch(`/api/logs?date=${today}`)
+        .then((r) => r.json())
+        .then((data) => {
+          setFoodLogs(data.foodLogs ?? []);
+          setWaterLogs(data.waterLogs ?? []);
+        })
+        .catch(() => { setFoodLogs([]); setWaterLogs([]); })
+        .finally(() => setLoadingDate(false));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,7 +94,7 @@ export default function DashboardClient({
       const res = await fetch(`/api/logs?date=${date}`);
       const data = await res.json();
       setFoodLogs(data.foodLogs ?? []);
-      setWater(data.water ?? 0);
+      setWaterLogs(data.waterLogs ?? []);
     } finally {
       setLoadingDate(false);
     }
@@ -76,20 +106,34 @@ export default function DashboardClient({
     navigateTo(d.toISOString().split('T')[0]);
   }
 
-  const positiveLogs = foodLogs.filter((l) => l.calories > 0);
-  const workoutBurned = Math.abs(
-    foodLogs.filter((l) => l.calories < 0).reduce((s, l) => s + l.calories, 0)
-  );
-
-  const stats = {
-    calories: positiveLogs.reduce((s, l) => s + l.calories, 0),
-    protein:  positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0),
-    carbs:    positiveLogs.reduce((s, l) => s + (l.carbs ?? 0), 0),
-    fat:      positiveLogs.reduce((s, l) => s + (l.fat ?? 0), 0),
-  };
+  const { workoutBurned, stats } = useMemo(() => {
+    const positiveLogs = foodLogs.filter((l) => l.calories > 0);
+    const workoutBurned = Math.abs(
+      foodLogs.filter((l) => l.calories < 0).reduce((s, l) => s + l.calories, 0)
+    );
+    return {
+      workoutBurned,
+      stats: {
+        calories: positiveLogs.reduce((s, l) => s + l.calories, 0),
+        protein:  positiveLogs.reduce((s, l) => s + (l.protein ?? 0), 0),
+        carbs:    positiveLogs.reduce((s, l) => s + (l.carbs ?? 0), 0),
+        fat:      positiveLogs.reduce((s, l) => s + (l.fat ?? 0), 0),
+      },
+    };
+  }, [foodLogs]);
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setFoodLogs((prev) => [...prev, log]);
+    setInsightKey((k) => k + 1);
+  }, []);
+
+  const handleFoodLoggedFromChat = useCallback((log: FoodLog) => {
+    setFoodLogs((prev) => [...prev, log]);
+    setInsightKey((k) => k + 1);
+  }, []);
+
+  const handleWaterAdded = useCallback((ml: number, createdAt: string) => {
+    setWaterLogs((prev) => [...prev, { amount_ml: ml, created_at: createdAt }]);
   }, []);
 
   const firstName = profile?.full_name?.split(' ')[0];
@@ -105,7 +149,6 @@ export default function DashboardClient({
               ? `${greetingText}${firstName ? `, ${firstName}` : ''}`
               : `Diário${firstName ? `, ${firstName}` : ''}`}
           </h1>
-          {/* Date navigation */}
           <div className="flex items-center gap-2">
             <div className={cn(
               'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
@@ -152,7 +195,6 @@ export default function DashboardClient({
         )}
       </div>
 
-      {/* Layout: calorie card full-width, then 2-col for macros/water */}
       <div className="flex flex-col gap-4">
         <CalorieCard
           consumed={stats.calories}
@@ -160,7 +202,17 @@ export default function DashboardClient({
           target={profile?.target_calories ?? 2000}
         />
 
-        {/* Action buttons */}
+        {isToday && (
+          <AIInsightCard
+            userId={userId}
+            refreshKey={insightKey}
+            onOpenChat={(msg) => {
+              setChatInitialInput(msg);
+              setChatTrigger((k) => k + 1);
+            }}
+          />
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setAddFoodOpen(true)}
@@ -178,7 +230,6 @@ export default function DashboardClient({
           </button>
         </div>
 
-        {/* TDEE / deficit info */}
         {profile?.tdee && (
           <div className="flex items-center justify-between px-1 py-0.5">
             <div className="flex items-center gap-1.5">
@@ -202,7 +253,6 @@ export default function DashboardClient({
           </div>
         )}
 
-        {/* Macros + Water — side by side on sm+ */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <MacroProgress
@@ -212,13 +262,13 @@ export default function DashboardClient({
               targetCalories={profile?.target_calories ?? 2000}
             />
           </div>
-          <div className="sm:w-52 flex-shrink-0">
+          <div className="sm:w-56 flex-shrink-0">
             <WaterTracker
-              current={water}
+              logs={waterLogs}
               target={profile?.target_water_ml ?? 2500}
-              userId={userId}
               date={selectedDate}
-              onUpdate={setWater}
+              onAdded={handleWaterAdded}
+              mealHydrationMl={mealHydrationMl}
             />
           </div>
         </div>
@@ -236,7 +286,7 @@ export default function DashboardClient({
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(log) => setFoodLogs((prev) => [...prev, log])}
+        onAdded={(log) => { setFoodLogs((prev) => [...prev, log]); setInsightKey((k) => k + 1); }}
       />
       {isToday && (
         <WeightLogModal
@@ -254,7 +304,9 @@ export default function DashboardClient({
           dailyCalories={stats.calories}
           dailyWater={water}
           userId={userId}
-          onFoodLogged={() => router.refresh()}
+          onFoodLogged={handleFoodLoggedFromChat}
+          triggerOpen={chatTrigger}
+          initialInput={chatInitialInput}
         />
       )}
     </div>

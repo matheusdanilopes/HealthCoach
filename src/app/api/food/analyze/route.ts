@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
+import { withGeminiRetry } from '@/lib/gemini-retry';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -13,6 +14,20 @@ PRINCÍPIO FUNDAMENTAL: NUNCA assuma 100g automaticamente para porções vagas. 
 
 Retorne SOMENTE JSON válido sem markdown, sem blocos de código:
 {"foods":[{"name":"Nome","quantity":"30g","calories":62,"protein":0.2,"carbs":10.0,"fat":2.5}],"totalCalories":62,"totalProtein":0.2,"totalCarbs":10.0,"totalFat":2.5,"confidence":"medium","portionAssumption":"small"}
+
+HIDRATAÇÃO — campo opcional "hydration_ml" (inteiro) por item:
+• Adicione "hydration_ml" APENAS para bebidas/líquidos hidratantes
+• Fator de hidratação aplicado ao volume estimado (ml × fator = hydration_ml):
+  - Água pura, água mineral, água com gás: 100%
+  - Água de coco: 95%
+  - Chá, café: 85%
+  - Suco natural, limonada: 80%
+  - Leite, kefir: 80%
+  - Isotônico, kombucha: 75%
+  - Caldo, sopa líquida: 50%
+• NÃO adicionar hydration_ml para: álcool, refrigerantes, milkshakes, energéticos
+• Para alimentos sólidos: omita o campo hydration_ml
+• Exemplo suco (200ml): "hydration_ml": 160 (200×0.80)
 
 TERMOS VAGOS — interprete sempre de forma conservadora:
 • "um pedaço" → 20-35g (frituras, mandioca, carne, bolo)
@@ -128,16 +143,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
 
-    const response = await getGemini().models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts }],
-      config: {
-        systemInstruction: SYSTEM,
-        maxOutputTokens: 2048,
-        temperature: 0.2,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+    const response = await withGeminiRetry(() =>
+      getGemini().models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+        config: {
+          systemInstruction: SYSTEM,
+          maxOutputTokens: 2048,
+          temperature: 0.2,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+    );
 
     const raw = response.text ?? '';
     if (!raw) {
@@ -160,7 +177,14 @@ export async function POST(req: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Analyze API error:', msg);
+    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
     const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
+    if (is503) {
+      return NextResponse.json(
+        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
+        { status: 503 }
+      );
+    }
     if (is429) {
       return NextResponse.json(
         { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },

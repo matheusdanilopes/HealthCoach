@@ -3,7 +3,7 @@ import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 
 const FIELDS = [
-  'waist','abdomen','hips','chest',
+  'waist','neck','hips','chest',
   'right_arm','left_arm',
   'right_thigh','left_thigh',
   'right_calf','left_calf',

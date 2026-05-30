@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI, FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
+import { withGeminiRetry } from '@/lib/gemini-retry';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -88,21 +89,24 @@ INSTRUÇÕES:
       parts: [{ text: m.content }],
     }));
 
-    const response = await getGemini().models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents,
-      config: {
-        systemInstruction,
-        tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
-        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-        maxOutputTokens: 500,
-        temperature: 0.7,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+    const response = await withGeminiRetry(() =>
+      getGemini().models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+          maxOutputTokens: 500,
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+    );
 
     let foodLogged = false;
     let assistantMessage = '';
+    let insertedRow: Record<string, unknown> | null = null;
 
     const functionCalls = response.functionCalls;
     if (functionCalls?.length) {
@@ -120,7 +124,7 @@ INSTRUÇÕES:
         const today = new Date().toISOString().split('T')[0];
         let insertError: unknown = null;
         try {
-          const { error } = await supabase.from('food_logs').insert({
+          const { data, error } = await supabase.from('food_logs').insert({
             user_id: user.id,
             food_name: args.food_name,
             meal_type: args.meal_type,
@@ -129,8 +133,9 @@ INSTRUÇÕES:
             carbs: args.carbs ?? null,
             fat: args.fat ?? null,
             log_date: today,
-          });
+          }).select().single();
           if (error) insertError = error;
+          else insertedRow = data as Record<string, unknown>;
         } catch (e) {
           insertError = e;
         }
@@ -142,18 +147,20 @@ INSTRUÇÕES:
 
         // Follow-up with the function response
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
-        const followUp = await getGemini().models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            ...contents,
-            { role: 'model', parts: modelParts },
-            {
-              role: 'user',
-              parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
-            },
-          ],
-          config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
-        });
+        const followUp = await withGeminiRetry(() =>
+          getGemini().models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              ...contents,
+              { role: 'model', parts: modelParts },
+              {
+                role: 'user',
+                parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
+              },
+            ],
+            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
+          })
+        );
 
         assistantMessage = followUp.text ?? '';
       }
@@ -161,9 +168,24 @@ INSTRUÇÕES:
       assistantMessage = response.text ?? '';
     }
 
-    return NextResponse.json({ message: assistantMessage, foodLogged });
+    return NextResponse.json({ message: assistantMessage, foodLogged, foodLog: insertedRow ?? null });
   } catch (error) {
-    console.error('Chat API error:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Chat API error:', msg);
+    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
+    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
+    if (is503) {
+      return NextResponse.json(
+        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
+        { status: 503 }
+      );
+    }
+    if (is429) {
+      return NextResponse.json(
+        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
+        { status: 429 }
+      );
+    }
     return NextResponse.json(
       { error: 'Erro interno. Verifique se a chave GEMINI_API_KEY está configurada.' },
       { status: 500 }
