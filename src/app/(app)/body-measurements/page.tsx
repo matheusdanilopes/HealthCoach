@@ -5,7 +5,7 @@ import BodyMeasurementsClient from './BodyMeasurementsClient';
 import type { BodyMeasurements } from '@/types';
 
 const NUM_FIELDS = [
-  'waist','abdomen','hips','chest',
+  'waist','neck','hips','chest',
   'right_arm','left_arm',
   'right_thigh','left_thigh',
   'right_calf','left_calf',
@@ -16,7 +16,7 @@ function parseRow(r: Record<string, unknown>): BodyMeasurements {
     id: r.id as string,
     user_id: r.user_id as string,
     date: r.date as string,
-    waist: null, abdomen: null, hips: null, chest: null,
+    waist: null, neck: null, hips: null, chest: null,
     right_arm: null, left_arm: null,
     right_thigh: null, left_thigh: null,
     right_calf: null, left_calf: null,

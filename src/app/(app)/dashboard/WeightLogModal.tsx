@@ -45,7 +45,7 @@ export default function WeightLogModal({
         <Input
           label="Peso atual (kg)"
           type="number"
-          step="0.1"
+          step="0.01"
           min="30"
           max="300"
           value={weight}
