@@ -4,9 +4,10 @@ import { useState, useRef } from 'react';
 import {
   UtensilsCrossed, ShoppingCart, CheckCircle2, RefreshCw,
   Copy, Check, Loader2, ChevronDown, ChevronUp, Sparkles,
-  ThumbsUp, ThumbsDown, Package, Send, AlertCircle,
+  ThumbsUp, ThumbsDown, Package, Send, AlertCircle, BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import RecipeModal, { type RecipeModalData } from './RecipeModal';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,8 +52,11 @@ interface MealPlan {
   estimated_cost: number;
   cost_per_meal:  number;
   shopping_list:  ShoppingItem[];
+  ingredients:    { name: string; quantity: string }[];
+  steps:          { title: string; items: string[] }[];
   ai_explanation?: string;
   approved:       boolean;
+  savedId?:       string;
   isLoading?:     boolean;
 }
 
@@ -191,14 +195,15 @@ function LoadingCard({ label }: { label: string }) {
 }
 
 function PlanCard({
-  plan, mealCount, onApprove, onReject, approving, rejecting,
+  plan, mealCount, onApprove, onReject, approving, rejecting, onViewSteps,
 }: {
-  plan:      MealPlan;
-  mealCount: number;
-  onApprove: () => void;
-  onReject:  () => void;
-  approving: boolean;
-  rejecting: boolean;
+  plan:         MealPlan;
+  mealCount:    number;
+  onApprove:    () => void;
+  onReject:     () => void;
+  approving:    boolean;
+  rejecting:    boolean;
+  onViewSteps?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -276,7 +281,17 @@ function PlanCard({
         </p>
       )}
 
-      {/* Action buttons */}
+      {/* Approved actions */}
+      {plan.approved && plan.steps?.length > 0 && (
+        <button
+          onClick={onViewSteps}
+          className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-semibold transition-all bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-100 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-300">
+          <BookOpen size={13} />
+          Ver passo a passo
+        </button>
+      )}
+
+      {/* Approve / reject buttons */}
       {!plan.approved && (
         <div className="flex gap-2">
           <button onClick={onApprove} disabled={approving || rejecting}
@@ -306,22 +321,23 @@ function PlanCard({
 // ── Main Widget ────────────────────────────────────────────────────────────
 
 export default function SmartMealPrepWidget() {
-  const [step,       setStep]       = useState<WidgetStep>('config');
-  const [config,     setConfig]     = useState<MealPrepConfig>({ mealCount: 10, budget: 'economico', goal: 'emagrecimento' });
-  const [plans,      setPlans]      = useState<MealPlan[]>([]);
-  const [actingId,   setActingId]   = useState<string | null>(null);
-  const [actingType, setActingType] = useState<'approve' | 'reject' | null>(null);
-  const [addingNew,  setAddingNew]  = useState(false);
-  const [copied,     setCopied]     = useState(false);
-  const [genError,   setGenError]   = useState<string | null>(null);
-  const [customCount,setCustomCount]= useState('');
-  const [showCustom, setShowCustom] = useState(false);
-  const [sendState,  setSendState]  = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
-  const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
+  const [step,        setStep]        = useState<WidgetStep>('config');
+  const [config,      setConfig]      = useState<MealPrepConfig>({ mealCount: 10, budget: 'economico', goal: 'emagrecimento' });
+  const [plans,       setPlans]       = useState<MealPlan[]>([]);
+  const [actingId,    setActingId]    = useState<string | null>(null);
+  const [actingType,  setActingType]  = useState<'approve' | 'reject' | null>(null);
+  const [addingNew,   setAddingNew]   = useState(false);
+  const [copied,      setCopied]      = useState(false);
+  const [genError,    setGenError]    = useState<string | null>(null);
+  const [customCount, setCustomCount] = useState('');
+  const [showCustom,  setShowCustom]  = useState(false);
+  const [sendState,   setSendState]   = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [sendResult,  setSendResult]  = useState<{ sent: number; failed: number } | null>(null);
+  const [activeRecipe,setActiveRecipe]= useState<RecipeModalData | null>(null);
 
   const planCounterRef = useRef(0);
 
-  const approvedPlans = plans.filter((p) => p.approved);
+  const approvedPlans  = plans.filter((p) => p.approved);
   const canConsolidate = approvedPlans.length >= 2;
 
   // ── API calls ──────────────────────────────────────────────────────────
@@ -338,15 +354,17 @@ export default function SmartMealPrepWidget() {
     return {
       id:             crypto.randomUUID(),
       label:          PLAN_LABELS[planIndex % 26],
-      title:          data.title ?? 'Cardápio',
-      meals:          data.meals ?? [],
-      avg_calories:   data.avg_calories ?? 0,
-      avg_protein:    data.avg_protein  ?? 0,
-      avg_carbs:      data.avg_carbs    ?? 0,
-      avg_fat:        data.avg_fat      ?? 0,
+      title:          data.title         ?? 'Cardápio',
+      meals:          data.meals         ?? [],
+      avg_calories:   data.avg_calories  ?? 0,
+      avg_protein:    data.avg_protein   ?? 0,
+      avg_carbs:      data.avg_carbs     ?? 0,
+      avg_fat:        data.avg_fat       ?? 0,
       estimated_cost: data.estimated_cost ?? 0,
       cost_per_meal:  data.cost_per_meal  ?? 0,
       shopping_list:  data.shopping_list  ?? [],
+      ingredients:    data.ingredients   ?? [],
+      steps:          data.steps         ?? [],
       ai_explanation: data.ai_explanation,
       approved:       false,
     };
@@ -354,6 +372,25 @@ export default function SmartMealPrepWidget() {
 
   function getExistingMeals(currentPlans: MealPlan[]): string[] {
     return currentPlans.flatMap((p) => p.meals.map((m) => m.protein_source));
+  }
+
+  function planToModalData(plan: MealPlan): RecipeModalData {
+    return {
+      title:          plan.title,
+      plan_label:     plan.label,
+      goal:           config.goal,
+      budget:         config.budget,
+      meal_count:     config.mealCount,
+      avg_calories:   plan.avg_calories,
+      avg_protein:    plan.avg_protein,
+      avg_carbs:      plan.avg_carbs,
+      avg_fat:        plan.avg_fat,
+      estimated_cost: plan.estimated_cost,
+      cost_per_meal:  plan.cost_per_meal,
+      ingredients:    plan.ingredients ?? [],
+      steps:          plan.steps ?? [],
+      ai_explanation: plan.ai_explanation,
+    };
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────
@@ -366,12 +403,12 @@ export default function SmartMealPrepWidget() {
     const loadingA: MealPlan = {
       id: 'loading-a', label: 'A', title: '', meals: [], avg_calories: 0, avg_protein: 0,
       avg_carbs: 0, avg_fat: 0, estimated_cost: 0, cost_per_meal: 0, shopping_list: [],
-      approved: false, isLoading: true,
+      ingredients: [], steps: [], approved: false, isLoading: true,
     };
     const loadingB: MealPlan = {
       id: 'loading-b', label: 'B', title: '', meals: [], avg_calories: 0, avg_protein: 0,
       avg_carbs: 0, avg_fat: 0, estimated_cost: 0, cost_per_meal: 0, shopping_list: [],
-      approved: false, isLoading: true,
+      ingredients: [], steps: [], approved: false, isLoading: true,
     };
     setPlans([loadingA, loadingB]);
 
@@ -389,7 +426,21 @@ export default function SmartMealPrepWidget() {
     setActingId(planId);
     setActingType('approve');
 
+    const planToSave = plans.find((p) => p.id === planId);
     setPlans((prev) => prev.map((p) => (p.id === planId ? { ...p, approved: true } : p)));
+
+    // Fire-and-forget persistence
+    if (planToSave) {
+      fetch('/api/meal-prep/save', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ plan: planToSave, config, planLabel: planToSave.label }),
+      }).then((r) => r.json()).then((data) => {
+        if (data.id) {
+          setPlans((prev) => prev.map((p) => p.id === planId ? { ...p, savedId: data.id } : p));
+        }
+      }).catch(() => {});
+    }
 
     const idx = planCounterRef.current++;
     setAddingNew(true);
@@ -425,10 +476,10 @@ export default function SmartMealPrepWidget() {
   }
 
   function handleCopyList() {
-    const items    = consolidate(approvedPlans);
-    const total    = items.reduce((s, i) => s + i.total_cost, 0);
+    const items     = consolidate(approvedPlans);
+    const total     = items.reduce((s, i) => s + i.total_cost, 0);
     const totalMeals = approvedPlans.length * config.mealCount;
-    const costPer  = total / totalMeals;
+    const costPer   = total / totalMeals;
 
     let text = `🥗 LISTA DE COMPRAS — MARMITAS\n`;
     text    += `${totalMeals} marmitas · R$ ${total.toFixed(0)} total · R$ ${costPer.toFixed(2)}/marmita\n\n`;
@@ -483,281 +534,292 @@ export default function SmartMealPrepWidget() {
 
   // ── Shopping list view ─────────────────────────────────────────────────
 
-  const shoppingItems  = step === 'shopping' ? consolidate(approvedPlans) : [];
-  const totalCost      = shoppingItems.reduce((s, i) => s + i.total_cost, 0);
-  const totalMeals     = approvedPlans.length * config.mealCount;
-  const costPerMeal    = totalMeals > 0 ? totalCost / totalMeals : 0;
+  const shoppingItems = step === 'shopping' ? consolidate(approvedPlans) : [];
+  const totalCost     = shoppingItems.reduce((s, i) => s + i.total_cost, 0);
+  const totalMeals    = approvedPlans.length * config.mealCount;
+  const costPerMeal   = totalMeals > 0 ? totalCost / totalMeals : 0;
 
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+    <>
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
 
-      {/* Widget header */}
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-emerald-500"><UtensilsCrossed size={13} /></span>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-          Ideias de Marmitas Inteligentes
+        {/* Widget header */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-emerald-500"><UtensilsCrossed size={13} /></span>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            Ideias de Marmitas Inteligentes
+          </p>
+        </div>
+        <p className="text-[12px] text-zinc-500 dark:text-zinc-400 mb-4 leading-relaxed">
+          Com base na sua alimentação recente, a IA prepara sugestões de marmitas para a próxima semana.
         </p>
-      </div>
-      <p className="text-[12px] text-zinc-500 dark:text-zinc-400 mb-4 leading-relaxed">
-        Com base na sua alimentação recente, a IA prepara sugestões de marmitas para a próxima semana.
-      </p>
 
-      {/* ── CONFIG STEP ──────────────────────────────────────────────── */}
-      {step === 'config' && (
-        <div className="space-y-4">
-          {genError && (
-            <div className="px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 text-[12px] text-red-600 dark:text-red-400">
-              {genError}
+        {/* ── CONFIG STEP ──────────────────────────────────────────────── */}
+        {step === 'config' && (
+          <div className="space-y-4">
+            {genError && (
+              <div className="px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 text-[12px] text-red-600 dark:text-red-400">
+                {genError}
+              </div>
+            )}
+
+            <div>
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">Objetivo</p>
+              <PillSelector
+                options={GOAL_OPTS}
+                value={config.goal}
+                onChange={(v) => setConfig((c) => ({ ...c, goal: v }))}
+              />
             </div>
-          )}
 
-          <div>
-            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">Objetivo</p>
-            <PillSelector
-              options={GOAL_OPTS}
-              value={config.goal}
-              onChange={(v) => setConfig((c) => ({ ...c, goal: v }))}
-            />
-          </div>
+            <div>
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">Orçamento</p>
+              <PillSelector
+                options={BUDGET_OPTS}
+                value={config.budget}
+                onChange={(v) => setConfig((c) => ({ ...c, budget: v }))}
+              />
+            </div>
 
-          <div>
-            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">Orçamento</p>
-            <PillSelector
-              options={BUDGET_OPTS}
-              value={config.budget}
-              onChange={(v) => setConfig((c) => ({ ...c, budget: v }))}
-            />
-          </div>
-
-          <div>
-            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">Quantidade de marmitas</p>
-            <div className="flex flex-wrap gap-2">
-              {MEAL_COUNTS.map((n) => (
-                <button key={n} onClick={() => { setConfig((c) => ({ ...c, mealCount: n })); setShowCustom(false); }}
+            <div>
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">Quantidade de marmitas</p>
+              <div className="flex flex-wrap gap-2">
+                {MEAL_COUNTS.map((n) => (
+                  <button key={n} onClick={() => { setConfig((c) => ({ ...c, mealCount: n })); setShowCustom(false); }}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all duration-150 border',
+                      config.mealCount === n && !showCustom
+                        ? 'bg-emerald-500 text-white border-emerald-500'
+                        : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-emerald-300 dark:hover:border-emerald-700'
+                    )}>
+                    {n}
+                  </button>
+                ))}
+                <button onClick={() => setShowCustom((v) => !v)}
                   className={cn(
                     'px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all duration-150 border',
-                    config.mealCount === n && !showCustom
+                    showCustom
                       ? 'bg-emerald-500 text-white border-emerald-500'
                       : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-emerald-300 dark:hover:border-emerald-700'
                   )}>
-                  {n}
+                  Personalizado
                 </button>
-              ))}
-              <button onClick={() => setShowCustom((v) => !v)}
-                className={cn(
-                  'px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all duration-150 border',
-                  showCustom
-                    ? 'bg-emerald-500 text-white border-emerald-500'
-                    : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-emerald-300 dark:hover:border-emerald-700'
-                )}>
-                Personalizado
-              </button>
-            </div>
-            {showCustom && (
-              <div className="mt-2 flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1} max={50}
-                  value={customCount}
-                  onChange={(e) => {
-                    setCustomCount(e.target.value);
-                    const n = parseInt(e.target.value);
-                    if (!isNaN(n) && n > 0 && n <= 50)
-                      setConfig((c) => ({ ...c, mealCount: n }));
-                  }}
-                  placeholder="Ex: 12"
-                  className="w-24 px-3 py-1.5 rounded-xl text-[13px] border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                />
-                <span className="text-[12px] text-zinc-400 dark:text-zinc-500">marmitas</span>
               </div>
-            )}
-          </div>
-
-          <button onClick={handleGenerate}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white font-semibold text-[14px] transition-all shadow-sm shadow-emerald-200 dark:shadow-none">
-            <Sparkles size={16} />
-            Gerar Sugestões de Cardápio
-          </button>
-        </div>
-      )}
-
-      {/* ── REVIEWING STEP ───────────────────────────────────────────── */}
-      {step === 'reviewing' && (
-        <div className="space-y-3">
-          {/* Approved counter */}
-          {approvedPlans.length > 0 && (
-            <div className={cn(
-              'flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all',
-              canConsolidate
-                ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
-                : 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-100 dark:border-zinc-700/50'
-            )}>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={canConsolidate ? 'text-emerald-500' : 'text-zinc-400'} />
-                <span className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-300">
-                  {approvedPlans.length} cardápio{approvedPlans.length > 1 ? 's' : ''} aprovado{approvedPlans.length > 1 ? 's' : ''}
-                </span>
-              </div>
-              {!canConsolidate && (
-                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Aprove mais {2 - approvedPlans.length}
-                </span>
+              {showCustom && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1} max={50}
+                    value={customCount}
+                    onChange={(e) => {
+                      setCustomCount(e.target.value);
+                      const n = parseInt(e.target.value);
+                      if (!isNaN(n) && n > 0 && n <= 50)
+                        setConfig((c) => ({ ...c, mealCount: n }));
+                    }}
+                    placeholder="Ex: 12"
+                    className="w-24 px-3 py-1.5 rounded-xl text-[13px] border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  />
+                  <span className="text-[12px] text-zinc-400 dark:text-zinc-500">marmitas</span>
+                </div>
               )}
             </div>
-          )}
 
-          {/* Plan cards */}
-          {plans.map((plan) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              mealCount={config.mealCount}
-              onApprove={() => handleApprove(plan.id)}
-              onReject={() => handleReject(plan.id)}
-              approving={actingId === plan.id && actingType === 'approve'}
-              rejecting={actingId === plan.id && actingType === 'reject'}
-            />
-          ))}
-
-          {/* Loading indicator for new plan */}
-          {addingNew && (
-            <div className="flex items-center justify-center gap-2 py-4 text-[12px] text-zinc-400 dark:text-zinc-500">
-              <Loader2 size={13} className="animate-spin text-emerald-500" />
-              Gerando nova opção…
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-1">
-            {canConsolidate && (
-              <button onClick={() => setStep('shopping')}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white font-semibold text-[14px] transition-all">
-                <ShoppingCart size={15} />
-                Ver Lista de Compras
-              </button>
-            )}
-            <button onClick={handleReset}
-              className={cn(
-                'flex items-center justify-center gap-1.5 py-3 px-4 rounded-2xl font-semibold text-[13px] transition-all',
-                'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300',
-                canConsolidate ? 'w-auto' : 'flex-1'
-              )}>
-              <RefreshCw size={13} />
-              {canConsolidate ? '' : 'Recomeçar'}
+            <button onClick={handleGenerate}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white font-semibold text-[14px] transition-all shadow-sm shadow-emerald-200 dark:shadow-none">
+              <Sparkles size={16} />
+              Gerar Sugestões de Cardápio
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── SHOPPING STEP ────────────────────────────────────────────── */}
-      {step === 'shopping' && (
-        <div className="space-y-4">
-          {/* Summary */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700/50">
-              <p className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-tight">Marmitas</p>
-              <p className="text-[16px] font-bold tabular-nums text-zinc-800 dark:text-zinc-200 mt-0.5">{totalMeals}</p>
-            </div>
-            <div className="text-center p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30">
-              <p className="text-[9px] text-emerald-600 dark:text-emerald-400 leading-tight">Total</p>
-              <p className="text-[16px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300 mt-0.5">R$ {totalCost.toFixed(0)}</p>
-            </div>
-            <div className="text-center p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700/50">
-              <p className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-tight">Por marmita</p>
-              <p className="text-[16px] font-bold tabular-nums text-zinc-800 dark:text-zinc-200 mt-0.5">R$ {costPerMeal.toFixed(2)}</p>
-            </div>
-          </div>
-
-          {/* Section header */}
-          <div className="flex items-center gap-2">
-            <Package size={13} className="text-emerald-500" />
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-              Ingredientes Consolidados
-            </p>
-          </div>
-
-          {/* Shopping list by category */}
+        {/* ── REVIEWING STEP ───────────────────────────────────────────── */}
+        {step === 'reviewing' && (
           <div className="space-y-3">
-            {(Object.keys(CAT_LABELS) as ShoppingCat[]).map((cat) => {
-              const catItems = shoppingItems.filter((i) => i.category === cat);
-              if (!catItems.length) return null;
-              const catTotal = catItems.reduce((s, i) => s + i.total_cost, 0);
-              return (
-                <div key={cat} className="rounded-xl border border-zinc-100 dark:border-zinc-700/50 overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-800/60">
-                    <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">{CAT_LABELS[cat]}</span>
-                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">R$ {catTotal.toFixed(0)}</span>
-                  </div>
-                  <div className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                    {catItems.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-zinc-900/50">
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300 truncate">{item.name}</p>
-                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{item.amount}</p>
-                        </div>
-                        <span className="text-[12px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400 ml-3 flex-shrink-0">
-                          R$ {item.total_cost.toFixed(0)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Approved cardápios info */}
-          <div className="text-[11px] text-zinc-400 dark:text-zinc-500 px-1 leading-relaxed">
-            Lista baseada em {approvedPlans.length} cardápio{approvedPlans.length > 1 ? 's' : ''} aprovado{approvedPlans.length > 1 ? 's' : ''}: {approvedPlans.map((p) => `Opção ${p.label}`).join(' + ')}.
-            Valores são estimativas de preços médios de mercado.
-          </div>
-
-          {/* Send to shopping list */}
-          <button
-            onClick={handleSendToShoppingList}
-            disabled={sendState === 'sending'}
-            className={cn(
-              'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-[14px] transition-all active:scale-[0.98]',
-              sendState === 'success'
-                ? 'bg-emerald-500 text-white'
-                : sendState === 'error'
-                ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400'
-                : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200 dark:shadow-none',
-              sendState === 'sending' && 'opacity-70 cursor-not-allowed'
-            )}>
-            {sendState === 'sending' && <><Loader2 size={15} className="animate-spin" />Enviando itens…</>}
-            {sendState === 'success' && <><Check size={15} />{sendResult?.sent ?? 0} itens enviados para a Lista!</>}
-            {sendState === 'error'   && <><AlertCircle size={15} />{sendResult ? `${sendResult.sent} enviados · ${sendResult.failed} com erro` : 'Erro ao enviar — Tentar novamente'}</>}
-            {sendState === 'idle'    && <><Send size={15} />Enviar para Lista de Compras</>}
-          </button>
-
-          {/* Actions */}
-          <div className="flex gap-2">
-            <button onClick={handleCopyList}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-[12px] transition-all',
-                copied
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
+            {/* Approved counter */}
+            {approvedPlans.length > 0 && (
+              <div className={cn(
+                'flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all',
+                canConsolidate
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
+                  : 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-100 dark:border-zinc-700/50'
               )}>
-              {copied ? <><Check size={13} />Copiado!</> : <><Copy size={13} />Copiar</>}
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={14} className={canConsolidate ? 'text-emerald-500' : 'text-zinc-400'} />
+                  <span className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-300">
+                    {approvedPlans.length} cardápio{approvedPlans.length > 1 ? 's' : ''} aprovado{approvedPlans.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {!canConsolidate && (
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    Aprove mais {2 - approvedPlans.length}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Plan cards */}
+            {plans.map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                mealCount={config.mealCount}
+                onApprove={() => handleApprove(plan.id)}
+                onReject={() => handleReject(plan.id)}
+                approving={actingId === plan.id && actingType === 'approve'}
+                rejecting={actingId === plan.id && actingType === 'reject'}
+                onViewSteps={() => setActiveRecipe(planToModalData(plan))}
+              />
+            ))}
+
+            {/* Loading indicator for new plan */}
+            {addingNew && (
+              <div className="flex items-center justify-center gap-2 py-4 text-[12px] text-zinc-400 dark:text-zinc-500">
+                <Loader2 size={13} className="animate-spin text-emerald-500" />
+                Gerando nova opção…
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              {canConsolidate && (
+                <button onClick={() => setStep('shopping')}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white font-semibold text-[14px] transition-all">
+                  <ShoppingCart size={15} />
+                  Ver Lista de Compras
+                </button>
+              )}
+              <button onClick={handleReset}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 py-3 px-4 rounded-2xl font-semibold text-[13px] transition-all',
+                  'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300',
+                  canConsolidate ? 'w-auto' : 'flex-1'
+                )}>
+                <RefreshCw size={13} />
+                {canConsolidate ? '' : 'Recomeçar'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── SHOPPING STEP ────────────────────────────────────────────── */}
+        {step === 'shopping' && (
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700/50">
+                <p className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-tight">Marmitas</p>
+                <p className="text-[16px] font-bold tabular-nums text-zinc-800 dark:text-zinc-200 mt-0.5">{totalMeals}</p>
+              </div>
+              <div className="text-center p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30">
+                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 leading-tight">Total</p>
+                <p className="text-[16px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300 mt-0.5">R$ {totalCost.toFixed(0)}</p>
+              </div>
+              <div className="text-center p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700/50">
+                <p className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-tight">Por marmita</p>
+                <p className="text-[16px] font-bold tabular-nums text-zinc-800 dark:text-zinc-200 mt-0.5">R$ {costPerMeal.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Section header */}
+            <div className="flex items-center gap-2">
+              <Package size={13} className="text-emerald-500" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                Ingredientes Consolidados
+              </p>
+            </div>
+
+            {/* Shopping list by category */}
+            <div className="space-y-3">
+              {(Object.keys(CAT_LABELS) as ShoppingCat[]).map((cat) => {
+                const catItems = shoppingItems.filter((i) => i.category === cat);
+                if (!catItems.length) return null;
+                const catTotal = catItems.reduce((s, i) => s + i.total_cost, 0);
+                return (
+                  <div key={cat} className="rounded-xl border border-zinc-100 dark:border-zinc-700/50 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-800/60">
+                      <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">{CAT_LABELS[cat]}</span>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">R$ {catTotal.toFixed(0)}</span>
+                    </div>
+                    <div className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                      {catItems.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-zinc-900/50">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300 truncate">{item.name}</p>
+                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{item.amount}</p>
+                          </div>
+                          <span className="text-[12px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400 ml-3 flex-shrink-0">
+                            R$ {item.total_cost.toFixed(0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Approved cardápios info */}
+            <div className="text-[11px] text-zinc-400 dark:text-zinc-500 px-1 leading-relaxed">
+              Lista baseada em {approvedPlans.length} cardápio{approvedPlans.length > 1 ? 's' : ''} aprovado{approvedPlans.length > 1 ? 's' : ''}: {approvedPlans.map((p) => `Opção ${p.label}`).join(' + ')}.
+              Valores são estimativas de preços médios de mercado.
+            </div>
+
+            {/* Send to shopping list */}
+            <button
+              onClick={handleSendToShoppingList}
+              disabled={sendState === 'sending'}
+              className={cn(
+                'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-[14px] transition-all active:scale-[0.98]',
+                sendState === 'success'
+                  ? 'bg-emerald-500 text-white'
+                  : sendState === 'error'
+                  ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400'
+                  : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200 dark:shadow-none',
+                sendState === 'sending' && 'opacity-70 cursor-not-allowed'
+              )}>
+              {sendState === 'sending' && <><Loader2 size={15} className="animate-spin" />Enviando itens…</>}
+              {sendState === 'success' && <><Check size={15} />{sendResult?.sent ?? 0} itens enviados para a Lista!</>}
+              {sendState === 'error'   && <><AlertCircle size={15} />{sendResult ? `${sendResult.sent} enviados · ${sendResult.failed} com erro` : 'Erro ao enviar — Tentar novamente'}</>}
+              {sendState === 'idle'    && <><Send size={15} />Enviar para Lista de Compras</>}
             </button>
-            <button onClick={() => setStep('reviewing')}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-[12px] transition-all bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
-              <ChevronUp size={13} />
-              Cardápios
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button onClick={handleCopyList}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-[12px] transition-all',
+                  copied
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
+                )}>
+                {copied ? <><Check size={13} />Copiado!</> : <><Copy size={13} />Copiar</>}
+              </button>
+              <button onClick={() => setStep('reviewing')}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-[12px] transition-all bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
+                <ChevronUp size={13} />
+                Cardápios
+              </button>
+            </div>
+
+            <button onClick={handleReset}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+              <RefreshCw size={12} />
+              Gerar novos cardápios
             </button>
           </div>
+        )}
+      </div>
 
-          <button onClick={handleReset}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
-            <RefreshCw size={12} />
-            Gerar novos cardápios
-          </button>
-        </div>
+      {/* Recipe step-by-step modal */}
+      {activeRecipe && (
+        <RecipeModal
+          recipe={activeRecipe}
+          onClose={() => setActiveRecipe(null)}
+        />
       )}
-    </div>
+    </>
   );
 }

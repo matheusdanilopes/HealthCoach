@@ -5,37 +5,42 @@ import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
 
-type GoalType = 'emagrecimento' | 'manutencao' | 'massa';
+type GoalType   = 'emagrecimento' | 'manutencao' | 'massa';
 type BudgetType = 'economico' | 'moderado' | 'premium';
 
-interface MealItem {
-  name: string;
-  protein_source: string;
-  carb_source: string;
-  vegetable: string;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-}
+export interface RecipeIngredient { name: string; quantity: string }
+export interface RecipeStep       { title: string; items: string[] }
 
-interface ShoppingItem {
-  name: string;
-  amount: string;
-  category: 'proteinas' | 'carboidratos' | 'hortifruti' | 'temperos' | 'outros';
+export interface ShoppingItem {
+  name:       string;
+  amount:     string;
+  category:   'proteinas' | 'carboidratos' | 'hortifruti' | 'temperos' | 'outros';
   total_cost: number;
 }
 
-interface GeneratedPlan {
-  title: string;
-  meals: MealItem[];
-  avg_calories: number;
-  avg_protein: number;
-  avg_carbs: number;
-  avg_fat: number;
+export interface MealItem {
+  name:           string;
+  protein_source: string;
+  carb_source:    string;
+  vegetable:      string;
+  calories:       number;
+  protein_g:      number;
+  carbs_g:        number;
+  fat_g:          number;
+}
+
+export interface GeneratedPlan {
+  title:          string;
+  meals:          MealItem[];
+  avg_calories:   number;
+  avg_protein:    number;
+  avg_carbs:      number;
+  avg_fat:        number;
   estimated_cost: number;
-  cost_per_meal: number;
-  shopping_list: ShoppingItem[];
+  cost_per_meal:  number;
+  ingredients:    RecipeIngredient[];
+  steps:          RecipeStep[];
+  shopping_list:  ShoppingItem[];
   ai_explanation: string;
 }
 
@@ -63,118 +68,252 @@ function extractJSON(raw: string): any {
   throw new Error('No valid JSON');
 }
 
-function getFallback(goal: GoalType, mealCount: number, variant: number): GeneratedPlan {
+// planIndex even → aves/peixe/ovos ; planIndex odd → carne vermelha/proteína vegetal
+function proteinGuide(planIndex: number): string {
+  return planIndex % 2 === 0
+    ? 'Prefira FRANGO, TILÁPIA, SALMÃO ou OVOS como proteína principal.'
+    : 'Prefira CARNE BOVINA (acém, patinho, carne moída), CARNE SUÍNA ou PROTEÍNA VEGETAL (lentilha, grão-de-bico, tofu) como proteína principal.';
+}
+
+function getFallback(goal: GoalType, mealCount: number, planIndex: number): GeneratedPlan {
   const s = mealCount / 10;
 
-  const templates: Record<GoalType, GeneratedPlan[]> = {
-    emagrecimento: [
-      {
-        title: 'Cardápio Leve e Proteico',
-        meals: [
-          { name: 'Frango grelhado com arroz integral e brócolis', protein_source: 'Frango grelhado', carb_source: 'Arroz integral', vegetable: 'Brócolis', calories: 420, protein_g: 42, carbs_g: 35, fat_g: 8 },
-          { name: 'Carne moída magra com batata doce e cenoura', protein_source: 'Carne moída magra', carb_source: 'Batata doce', vegetable: 'Cenoura', calories: 450, protein_g: 38, carbs_g: 45, fat_g: 12 },
-          { name: 'Tilápia assada com arroz e abobrinha', protein_source: 'Tilápia assada', carb_source: 'Arroz integral', vegetable: 'Abobrinha', calories: 380, protein_g: 40, carbs_g: 32, fat_g: 7 },
-          { name: 'Frango desfiado com mandioquinha e espinafre', protein_source: 'Frango desfiado', carb_source: 'Mandioquinha', vegetable: 'Espinafre', calories: 410, protein_g: 38, carbs_g: 40, fat_g: 9 },
-        ],
-        avg_calories: 415, avg_protein: 40, avg_carbs: 38, avg_fat: 9,
-        estimated_cost: Math.round(95 * s), cost_per_meal: 9.5,
-        shopping_list: [
-          { name: 'Peito de frango', amount: `${(2.5 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(37 * s) },
-          { name: 'Carne moída magra', amount: `${(1 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(18 * s) },
-          { name: 'Tilápia', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(14 * s) },
-          { name: 'Arroz integral', amount: `${(1.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(9 * s) },
-          { name: 'Batata doce', amount: `${(1.2 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(7 * s) },
-          { name: 'Mandioquinha', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
-          { name: 'Brócolis', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
-          { name: 'Cenoura', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(3 * s) },
-          { name: 'Abobrinha', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(3 * s) },
-          { name: 'Alho, cebola e temperos', amount: '1 kit', category: 'temperos', total_cost: Math.round(7 * s) },
-        ],
-        ai_explanation: 'Cardápio rico em proteínas magras e carboidratos complexos, promovendo saciedade e déficit calórico sustentável.',
-      },
-      {
-        title: 'Cardápio Variado Leve',
-        meals: [
-          { name: 'Salmão grelhado com quinoa e aspargos', protein_source: 'Salmão grelhado', carb_source: 'Quinoa', vegetable: 'Aspargos', calories: 440, protein_g: 38, carbs_g: 30, fat_g: 16 },
-          { name: 'Peito de peru com arroz e brócolis', protein_source: 'Peito de peru', carb_source: 'Arroz integral', vegetable: 'Brócolis', calories: 390, protein_g: 42, carbs_g: 34, fat_g: 6 },
-          { name: 'Omelete assado com batata doce e espinafre', protein_source: 'Omelete assado', carb_source: 'Batata doce', vegetable: 'Espinafre', calories: 400, protein_g: 30, carbs_g: 38, fat_g: 12 },
-        ],
-        avg_calories: 410, avg_protein: 37, avg_carbs: 34, avg_fat: 11,
-        estimated_cost: Math.round(110 * s), cost_per_meal: 11.0,
-        shopping_list: [
-          { name: 'Salmão', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(40 * s) },
-          { name: 'Peito de peru', amount: `${(1.5 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(25 * s) },
-          { name: 'Ovos', amount: `${Math.round(12 * s)} unidades`, category: 'proteinas', total_cost: Math.round(12 * s) },
-          { name: 'Quinoa', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(15 * s) },
-          { name: 'Arroz integral', amount: `${(1 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
-          { name: 'Batata doce', amount: `${(1 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
-          { name: 'Brócolis', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
-          { name: 'Espinafre', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
-          { name: 'Aspargos', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(8 * s) },
-          { name: 'Temperos e azeite', amount: '1 kit', category: 'temperos', total_cost: Math.round(8 * s) },
-        ],
-        ai_explanation: 'Combinação de proteínas nobres com gorduras saudáveis e vegetais ricos em fibras, favorecendo emagrecimento com qualidade nutricional.',
-      },
-    ],
-    manutencao: [
-      {
-        title: 'Cardápio Equilibrado',
-        meals: [
-          { name: 'Frango grelhado com arroz, feijão e salada', protein_source: 'Frango grelhado', carb_source: 'Arroz e feijão', vegetable: 'Mix de salada', calories: 520, protein_g: 45, carbs_g: 55, fat_g: 10 },
-          { name: 'Patinho assado com macarrão integral e legumes', protein_source: 'Patinho assado', carb_source: 'Macarrão integral', vegetable: 'Mix de legumes', calories: 560, protein_g: 42, carbs_g: 62, fat_g: 12 },
-          { name: 'Tilápia grelhada com arroz e cenoura', protein_source: 'Tilápia grelhada', carb_source: 'Arroz branco', vegetable: 'Cenoura refogada', calories: 480, protein_g: 40, carbs_g: 52, fat_g: 8 },
-          { name: 'Frango refogado com batata e brócolis', protein_source: 'Frango refogado', carb_source: 'Batata', vegetable: 'Brócolis', calories: 510, protein_g: 40, carbs_g: 52, fat_g: 10 },
-        ],
-        avg_calories: 518, avg_protein: 42, avg_carbs: 55, avg_fat: 10,
-        estimated_cost: Math.round(125 * s), cost_per_meal: 12.5,
-        shopping_list: [
-          { name: 'Peito de frango', amount: `${(2 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(30 * s) },
-          { name: 'Patinho bovino', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(22 * s) },
-          { name: 'Tilápia', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(11 * s) },
-          { name: 'Arroz branco', amount: `${(1 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
-          { name: 'Feijão carioca', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
-          { name: 'Macarrão integral', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
-          { name: 'Batata', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
-          { name: 'Brócolis', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
-          { name: 'Cenoura', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(3 * s) },
-          { name: 'Mix de legumes', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(5 * s) },
-          { name: 'Temperos e condimentos', amount: '1 kit', category: 'temperos', total_cost: Math.round(8 * s) },
-        ],
-        ai_explanation: 'Cardápio completo e variado com proteínas, carboidratos complexos e legumes, ideal para manutenção do peso e energia estável.',
-      },
-    ],
-    massa: [
-      {
-        title: 'Cardápio Hiperproteico',
-        meals: [
-          { name: 'Frango com arroz, batata doce e brócolis', protein_source: 'Peito de frango', carb_source: 'Arroz + batata doce', vegetable: 'Brócolis', calories: 650, protein_g: 58, carbs_g: 72, fat_g: 10 },
-          { name: 'Carne moída com macarrão integral e legumes', protein_source: 'Carne moída', carb_source: 'Macarrão integral', vegetable: 'Mix de legumes', calories: 680, protein_g: 55, carbs_g: 75, fat_g: 14 },
-          { name: 'Tilápia com arroz integral e feijão', protein_source: 'Tilápia', carb_source: 'Arroz integral + feijão', vegetable: 'Cenoura', calories: 620, protein_g: 52, carbs_g: 70, fat_g: 8 },
-          { name: 'Omelete proteico com batata e espinafre', protein_source: 'Omelete (4 ovos)', carb_source: 'Batata', vegetable: 'Espinafre', calories: 590, protein_g: 50, carbs_g: 55, fat_g: 16 },
-          { name: 'Frango desfiado com mandioca e couve', protein_source: 'Frango desfiado', carb_source: 'Mandioca', vegetable: 'Couve', calories: 640, protein_g: 55, carbs_g: 68, fat_g: 11 },
-        ],
-        avg_calories: 636, avg_protein: 54, avg_carbs: 68, avg_fat: 12,
-        estimated_cost: Math.round(145 * s), cost_per_meal: 14.5,
-        shopping_list: [
-          { name: 'Peito de frango', amount: `${(3 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(45 * s) },
-          { name: 'Carne moída', amount: `${(1.2 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(22 * s) },
-          { name: 'Tilápia', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(14 * s) },
-          { name: 'Ovos', amount: `${Math.round(20 * s)} unidades`, category: 'proteinas', total_cost: Math.round(16 * s) },
-          { name: 'Arroz integral', amount: `${(2 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(12 * s) },
-          { name: 'Batata doce', amount: `${(2 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(10 * s) },
-          { name: 'Feijão', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(7 * s) },
-          { name: 'Mandioca', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
-          { name: 'Brócolis', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(5 * s) },
-          { name: 'Legumes variados', amount: `${(1 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(8 * s) },
-          { name: 'Temperos e azeite', amount: '1 kit', category: 'temperos', total_cost: Math.round(10 * s) },
-        ],
-        ai_explanation: 'Cardápio hipercalórico e hiperproteico para maximizar ganho de massa muscular com carboidratos de qualidade e proteínas completas.',
-      },
-    ],
+  const base: Record<string, GeneratedPlan> = {
+    'emagrecimento-0': {
+      title: 'Frango Desfiado Fit com Legumes',
+      meals: [
+        { name: 'Frango desfiado com arroz integral e brócolis', protein_source: 'Frango desfiado', carb_source: 'Arroz integral', vegetable: 'Brócolis', calories: 420, protein_g: 42, carbs_g: 35, fat_g: 8 },
+        { name: 'Tilápia assada com batata doce e cenoura', protein_source: 'Tilápia assada', carb_source: 'Batata doce', vegetable: 'Cenoura', calories: 400, protein_g: 38, carbs_g: 38, fat_g: 7 },
+        { name: 'Omelete proteico com arroz e espinafre', protein_source: 'Omelete (3 ovos)', carb_source: 'Arroz integral', vegetable: 'Espinafre', calories: 380, protein_g: 30, carbs_g: 32, fat_g: 12 },
+      ],
+      avg_calories: 400, avg_protein: 37, avg_carbs: 35, avg_fat: 9,
+      estimated_cost: Math.round(95 * s), cost_per_meal: 9.5,
+      ingredients: [
+        { name: 'Peito de frango', quantity: `${(1.5 * s).toFixed(1)} kg` },
+        { name: 'Tilápia', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Ovos', quantity: `${Math.round(12 * s)} unidades` },
+        { name: 'Arroz integral', quantity: `${(0.5 * s).toFixed(1)} kg (cru)` },
+        { name: 'Batata doce', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Brócolis', quantity: `${(0.5 * s).toFixed(1)} kg` },
+        { name: 'Cenoura', quantity: `${(0.4 * s).toFixed(1)} kg` },
+        { name: 'Espinafre', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Azeite de oliva', quantity: '50 ml' },
+        { name: 'Alho', quantity: '2 cabeças' },
+        { name: 'Sal, pimenta e temperos', quantity: 'a gosto' },
+      ],
+      steps: [
+        { title: 'Etapa 1 – Preparação', items: ['Lavar e secar o frango.', 'Temperar com alho amassado, sal, pimenta e páprica.', 'Cortar a cenoura em cubos e o brócolis em floretes.', 'Reservar a tilápia já temperada com limão e sal.'] },
+        { title: 'Etapa 2 – Cozimento', items: [`Cozinhar o arroz integral em água com sal por 35 minutos (proporção 1:2).`, 'Assar o frango por 25 min a 200°C; desfiar após esfriar.', 'Assar a tilápia por 20 min a 180°C.', 'Refogar os legumes com azeite em fogo médio por 5 minutos.', 'Preparar o omelete com ovos, sal e espinafre refogado.'] },
+        { title: 'Etapa 3 – Montagem das Marmitas', items: [`Distribuir ~150 g de arroz em cada marmita.`, `Adicionar ~120 g de proteína (frango, tilápia ou omelete) alternando por marmita.`, 'Completar com legumes a gosto.', 'Verificar o peso total de cada marmita (~400–450 g).'] },
+        { title: 'Etapa 4 – Congelamento', items: ['Aguardar esfriar completamente (mín. 30 min).', 'Fechar os recipientes hermeticamente.', 'Etiquetar com data de preparo.', 'Armazenar no freezer por até 90 dias.'] },
+      ],
+      shopping_list: [
+        { name: 'Peito de frango', amount: `${(1.5 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(22 * s) },
+        { name: 'Tilápia', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(14 * s) },
+        { name: 'Ovos', amount: `${Math.round(12 * s)} un`, category: 'proteinas', total_cost: Math.round(12 * s) },
+        { name: 'Arroz integral', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
+        { name: 'Batata doce', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
+        { name: 'Brócolis', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
+        { name: 'Cenoura', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(3 * s) },
+        { name: 'Espinafre', amount: `${(0.3 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(5 * s) },
+        { name: 'Alho, azeite e temperos', amount: '1 kit', category: 'temperos', total_cost: Math.round(10 * s) },
+      ],
+      ai_explanation: 'Cardápio leve e proteico com frango desfiado e tilápia, rico em vegetais e carboidratos complexos. Ideal para déficit calórico sustentável.',
+    },
+    'emagrecimento-1': {
+      title: 'Carne Moída com Purê de Batata-Doce',
+      meals: [
+        { name: 'Carne moída refogada com purê de batata-doce e brócolis', protein_source: 'Carne moída magra', carb_source: 'Purê de batata-doce', vegetable: 'Brócolis', calories: 440, protein_g: 38, carbs_g: 42, fat_g: 12 },
+        { name: 'Carne moída com arroz integral e abobrinha', protein_source: 'Carne moída magra', carb_source: 'Arroz integral', vegetable: 'Abobrinha grelhada', calories: 420, protein_g: 36, carbs_g: 38, fat_g: 11 },
+        { name: 'Lentilha refogada com mandioquinha e cenoura', protein_source: 'Lentilha', carb_source: 'Mandioquinha cozida', vegetable: 'Cenoura', calories: 390, protein_g: 22, carbs_g: 55, fat_g: 5 },
+      ],
+      avg_calories: 417, avg_protein: 32, avg_carbs: 45, avg_fat: 9,
+      estimated_cost: Math.round(88 * s), cost_per_meal: 8.8,
+      ingredients: [
+        { name: 'Carne moída magra (patinho)', quantity: `${(1.2 * s).toFixed(1)} kg` },
+        { name: 'Lentilha', quantity: `${(0.4 * s).toFixed(1)} kg` },
+        { name: 'Batata doce', quantity: `${(1.2 * s).toFixed(1)} kg` },
+        { name: 'Arroz integral', quantity: `${(0.4 * s).toFixed(1)} kg (cru)` },
+        { name: 'Mandioquinha', quantity: `${(0.5 * s).toFixed(1)} kg` },
+        { name: 'Brócolis', quantity: `${(0.5 * s).toFixed(1)} kg` },
+        { name: 'Abobrinha', quantity: `${(0.4 * s).toFixed(1)} kg` },
+        { name: 'Cenoura', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Cebola', quantity: '3 unidades' },
+        { name: 'Alho', quantity: '2 cabeças' },
+        { name: 'Azeite e temperos', quantity: 'a gosto' },
+      ],
+      steps: [
+        { title: 'Etapa 1 – Preparação', items: ['Picar cebola e alho finamente.', 'Cortar abobrinha em rodelas e brócolis em floretes.', 'Deixar a lentilha de molho por 30 minutos (opcional).'] },
+        { title: 'Etapa 2 – Cozimento', items: ['Refogar cebola e alho no azeite; adicionar a carne moída e cozinhar bem.', 'Cozinhar a lentilha em água com sal por 20 minutos.', 'Cozinhar batata-doce e mandioquinha até ficarem macias; amassar com garfo.', 'Grelhar abobrinha com azeite e sal.', `Cozinhar o arroz integral por 35 minutos.`] },
+        { title: 'Etapa 3 – Montagem das Marmitas', items: ['Distribuir ~120 g de purê ou arroz em cada marmita.', 'Adicionar ~130 g de carne moída ou lentilha.', 'Completar com legumes grelhados.'] },
+        { title: 'Etapa 4 – Congelamento', items: ['Deixar esfriar completamente.', 'Tampar e etiquetar com a data.', 'Freezar por até 90 dias.'] },
+      ],
+      shopping_list: [
+        { name: 'Carne moída magra', amount: `${(1.2 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(22 * s) },
+        { name: 'Lentilha', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(8 * s) },
+        { name: 'Batata doce', amount: `${(1.2 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(7 * s) },
+        { name: 'Arroz integral', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
+        { name: 'Mandioquinha', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
+        { name: 'Brócolis', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
+        { name: 'Abobrinha', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(3 * s) },
+        { name: 'Cebola e alho', amount: '1 kit', category: 'temperos', total_cost: Math.round(5 * s) },
+        { name: 'Azeite e condimentos', amount: '1 kit', category: 'temperos', total_cost: Math.round(7 * s) },
+      ],
+      ai_explanation: 'Cardápio com carne moída magra e lentilha — proteínas acessíveis e versáteis, com purê de batata-doce para saciedade no déficit calórico.',
+    },
+    'manutencao-0': {
+      title: 'Frango Assado com Arroz e Legumes',
+      meals: [
+        { name: 'Frango assado com arroz branco e mix de legumes', protein_source: 'Frango assado', carb_source: 'Arroz branco', vegetable: 'Mix de legumes', calories: 520, protein_g: 45, carbs_g: 55, fat_g: 10 },
+        { name: 'Tilápia grelhada com macarrão integral e cenoura', protein_source: 'Tilápia grelhada', carb_source: 'Macarrão integral', vegetable: 'Cenoura refogada', calories: 500, protein_g: 40, carbs_g: 58, fat_g: 9 },
+      ],
+      avg_calories: 510, avg_protein: 43, avg_carbs: 57, avg_fat: 10,
+      estimated_cost: Math.round(125 * s), cost_per_meal: 12.5,
+      ingredients: [
+        { name: 'Peito de frango', quantity: `${(1.5 * s).toFixed(1)} kg` },
+        { name: 'Tilápia', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Arroz branco', quantity: `${(0.6 * s).toFixed(1)} kg (cru)` },
+        { name: 'Macarrão integral', quantity: `${(0.5 * s).toFixed(1)} kg` },
+        { name: 'Mix de legumes (cenoura, vagem, milho)', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Azeite, alho e temperos', quantity: 'a gosto' },
+      ],
+      steps: [
+        { title: 'Etapa 1 – Preparação', items: ['Marinar o frango com alho, sal, limão e páprica por 30 min.', 'Pré-cozinhar o macarrão al dente.', 'Cortar os legumes em cubos pequenos.'] },
+        { title: 'Etapa 2 – Cozimento', items: ['Assar o frango a 200°C por 30 min.', 'Cozinhar o arroz branco normalmente.', 'Refogar os legumes com azeite por 5 min.', 'Grelhar a tilápia com limão.'] },
+        { title: 'Etapa 3 – Montagem das Marmitas', items: ['150–180 g de arroz ou macarrão por marmita.', '150 g de proteína por marmita.', 'Completar com legumes.'] },
+        { title: 'Etapa 4 – Congelamento', items: ['Esfriar, tampar e etiquetar.', 'Conservar no freezer por até 90 dias.'] },
+      ],
+      shopping_list: [
+        { name: 'Peito de frango', amount: `${(1.5 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(22 * s) },
+        { name: 'Tilápia', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(14 * s) },
+        { name: 'Arroz branco', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
+        { name: 'Macarrão integral', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
+        { name: 'Mix de legumes', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(8 * s) },
+        { name: 'Temperos e azeite', amount: '1 kit', category: 'temperos', total_cost: Math.round(10 * s) },
+      ],
+      ai_explanation: 'Cardápio equilibrado com frango e tilápia, combinando carboidratos de qualidade para manutenção energética ao longo da semana.',
+    },
+    'manutencao-1': {
+      title: 'Patinho Assado com Quinoa e Legumes',
+      meals: [
+        { name: 'Patinho assado com quinoa e aspargos', protein_source: 'Patinho assado', carb_source: 'Quinoa', vegetable: 'Aspargos grelhados', calories: 540, protein_g: 44, carbs_g: 52, fat_g: 13 },
+        { name: 'Carne moída com batata e couve', protein_source: 'Carne moída', carb_source: 'Batata cozida', vegetable: 'Couve refogada', calories: 510, protein_g: 40, carbs_g: 55, fat_g: 11 },
+      ],
+      avg_calories: 525, avg_protein: 42, avg_carbs: 54, avg_fat: 12,
+      estimated_cost: Math.round(140 * s), cost_per_meal: 14.0,
+      ingredients: [
+        { name: 'Patinho bovino', quantity: `${(1.0 * s).toFixed(1)} kg` },
+        { name: 'Carne moída', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Quinoa', quantity: `${(0.4 * s).toFixed(1)} kg (cru)` },
+        { name: 'Batata', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Aspargos', quantity: `${(0.4 * s).toFixed(1)} kg` },
+        { name: 'Couve', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Azeite, alho e temperos', quantity: 'a gosto' },
+      ],
+      steps: [
+        { title: 'Etapa 1 – Preparação', items: ['Temperar o patinho com alho, sal, ervas e limão.', 'Lavar a quinoa e deixar de molho 10 min.', 'Lavar e picar a couve finamente.'] },
+        { title: 'Etapa 2 – Cozimento', items: ['Assar o patinho a 180°C por 40–45 min.', 'Cozinhar a quinoa (1:2 com água) por 15 min.', 'Cozinhar a batata com casca até amolecer.', 'Grelhar aspargos e refogar a couve com alho.', 'Preparar a carne moída refogada com cebola e alho.'] },
+        { title: 'Etapa 3 – Montagem das Marmitas', items: ['150 g de quinoa ou batata por marmita.', '140 g de proteína por marmita.', 'Adicionar os vegetais.'] },
+        { title: 'Etapa 4 – Congelamento', items: ['Esfriar completamente.', 'Fechar e etiquetar.', 'Freezar por até 90 dias.'] },
+      ],
+      shopping_list: [
+        { name: 'Patinho bovino', amount: `${(1.0 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(28 * s) },
+        { name: 'Carne moída', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(15 * s) },
+        { name: 'Quinoa', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(15 * s) },
+        { name: 'Batata', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
+        { name: 'Aspargos', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(12 * s) },
+        { name: 'Couve', amount: `${(0.3 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
+        { name: 'Temperos e azeite', amount: '1 kit', category: 'temperos', total_cost: Math.round(10 * s) },
+      ],
+      ai_explanation: 'Combinação de proteínas bovinas com quinoa (proteína completa) e vegetais variados para manutenção com alto valor nutricional.',
+    },
+    'massa-0': {
+      title: 'Frango Hipercalórico com Arroz e Batata Doce',
+      meals: [
+        { name: 'Frango grelhado com arroz integral, batata doce e brócolis', protein_source: 'Peito de frango', carb_source: 'Arroz integral + Batata doce', vegetable: 'Brócolis', calories: 650, protein_g: 58, carbs_g: 72, fat_g: 10 },
+        { name: 'Frango assado com macarrão integral e legumes', protein_source: 'Coxa de frango', carb_source: 'Macarrão integral', vegetable: 'Mix de legumes', calories: 670, protein_g: 55, carbs_g: 75, fat_g: 14 },
+        { name: 'Omelete proteico com batata e espinafre', protein_source: 'Omelete (4 ovos)', carb_source: 'Batata inglesa', vegetable: 'Espinafre', calories: 590, protein_g: 50, carbs_g: 55, fat_g: 16 },
+      ],
+      avg_calories: 637, avg_protein: 54, avg_carbs: 67, avg_fat: 13,
+      estimated_cost: Math.round(145 * s), cost_per_meal: 14.5,
+      ingredients: [
+        { name: 'Peito de frango', quantity: `${(2.0 * s).toFixed(1)} kg` },
+        { name: 'Coxa de frango (sem pele)', quantity: `${(0.8 * s).toFixed(1)} kg` },
+        { name: 'Ovos', quantity: `${Math.round(20 * s)} unidades` },
+        { name: 'Arroz integral', quantity: `${(0.8 * s).toFixed(1)} kg (cru)` },
+        { name: 'Batata doce', quantity: `${(1.5 * s).toFixed(1)} kg` },
+        { name: 'Batata inglesa', quantity: `${(0.6 * s).toFixed(1)} kg` },
+        { name: 'Macarrão integral', quantity: `${(0.5 * s).toFixed(1)} kg` },
+        { name: 'Brócolis', quantity: `${(0.5 * s).toFixed(1)} kg` },
+        { name: 'Espinafre', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Azeite (uso generoso)', quantity: '100 ml' },
+        { name: 'Alho, sal e temperos', quantity: 'a gosto' },
+      ],
+      steps: [
+        { title: 'Etapa 1 – Preparação', items: ['Temperar o frango generosamente com alho, ervas e azeite.', 'Cortar a batata doce em cubos grandes.', 'Separar ovos e temperar com sal.'] },
+        { title: 'Etapa 2 – Cozimento', items: [`Cozinhar o arroz integral por 35 min.`, 'Assar o frango inteiro a 200°C por 30–35 min.', 'Cozinhar batata doce e inglesa no vapor ou forno.', 'Preparar omelete alto (4 ovos) em frigideira.', 'Cozinhar macarrão integral al dente.', 'Refogar brócolis e espinafre com azeite.'] },
+        { title: 'Etapa 3 – Montagem das Marmitas', items: ['200–220 g de carboidrato por marmita (arroz + batata doce).', '160–180 g de proteína por marmita.', 'Finalizar com legumes e fio de azeite.'] },
+        { title: 'Etapa 4 – Congelamento', items: ['Esfriar antes de fechar.', 'Etiquetar com proteína e data.', 'Freezar por até 90 dias.'] },
+      ],
+      shopping_list: [
+        { name: 'Peito de frango', amount: `${(2.0 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(30 * s) },
+        { name: 'Coxa de frango', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(10 * s) },
+        { name: 'Ovos', amount: `${Math.round(20 * s)} un`, category: 'proteinas', total_cost: Math.round(16 * s) },
+        { name: 'Arroz integral', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(8 * s) },
+        { name: 'Batata doce', amount: `${(1.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(9 * s) },
+        { name: 'Batata inglesa', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(4 * s) },
+        { name: 'Macarrão integral', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
+        { name: 'Brócolis', amount: `${(0.5 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(4 * s) },
+        { name: 'Espinafre', amount: `${(0.3 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(5 * s) },
+        { name: 'Azeite e temperos', amount: '1 kit', category: 'temperos', total_cost: Math.round(13 * s) },
+      ],
+      ai_explanation: 'Cardápio hipercalórico baseado em frango com alta densidade de carboidratos complexos para máximo ganho de massa muscular.',
+    },
+    'massa-1': {
+      title: 'Carne Moída e Frango com Mandioca e Feijão',
+      meals: [
+        { name: 'Carne moída com mandioca cozida e couve', protein_source: 'Carne moída', carb_source: 'Mandioca cozida', vegetable: 'Couve refogada', calories: 680, protein_g: 55, carbs_g: 75, fat_g: 14 },
+        { name: 'Frango desfiado com feijão preto e arroz', protein_source: 'Frango desfiado', carb_source: 'Feijão preto + arroz', vegetable: 'Cenoura', calories: 660, protein_g: 52, carbs_g: 72, fat_g: 12 },
+        { name: 'Tilápia com arroz, lentilha e espinafre', protein_source: 'Tilápia grelhada', carb_source: 'Arroz + lentilha', vegetable: 'Espinafre', calories: 610, protein_g: 48, carbs_g: 68, fat_g: 9 },
+      ],
+      avg_calories: 650, avg_protein: 52, avg_carbs: 72, avg_fat: 12,
+      estimated_cost: Math.round(138 * s), cost_per_meal: 13.8,
+      ingredients: [
+        { name: 'Carne moída (patinho)', quantity: `${(1.2 * s).toFixed(1)} kg` },
+        { name: 'Peito de frango', quantity: `${(1.0 * s).toFixed(1)} kg` },
+        { name: 'Tilápia', quantity: `${(0.6 * s).toFixed(1)} kg` },
+        { name: 'Arroz branco', quantity: `${(0.8 * s).toFixed(1)} kg (cru)` },
+        { name: 'Feijão preto', quantity: `${(0.4 * s).toFixed(1)} kg (cru)` },
+        { name: 'Lentilha', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Mandioca congelada', quantity: `${(1.0 * s).toFixed(1)} kg` },
+        { name: 'Couve', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Espinafre', quantity: `${(0.3 * s).toFixed(1)} kg` },
+        { name: 'Cenoura', quantity: `${(0.4 * s).toFixed(1)} kg` },
+        { name: 'Cebola, alho e temperos', quantity: 'a gosto' },
+      ],
+      steps: [
+        { title: 'Etapa 1 – Preparação', items: ['Deixar feijão de molho por 8h ou usar panela de pressão.', 'Descongelar a mandioca.', 'Temperar frango e tilápia com ervas e sal.'] },
+        { title: 'Etapa 2 – Cozimento', items: ['Cozinhar feijão na pressão por 25 min.', 'Cozinhar lentilha por 20 min.', 'Refogar a carne moída com cebola, alho e tomate.', 'Cozinhar a mandioca até macia.', 'Assar frango e tilápia.', 'Cozinhar o arroz branco normalmente.'] },
+        { title: 'Etapa 3 – Montagem das Marmitas', items: ['180 g de carboidrato (arroz + feijão ou mandioca).', '140–160 g de proteína.', 'Finalizar com vegetais.'] },
+        { title: 'Etapa 4 – Congelamento', items: ['Resfriar e tampar hermeticamente.', 'Etiquetar e freezar por até 90 dias.'] },
+      ],
+      shopping_list: [
+        { name: 'Carne moída', amount: `${(1.2 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(22 * s) },
+        { name: 'Peito de frango', amount: `${(1.0 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(15 * s) },
+        { name: 'Tilápia', amount: `${(0.6 * s).toFixed(1)}kg`, category: 'proteinas', total_cost: Math.round(11 * s) },
+        { name: 'Arroz branco', amount: `${(0.8 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
+        { name: 'Feijão preto', amount: `${(0.4 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(5 * s) },
+        { name: 'Lentilha', amount: `${(0.3 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(6 * s) },
+        { name: 'Mandioca congelada', amount: `${(1.0 * s).toFixed(1)}kg`, category: 'carboidratos', total_cost: Math.round(7 * s) },
+        { name: 'Vegetais variados', amount: `${(1.0 * s).toFixed(1)}kg`, category: 'hortifruti', total_cost: Math.round(8 * s) },
+        { name: 'Temperos e condimentos', amount: '1 kit', category: 'temperos', total_cost: Math.round(8 * s) },
+      ],
+      ai_explanation: 'Cardápio diversificado com carne bovina, frango e tilápia combinados com leguminosas ricas em carboidratos e proteínas para ganho de massa.',
+    },
   };
 
-  const options = templates[goal];
-  return options[variant % options.length];
+  const key = `${goal}-${planIndex % 2}`;
+  return base[key] ?? base[`${goal}-0`] ?? base['emagrecimento-0'];
 }
 
 export async function POST(req: Request) {
@@ -183,13 +322,13 @@ export async function POST(req: Request) {
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const userId = session.user.id;
-    const body = await req.json();
+    const body   = await req.json();
 
-    const config = body.config as { mealCount: number; budget: BudgetType; goal: GoalType };
+    const config:           { mealCount: number; budget: BudgetType; goal: GoalType } = body.config;
     const existingMealNames: string[] = body.existingMealNames ?? [];
-    const planIndex: number = body.planIndex ?? 0;
+    const planIndex:         number   = body.planIndex ?? 0;
 
-    const today = brazilToday();
+    const today        = brazilToday();
     const thirtyDaysAgo = brazilNDaysAgo(30, today);
 
     const [{ data: profile }, { data: foodLogs }] = await Promise.all([
@@ -213,41 +352,39 @@ export async function POST(req: Request) {
       if (!byDate[log.log_date]) byDate[log.log_date] = { cal: 0, prot: 0, carbs: 0, fat: 0 };
       byDate[log.log_date].cal   += log.calories;
       byDate[log.log_date].prot  += log.protein ?? 0;
-      byDate[log.log_date].carbs += log.carbs ?? 0;
-      byDate[log.log_date].fat   += log.fat ?? 0;
+      byDate[log.log_date].carbs += log.carbs   ?? 0;
+      byDate[log.log_date].fat   += log.fat     ?? 0;
     }
-    const histDates = Object.keys(byDate);
-    const histVals  = Object.values(byDate);
-    const avgCal   = histDates.length > 0 ? Math.round(histVals.reduce((s, v) => s + v.cal, 0) / histDates.length) : (profile?.target_calories ?? 2000);
-    const avgProt  = histDates.length > 0 ? Math.round(histVals.reduce((s, v) => s + v.prot, 0) / histDates.length) : 130;
-    const avgCarbs = histDates.length > 0 ? Math.round(histVals.reduce((s, v) => s + v.carbs, 0) / histDates.length) : 170;
-    const avgFat   = histDates.length > 0 ? Math.round(histVals.reduce((s, v) => s + v.fat, 0) / histDates.length) : 55;
+    const hdates = Object.keys(byDate);
+    const hvals  = Object.values(byDate);
+    const avgCal   = hdates.length > 0 ? Math.round(hvals.reduce((s, v) => s + v.cal,   0) / hdates.length) : (profile?.target_calories ?? 2000);
+    const avgProt  = hdates.length > 0 ? Math.round(hvals.reduce((s, v) => s + v.prot,  0) / hdates.length) : 130;
+    const avgCarbs = hdates.length > 0 ? Math.round(hvals.reduce((s, v) => s + v.carbs, 0) / hdates.length) : 170;
+    const avgFat   = hdates.length > 0 ? Math.round(hvals.reduce((s, v) => s + v.fat,   0) / hdates.length) : 55;
 
     const foodCounts: Record<string, number> = {};
     for (const log of foodLogs ?? []) {
-      const name = (log.food_name ?? '').toLowerCase().trim();
-      if (name) foodCounts[name] = (foodCounts[name] ?? 0) + 1;
+      const n = (log.food_name ?? '').toLowerCase().trim();
+      if (n) foodCounts[n] = (foodCounts[n] ?? 0) + 1;
     }
     const frequentFoods = Object.entries(foodCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([name]) => name);
+      .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([n]) => n);
 
     const uniqueMealsCount = Math.min(Math.max(Math.ceil(config.mealCount / 2), 3), 6);
 
     const budgetMap: Record<BudgetType, string> = {
-      economico: `econômico (R$ ${Math.round(config.mealCount * 9)}-${Math.round(config.mealCount * 11)} para ${config.mealCount} marmitas)`,
-      moderado:  `moderado (R$ ${Math.round(config.mealCount * 13)}-${Math.round(config.mealCount * 16)} para ${config.mealCount} marmitas)`,
-      premium:   `premium (R$ ${Math.round(config.mealCount * 19)}-${Math.round(config.mealCount * 23)} para ${config.mealCount} marmitas)`,
+      economico: `econômico (R$ ${Math.round(config.mealCount * 9)}–${Math.round(config.mealCount * 11)} total)`,
+      moderado:  `moderado (R$ ${Math.round(config.mealCount * 13)}–${Math.round(config.mealCount * 16)} total)`,
+      premium:   `premium (R$ ${Math.round(config.mealCount * 19)}–${Math.round(config.mealCount * 23)} total)`,
     };
     const goalMap: Record<GoalType, string> = {
-      emagrecimento: 'emagrecimento — déficit calórico, alta proteína, carboidratos complexos',
+      emagrecimento: 'emagrecimento — déficit calórico, alta proteína, carboidratos complexos controlados',
       manutencao:    'manutenção — calorias ≈ gasto, macros equilibrados',
       massa:         'ganho de massa — superávit calórico, muito proteína, carboidratos generosos',
     };
 
     const avoidSection = existingMealNames.length > 0
-      ? `\nEVITAR (já em cardápios aprovados):\n${existingMealNames.slice(0, 10).map((n) => `• ${n}`).join('\n')}\n`
+      ? `\nEVITAR (já em outros cardápios):\n${existingMealNames.slice(0, 12).map((n) => `• ${n}`).join('\n')}\n`
       : '';
 
     const prompt = `Você é nutricionista especializado em meal prep saudável para brasileiros.
@@ -256,21 +393,25 @@ PERFIL:
 • Objetivo: ${goalMap[config.goal]}
 • Meta calórica: ${profile?.target_calories ?? avgCal}kcal/dia | Proteína: ${profile?.target_protein_g ?? Math.round(((profile?.target_calories ?? avgCal) * 0.3) / 4)}g/dia
 • Peso: ${profile?.current_weight ?? '?'}kg | Sexo: ${profile?.sex === 'female' ? 'F' : 'M'}
-• Média atual (30d): ${avgCal}kcal · ${avgProt}g prot · ${avgCarbs}g carbs · ${avgFat}g gord
+• Média 30d: ${avgCal}kcal · ${avgProt}g prot · ${avgCarbs}g carbs · ${avgFat}g gord
 • Alimentos frequentes: ${frequentFoods.length > 0 ? frequentFoods.join(', ') : 'não identificados'}
 
 CONFIGURAÇÃO:
 • Total de marmitas: ${config.mealCount}
 • Orçamento: ${budgetMap[config.budget]}
 • Refeições únicas: ${uniqueMealsCount} (repetidas para completar ${config.mealCount} marmitas)
+• Guia de proteína (OBRIGATÓRIO): ${proteinGuide(planIndex)}
 ${avoidSection}
-Gere ${uniqueMealsCount} refeições DIFERENTES com proteínas VARIADAS (ex: frango, carne, peixe, ovos).
-Calcule os ingredientes para o TOTAL de ${config.mealCount} marmitas.
-Use preços médios de mercado brasileiro 2025.
+REGRAS IMPORTANTES:
+1. Gere ${uniqueMealsCount} refeições CLARAMENTE DIFERENTES entre si (variar proteína, preparo e vegetais).
+2. Siga ESTRITAMENTE o guia de proteína acima — não use frango se pedir carne bovina e vice-versa.
+3. Calcule ingredientes e shopping list para o TOTAL de ${config.mealCount} marmitas.
+4. Use preços médios de mercado brasileiro 2025.
+5. O modo de preparo deve ser detalhado e executável (tempos, temperaturas, quantidades por marmita).
 
 Retorne SOMENTE JSON válido (sem texto fora, sem markdown):
 {
-  "title": "Cardápio Econômico|Variado|Proteico|Premium|Leve (escolha baseado no contexto)",
+  "title": "Nome curto e apetitoso da receita (ex: Frango Desfiado Fit com Legumes)",
   "meals": [
     {
       "name": "Nome completo da refeição",
@@ -289,22 +430,44 @@ Retorne SOMENTE JSON válido (sem texto fora, sem markdown):
   "avg_fat": 8,
   "estimated_cost": 115,
   "cost_per_meal": 11.5,
-  "shopping_list": [
-    { "name": "Peito de frango", "amount": "3kg", "category": "proteinas", "total_cost": 45.0 }
+  "ingredients": [
+    { "name": "Peito de frango", "quantity": "1,5 kg" },
+    { "name": "Arroz integral", "quantity": "500 g (cru)" }
   ],
-  "ai_explanation": "1-2 frases sobre por que este cardápio atende ao objetivo e perfil."
+  "steps": [
+    {
+      "title": "Etapa 1 – Preparação",
+      "items": ["Lavar e secar o frango.", "Temperar com alho, sal e páprica."]
+    },
+    {
+      "title": "Etapa 2 – Cozimento",
+      "items": ["Cozinhar o arroz por 35 min.", "Grelhar o frango por 8 min de cada lado."]
+    },
+    {
+      "title": "Etapa 3 – Montagem das Marmitas",
+      "items": ["Distribuir 150 g de arroz em cada marmita.", "Adicionar 120 g de frango."]
+    },
+    {
+      "title": "Etapa 4 – Congelamento",
+      "items": ["Aguardar esfriar completamente.", "Fechar hermeticamente e etiquetar.", "Freezar por até 90 dias."]
+    }
+  ],
+  "shopping_list": [
+    { "name": "Peito de frango", "amount": "1,5kg", "category": "proteinas", "total_cost": 22.5 }
+  ],
+  "ai_explanation": "1-2 frases sobre por que este cardápio atende ao objetivo."
 }
-Categorias válidas: "proteinas", "carboidratos", "hortifruti", "temperos", "outros"`;
+Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "temperos", "outros"`;
 
-    console.log(`[meal-prep] Calling Gemini | goal=${config.goal} | budget=${config.budget} | meals=${config.mealCount} | planIndex=${planIndex}`);
+    console.log(`[meal-prep] Gemini | goal=${config.goal} | budget=${config.budget} | meals=${config.mealCount} | idx=${planIndex}`);
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: 'Você é nutricionista especializado em meal prep. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.',
-          maxOutputTokens: 1800,
+          systemInstruction: 'Nutricionista de meal prep. Retorne SOMENTE JSON válido, sem texto fora, sem markdown.',
+          maxOutputTokens: 3000,
           temperature: 0.85,
           thinkingConfig: { thinkingBudget: 0 },
         },
@@ -315,9 +478,13 @@ Categorias válidas: "proteinas", "carboidratos", "hortifruti", "temperos", "out
     let plan: GeneratedPlan;
     try {
       const parsed = extractJSON(raw);
-      if (!parsed?.meals || !Array.isArray(parsed.meals) || parsed.meals.length === 0) throw new Error('invalid');
+      if (!parsed?.meals || !Array.isArray(parsed.meals) || parsed.meals.length === 0) throw new Error('invalid meals');
       if (!parsed?.shopping_list || !Array.isArray(parsed.shopping_list)) throw new Error('invalid shopping');
-      plan = parsed as GeneratedPlan;
+      plan = {
+        ...parsed,
+        ingredients:  Array.isArray(parsed.ingredients)  ? parsed.ingredients  : [],
+        steps:        Array.isArray(parsed.steps)         ? parsed.steps        : [],
+      } as GeneratedPlan;
     } catch {
       console.warn('[meal-prep] Gemini parse failed, using fallback');
       plan = getFallback(config.goal, config.mealCount, planIndex);
@@ -328,16 +495,6 @@ Categorias válidas: "proteinas", "carboidratos", "hortifruti", "temperos", "out
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('[meal-prep] Error:', msg);
-    if (msg.includes('503') || msg.includes('UNAVAILABLE')) {
-      // Return fallback so UI is never empty
-      try {
-        const body = await new Request(req.url).json().catch(() => ({}));
-        const goal = body?.config?.goal ?? 'emagrecimento';
-        const mealCount = body?.config?.mealCount ?? 10;
-        const fallback = getFallback(goal, mealCount, 0);
-        return NextResponse.json(fallback);
-      } catch { /**/ }
-    }
     return NextResponse.json({ error: 'Erro ao gerar cardápio' }, { status: 500 });
   }
 }
