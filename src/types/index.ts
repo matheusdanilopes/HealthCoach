@@ -16,7 +16,7 @@ export interface FoodLog {
   user_id: string;
   created_at: string;
   food_name: string;
-  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | null;
+  meal_type: MealType | 'snack' | null;
   calories: number;
   protein: number | null;
   carbs: number | null;
@@ -103,5 +103,14 @@ export interface AIInsight {
   read_at: string | null;
 }
 
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealType =
+  | 'breakfast'
+  | 'morning_snack'
+  | 'lunch'
+  | 'afternoon_snack'
+  | 'dinner'
+  | 'supper'
+  | 'pre_workout'
+  | 'post_workout'
+  | 'other';
 export type ActivityLevel = 'sedentary' | 'moderate' | 'active';

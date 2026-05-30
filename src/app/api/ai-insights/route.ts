@@ -33,10 +33,16 @@ const VALID_TYPES      = ['nutrition', 'hydration', 'workout', 'body', 'behavior
 const VALID_PRIORITIES = ['informativo', 'atencao', 'positivo', 'recomendacao'];
 
 const MEAL_LABEL: Record<string, string> = {
-  breakfast: 'Café da manhã',
-  lunch:     'Almoço',
-  dinner:    'Jantar',
-  snack:     'Lanche',
+  breakfast:       'Café da manhã',
+  morning_snack:   'Lanche da manhã',
+  lunch:           'Almoço',
+  afternoon_snack: 'Lanche da tarde',
+  dinner:          'Jantar',
+  supper:          'Ceia',
+  pre_workout:     'Pré-treino',
+  post_workout:    'Pós-treino',
+  other:           'Livre / Outro',
+  snack:           'Lanche',
 };
 
 const DOW_NAME = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];

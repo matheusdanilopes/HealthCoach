@@ -22,7 +22,7 @@ const LOG_FOOD_DECLARATION = {
       fat: { type: Type.NUMBER, description: 'Gordura em gramas' },
       meal_type: {
         type: Type.STRING,
-        enum: ['breakfast', 'lunch', 'dinner', 'snack'],
+        enum: ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'],
         description: 'Tipo de refeição',
       },
     },
