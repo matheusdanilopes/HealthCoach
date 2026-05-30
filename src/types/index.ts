@@ -93,7 +93,7 @@ export interface BodyMeasurements {
 export interface AIInsight {
   id: string;
   user_id: string;
-  type: 'nutrition' | 'workout' | 'body' | 'behavior';
+  type: 'nutrition' | 'hydration' | 'workout' | 'body' | 'behavior' | 'motivation';
   priority: 'informativo' | 'atencao' | 'positivo' | 'recomendacao';
   title: string;
   message: string;

@@ -1,15 +1,20 @@
 'use client';
 
 import { memo, useEffect, useState, useCallback, useRef } from 'react';
-import { Sparkles, Apple, Dumbbell, TrendingUp, Brain, ChevronRight, RefreshCw } from 'lucide-react';
+import {
+  Sparkles, Apple, Dumbbell, TrendingUp, Brain,
+  ChevronRight, RefreshCw, Droplets, Star, ChevronDown,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AIInsight } from '@/types';
 
 const TYPE_CONFIG = {
-  nutrition: { icon: Apple,      label: 'Nutrição' },
-  workout:   { icon: Dumbbell,   label: 'Treino'   },
-  body:      { icon: TrendingUp, label: 'Corpo'    },
-  behavior:  { icon: Brain,      label: 'Hábitos'  },
+  nutrition:  { icon: Apple,      label: 'Nutrição'    },
+  hydration:  { icon: Droplets,   label: 'Hidratação'  },
+  workout:    { icon: Dumbbell,   label: 'Treino'      },
+  body:       { icon: TrendingUp, label: 'Corpo'       },
+  behavior:   { icon: Brain,      label: 'Hábitos'     },
+  motivation: { icon: Star,       label: 'Motivação'   },
 };
 
 const PRIORITY_CONFIG = {
@@ -52,7 +57,7 @@ function InsightSkeleton() {
         </div>
         <div className="flex items-start gap-3">
           <div className="h-9 w-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 animate-pulse flex-shrink-0" />
-          <div className="flex-1 min-w-0 space-y-2 pt-0.5">
+          <div className="flex-1 space-y-2 pt-0.5">
             <div className="h-3.5 w-2/3 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
             <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
             <div className="h-3 w-4/5 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
@@ -71,7 +76,7 @@ function InsightError({ onRetry }: { onRetry: () => void }) {
         <div className="h-9 w-9 rounded-xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
           <Brain size={16} className="text-zinc-300 dark:text-zinc-600" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-[13px] text-zinc-400 dark:text-zinc-500">Insights temporariamente indisponíveis</p>
         </div>
         <button
@@ -85,14 +90,11 @@ function InsightError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-// Debounce delay for auto-refresh triggered by data changes (ms)
 const AUTO_REFRESH_DEBOUNCE_MS = 1_500;
 
 interface AIInsightCardProps {
   userId: string;
-  /** Increment each time a meal/workout is logged to trigger a background refresh */
   refreshKey?: number;
-  /** Called when the user taps the CTA — passes a pre-formed message for the chat */
   onOpenChat?: (message: string) => void;
 }
 
@@ -105,14 +107,13 @@ const AIInsightCard = memo(function AIInsightCard({
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded]     = useState(false);
   const debounceRef                 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchInsight = useCallback(async (force = false) => {
-    // During a forced refresh, don't clear the existing insight — show it as stale
     if (force) {
       setRefreshing(true);
     } else {
-      // Only show skeleton on the very first load (no insight yet)
       setLoading((prev) => prev || true);
     }
     try {
@@ -121,6 +122,7 @@ const AIInsightCard = memo(function AIInsightCard({
       const data: AIInsight = await res.json();
       if (data && data.id) {
         setInsight(data);
+        setExpanded(false);
         setError(false);
       } else {
         throw new Error('Invalid response');
@@ -129,19 +131,14 @@ const AIInsightCard = memo(function AIInsightCard({
       const msg = err instanceof Error ? err.message : String(err);
       console.warn('[AIInsightCard] fetch failed:', msg);
       setError(true);
-      // Do NOT clear the existing insight — stale data is better than nothing
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // Initial load
   useEffect(() => { fetchInsight(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced auto-refresh when meals/workouts are logged.
-  // Show spinner immediately so the user sees feedback right away;
-  // the actual AI call fires after a short debounce to coalesce rapid actions.
   useEffect(() => {
     if (refreshKey === 0) return;
     setRefreshing(true);
@@ -150,17 +147,20 @@ const AIInsightCard = memo(function AIInsightCard({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  // fetchInsight is stable (useCallback with []), safe to exclude from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
   if (loading && !insight) return <InsightSkeleton />;
-  if (error && !insight) return <InsightError onRetry={() => fetchInsight()} />;
-  if (!insight) return null;
+  if (error && !insight)   return <InsightError onRetry={() => fetchInsight()} />;
+  if (!insight)            return null;
 
-  const typeConfig = TYPE_CONFIG[insight.type as keyof typeof TYPE_CONFIG]           ?? TYPE_CONFIG.behavior;
+  const typeConfig = TYPE_CONFIG[insight.type as keyof typeof TYPE_CONFIG]            ?? TYPE_CONFIG.behavior;
   const prioConfig = PRIORITY_CONFIG[insight.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.informativo;
-  const Icon = typeConfig.icon;
+  const Icon       = typeConfig.icon;
+
+  const expandedText = typeof insight.metadata?.expanded === 'string' && insight.metadata.expanded
+    ? insight.metadata.expanded
+    : null;
 
   function handleCTA() {
     if (!onOpenChat) return;
@@ -194,12 +194,13 @@ const AIInsightCard = memo(function AIInsightCard({
 
         {/* Content */}
         <div className="flex items-start gap-3">
-          <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', prioConfig.icon)}>
+          <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5', prioConfig.icon)}>
             <Icon size={16} />
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-2 mb-1.5">
+          <div className="flex-1">
+            {/* Title + priority badge */}
+            <div className="flex items-start gap-2 mb-2">
               <h3 className="flex-1 text-[14px] font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">
                 {insight.title}
               </h3>
@@ -211,9 +212,36 @@ const AIInsightCard = memo(function AIInsightCard({
                 {prioConfig.label}
               </span>
             </div>
+
+            {/* Main message — never truncated */}
             <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
               {insight.message}
             </p>
+
+            {/* Expandable deeper analysis */}
+            {expandedText && (
+              <>
+                <div
+                  className="overflow-hidden transition-all duration-300 ease-in-out"
+                  style={{ maxHeight: expanded ? '500px' : '0' }}
+                >
+                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    {expandedText}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setExpanded(!expanded)}
+                  className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 transition-colors"
+                >
+                  {expanded ? 'Ver menos' : 'Ver mais'}
+                  <ChevronDown
+                    size={12}
+                    strokeWidth={2.5}
+                    className={cn('transition-transform duration-200', expanded && 'rotate-180')}
+                  />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
