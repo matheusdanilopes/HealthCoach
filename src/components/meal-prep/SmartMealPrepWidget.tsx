@@ -240,10 +240,10 @@ function PlanCard({
       <div className="space-y-1.5 mb-3">
         {(expanded ? plan.meals : plan.meals.slice(0, 3)).map((meal, i) => (
           <div key={i} className="flex items-start gap-1.5">
-            <span className="text-zinc-300 dark:text-zinc-600 mt-0.5 flex-shrink-0">•</span>
+            <span className="text-zinc-300 dark:text-zinc-600 mt-[3px] flex-shrink-0">•</span>
             <div className="min-w-0">
-              <span className="text-[12px] text-zinc-700 dark:text-zinc-300 font-medium">{meal.protein_source}</span>
-              <span className="text-[11px] text-zinc-400 dark:text-zinc-500"> · {meal.carb_source} · {meal.vegetable}</span>
+              <p className="text-[12px] text-zinc-700 dark:text-zinc-300 font-medium leading-snug">{meal.name}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">{meal.protein_source} · {meal.carb_source} · {meal.vegetable}</p>
             </div>
           </div>
         ))}
