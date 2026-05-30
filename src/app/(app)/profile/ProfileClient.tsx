@@ -22,6 +22,7 @@ import {
   Bell,
   BellOff,
   Loader2,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { requestAndSubscribePush, unsubscribeFromPush, forceResubscribePush } from '@/components/ServiceWorkerRegistration';
@@ -702,6 +703,25 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               </div>
             </button>
           )}
+
+          {/* Diagnostics link */}
+          <Link
+            href="/notifications"
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
+          >
+            <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <Activity size={14} className="text-zinc-400 dark:text-zinc-500" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
+                Diagnóstico de notificações
+              </p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                Status, dispositivos, logs e preferências
+              </p>
+            </div>
+            <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0" />
+          </Link>
 
           {/* iOS sound hint */}
           {notifPerm === 'granted' && (

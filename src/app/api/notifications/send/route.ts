@@ -2,18 +2,21 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { sendPushToSubscriptions } from '@/lib/webpush';
+import { logNotification } from '@/lib/notification-logger';
+import type { NotificationCategory } from '@/lib/notification-logger';
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, body, tag, url, urgency, ttl } = await req.json() as {
-    title:    string;
-    body:     string;
-    tag?:     string;
-    url?:     string;
-    urgency?: 'very-low' | 'low' | 'normal' | 'high';
-    ttl?:     number;
+  const { title, body, tag, url, urgency, ttl, category } = await req.json() as {
+    title:     string;
+    body:      string;
+    tag?:      string;
+    url?:      string;
+    urgency?:  'very-low' | 'low' | 'normal' | 'high';
+    ttl?:      number;
+    category?: NotificationCategory;
   };
 
   const { data: subs } = await supabase
@@ -25,11 +28,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ sent: 0, reason: 'no_subscriptions' });
   }
 
-  let result = { sent: 0, expired: [] as string[], failed: 0 };
+  const subRows = subs as Array<{ endpoint: string; p256dh: string; auth: string }>;
+  let result = { sent: 0, expired: [] as string[], failed: 0, errors: [] as Array<{ endpoint: string; code: number; message: string }> };
   try {
     result = await sendPushToSubscriptions(
-      subs.map((s) => ({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })),
-      { title, body, tag: tag ?? 'hc-hydration', url: url ?? '/dashboard' },
+      subRows.map((s) => ({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })),
+      { title, body, tag: tag ?? 'hc-general', url: url ?? '/dashboard' },
       { urgency, ttl },
     );
   } catch (err) {
@@ -46,8 +50,31 @@ export async function POST(req: Request) {
     console.info('[push] removed', result.expired.length, 'expired subscriptions for user', session.user.id);
   }
 
+  // Log the notification attempt
+  await logNotification({
+    user_id:  session.user.id,
+    category: category ?? 'system',
+    title,
+    body,
+    status:   result.sent > 0 ? 'sent' : 'failed',
+    error_msg: result.failed > 0 ? result.errors.map((e) => `${e.code}:${e.message}`).join('; ') : undefined,
+  });
+
+  // Update last_used_at for active subscriptions
+  if (result.sent > 0) {
+    const activeEndpoints: string[] = subRows
+      .map((s) => s.endpoint)
+      .filter((ep) => !result.expired.includes(ep));
+    if (activeEndpoints.length > 0) {
+      await supabase
+        .from('push_subscriptions')
+        .update({ last_used_at: new Date().toISOString() })
+        .in('endpoint', activeEndpoints)
+        .eq('user_id', session.user.id);
+    }
+  }
+
   console.info('[push] sent', result.sent, 'push(es) for user', session.user.id, 'failed:', result.failed);
-  // Include reason when sent=0 so client can show a useful message
   if (result.sent === 0 && result.failed > 0) {
     return NextResponse.json({ sent: 0, failed: result.failed, reason: 'send_failed' });
   }

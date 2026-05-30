@@ -11,6 +11,46 @@
     {
       "path": "/api/notifications/hydration-check?cron=1&t=evening",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/notifications/meal-reminders?cron=1&t=breakfast",
+      "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/notifications/meal-reminders?cron=1&t=lunch",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/notifications/meal-reminders?cron=1&t=snack",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/notifications/meal-reminders?cron=1&t=dinner",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/notifications/workout-reminders?cron=1&t=morning",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/notifications/workout-reminders?cron=1&t=evening",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/notifications/insights-push?cron=1",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/notifications/insights-push?cron=1",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/notifications/retry?cron=1",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/notifications/cleanup?cron=1",
+      "schedule": "0 3 * * 0"
     }
   ]
 }
