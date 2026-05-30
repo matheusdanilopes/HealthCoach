@@ -96,10 +96,17 @@ export default function MealPrepHistory() {
   }
 
   async function handleDelete(id: string) {
+    const snapshot = [...recipes];
     setDeleting(id);
     setRecipes((prev) => prev.filter((r) => r.id !== id));
-    await fetch(`/api/meal-prep/${id}`, { method: 'DELETE' }).catch(() => {});
-    setDeleting(null);
+    try {
+      const res = await fetch(`/api/meal-prep/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+    } catch {
+      setRecipes(snapshot);
+    } finally {
+      setDeleting(null);
+    }
   }
 
   async function handleSend(recipe: SavedRecipe) {

@@ -614,10 +614,20 @@ export default function SmartMealPrepWidget() {
                     min={1} max={50}
                     value={customCount}
                     onChange={(e) => {
-                      setCustomCount(e.target.value);
-                      const n = parseInt(e.target.value);
-                      if (!isNaN(n) && n > 0 && n <= 50)
-                        setConfig((c) => ({ ...c, mealCount: n }));
+                      const val = e.target.value;
+                      setCustomCount(val);
+                      const n = parseInt(val);
+                      if (!isNaN(n)) {
+                        const clamped = Math.min(Math.max(n, 1), 50);
+                        setConfig((c) => ({ ...c, mealCount: clamped }));
+                      }
+                    }}
+                    onBlur={() => {
+                      const n = parseInt(customCount);
+                      if (!isNaN(n)) {
+                        const clamped = Math.min(Math.max(n, 1), 50);
+                        setCustomCount(clamped.toString());
+                      }
                     }}
                     placeholder="Ex: 12"
                     className="w-24 px-3 py-1.5 rounded-xl text-[13px] border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-400"

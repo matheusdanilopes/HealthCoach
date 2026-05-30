@@ -322,7 +322,10 @@ export async function POST(req: Request) {
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const userId = session.user.id;
-    const body   = await req.json();
+    const body   = await req.json().catch(() => null);
+    if (!body || !body.config) {
+      return NextResponse.json({ error: 'Configuração inválida ou ausente' }, { status: 400 });
+    }
 
     const config:           { mealCount: number; budget: BudgetType; goal: GoalType } = body.config;
     const existingMealNames: string[] = body.existingMealNames ?? [];

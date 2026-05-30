@@ -70,11 +70,14 @@ export async function POST(req: Request) {
         estimated_price: item.total_cost > 0 ? Math.round(item.total_cost * 100) / 100 : undefined,
       };
 
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${EXTERNAL_BASE}/items`, {
         method:  'POST',
         headers,
         body:    JSON.stringify(payload),
-      });
+        signal:  controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => res.statusText);
