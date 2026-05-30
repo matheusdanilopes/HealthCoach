@@ -24,9 +24,12 @@ interface SavedRecipe {
   ingredients:    { name: string; quantity: string }[];
   steps:          { title: string; items: string[] }[];
   shopping_list:  { name: string; amount: string; category: string; total_cost: number }[];
-  ai_explanation: string | null;
-  is_favorite:    boolean;
-  created_at:     string;
+  ai_explanation:      string | null;
+  porcoes:             number | null;
+  tempo_preparo_min:   number | null;
+  tempo_cozimento_min: number | null;
+  is_favorite:         boolean;
+  created_at:          string;
 }
 
 const GOAL_LABELS: Record<string, string> = {
@@ -61,9 +64,12 @@ function toModalData(r: SavedRecipe): RecipeModalData {
     avg_fat:        r.avg_fat,
     estimated_cost: r.estimated_cost,
     cost_per_meal:  r.cost_per_meal,
-    ingredients:    r.ingredients ?? [],
-    steps:          r.steps ?? [],
-    ai_explanation: r.ai_explanation ?? undefined,
+    ingredients:         r.ingredients ?? [],
+    steps:               r.steps ?? [],
+    ai_explanation:      r.ai_explanation ?? undefined,
+    porcoes:             r.porcoes             ?? undefined,
+    tempo_preparo_min:   r.tempo_preparo_min   ?? undefined,
+    tempo_cozimento_min: r.tempo_cozimento_min ?? undefined,
   };
 }
 

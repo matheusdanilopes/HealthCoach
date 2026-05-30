@@ -332,6 +332,7 @@ export default function MarmitasClient() {
   const [newItemCat,   setNewItemCat]   = useState<ShoppingCat>('outros');
   const [copied,       setCopied]       = useState(false);
   const [sendState,    setSendState]    = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const planCounterRef = useRef(0);
   const approvedPlans  = plans.filter((p) => p.approved);
@@ -493,7 +494,16 @@ export default function MarmitasClient() {
     setPlans([]);
     setGenError(null);
     setSendState('idle');
+    setConfirmReset(false);
     planCounterRef.current = 0;
+  }
+
+  function handleResetClick() {
+    if (approvedPlans.length > 0) {
+      setConfirmReset(true);
+    } else {
+      handleReset();
+    }
   }
 
   function handleToggleCheck(idx: number) {
@@ -588,12 +598,25 @@ export default function MarmitasClient() {
               Planejamento semanal personalizado com IA
             </p>
           </div>
-          {step !== 'config' && (
-            <button onClick={handleReset}
+          {step !== 'config' && !confirmReset && (
+            <button onClick={handleResetClick}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex-shrink-0">
               <ArrowLeft size={13} />
               Recomeçar
             </button>
+          )}
+          {step !== 'config' && confirmReset && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button onClick={() => setConfirmReset(false)}
+                className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleReset}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors">
+                <Trash2 size={11} />
+                Perder {approvedPlans.length} aprovada{approvedPlans.length > 1 ? 's' : ''}?
+              </button>
+            </div>
           )}
         </div>
 
