@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen, TrendingUp, Scale, User, Ruler } from 'lucide-react';
+import { LayoutDashboard, HeartPulse, Scale, User, Ruler } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BODY_PATHS = ['/body-metrics', '/body-measurements'];
@@ -11,13 +11,6 @@ const BODY_PATHS = ['/body-metrics', '/body-measurements'];
 const BODY_SUB_ITEMS = [
   { href: '/body-metrics',      icon: Scale, label: 'Pesagem', desc: 'Peso e composição'  },
   { href: '/body-measurements', icon: Ruler, label: 'Medidas', desc: 'Circunferências'     },
-];
-
-const REGULAR_ITEMS = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Início'   },
-  { href: '/diary',     icon: BookOpen,         label: 'Diário'   },
-  { href: '/history',   icon: TrendingUp,       label: 'Evolução' },
-  { href: '/profile',   icon: User,             label: 'Perfil'   },
 ];
 
 function NavItem({
@@ -52,25 +45,28 @@ function NavItem({
   );
 }
 
+const SAUDE_PATHS = ['/saude', '/diary', '/history', '/marmitas'];
+
 export default function BottomNav() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [bodyOpen, setBodyOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const isBodyActive = BODY_PATHS.includes(pathname);
+  const isSaudeActive = SAUDE_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
-  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => { setBodyOpen(false); }, [pathname]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!bodyOpen) return;
     function onPointerDown(e: PointerEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+      if (bodyRef.current && !bodyRef.current.contains(e.target as Node)) {
+        setBodyOpen(false);
       }
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
+  }, [bodyOpen]);
 
   return (
     <nav
@@ -79,14 +75,15 @@ export default function BottomNav() {
     >
       <div className="flex items-center max-w-2xl mx-auto h-[56px] px-3">
 
-        <NavItem href="/dashboard" icon={LayoutDashboard} label="Início"   active={pathname === '/dashboard'} />
-        <NavItem href="/diary"     icon={BookOpen}         label="Diário"   active={pathname === '/diary'}     />
+        <NavItem href="/dashboard" icon={LayoutDashboard} label="Início" active={pathname === '/dashboard'} />
+
+        <NavItem href="/saude" icon={HeartPulse} label="Saúde" active={isSaudeActive} />
 
         {/* Corpo — button with floating submenu */}
-        <div ref={containerRef} className="relative flex-1 flex items-center justify-center h-full">
+        <div ref={bodyRef} className="relative flex-1 flex items-center justify-center h-full">
 
           {/* Floating menu */}
-          {open && (
+          {bodyOpen && (
             <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
               <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden min-w-[172px]">
                 {BODY_SUB_ITEMS.map(({ href, icon: Icon, label, desc }) => {
@@ -95,7 +92,7 @@ export default function BottomNav() {
                     <Link
                       key={href}
                       href={href}
-                      onClick={() => setOpen(false)}
+                      onClick={() => setBodyOpen(false)}
                       className={cn(
                         'flex items-center gap-3 px-4 py-3 transition-colors duration-150',
                         active
@@ -132,33 +129,33 @@ export default function BottomNav() {
           )}
 
           <button
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setBodyOpen((v) => !v)}
             className={cn(
               'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200',
-              isBodyActive || open
+              isBodyActive || bodyOpen
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
             )}
           >
-            {(isBodyActive || open) && (
+            {(isBodyActive || bodyOpen) && (
               <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             )}
             <Scale
               size={19}
-              strokeWidth={isBodyActive || open ? 2.25 : 1.75}
+              strokeWidth={isBodyActive || bodyOpen ? 2.25 : 1.75}
               className="transition-all duration-200"
             />
             <span className={cn(
               'text-[10px] font-medium tracking-tight transition-all duration-200',
-              isBodyActive || open ? 'opacity-100' : 'opacity-60'
+              isBodyActive || bodyOpen ? 'opacity-100' : 'opacity-60'
             )}>
               Corpo
             </span>
           </button>
         </div>
 
-        <NavItem href="/history" icon={TrendingUp} label="Evolução" active={pathname === '/history'} />
-        <NavItem href="/profile" icon={User}       label="Perfil"   active={pathname === '/profile'} />
+        <NavItem href="/profile" icon={User} label="Perfil" active={pathname === '/profile'} />
+
       </div>
     </nav>
   );
