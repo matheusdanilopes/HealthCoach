@@ -11,16 +11,16 @@ export default async function MarmitasPage() {
 
   const { data: profileData } = await supabase
     .from('users')
-    .select('name, target_calories, protein_goal, carbs_goal, fat_goal')
+    .select('target_calories, target_protein_g, target_carbs_g, target_fat_g')
     .eq('id', userId)
     .single();
 
   return (
     <MarmitasClient
       targetCalories={profileData?.target_calories ?? 2000}
-      proteinGoal={profileData?.protein_goal ?? null}
-      carbsGoal={profileData?.carbs_goal ?? null}
-      fatGoal={profileData?.fat_goal ?? null}
+      proteinGoal={profileData?.target_protein_g ?? null}
+      carbsGoal={profileData?.target_carbs_g ?? null}
+      fatGoal={profileData?.target_fat_g ?? null}
     />
   );
 }
