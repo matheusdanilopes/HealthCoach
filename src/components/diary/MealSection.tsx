@@ -15,9 +15,12 @@ interface MealSectionProps {
 
 function getDefaultExpanded(mealType: MealType): boolean {
   const h = new Date().getHours();
-  if (mealType === 'breakfast') return h >= 5 && h < 11;
-  if (mealType === 'lunch')     return h >= 11 && h < 15;
-  if (mealType === 'dinner')    return h >= 15 && h < 22;
+  if (mealType === 'breakfast')       return h >= 5  && h < 10;
+  if (mealType === 'morning_snack')   return h >= 10 && h < 12;
+  if (mealType === 'lunch')           return h >= 12 && h < 15;
+  if (mealType === 'afternoon_snack') return h >= 15 && h < 18;
+  if (mealType === 'dinner')          return h >= 18 && h < 22;
+  if (mealType === 'supper')          return h >= 22 || h < 5;
   return false;
 }
 

@@ -3,17 +3,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
-import { cn } from '@/lib/utils';
+import { cn, suggestMealType } from '@/lib/utils';
 import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
+import MealTypeSelector from '@/components/diary/MealTypeSelector';
 import type { FoodLog, MealType } from '@/types';
-
-const MEAL_OPTIONS: { value: MealType; label: string; icon: string }[] = [
-  { value: 'breakfast', label: 'Café',   icon: '☀️' },
-  { value: 'lunch',     label: 'Almoço', icon: '🍽️' },
-  { value: 'dinner',    label: 'Jantar',  icon: '🌙' },
-  { value: 'snack',     label: 'Lanche',  icon: '🍎' },
-];
 
 interface FoodItem {
   name: string;
@@ -40,7 +34,7 @@ interface AIFoodLoggerProps {
   open: boolean;
   onClose: () => void;
   userId: string;
-  defaultMeal?: MealType;
+  defaultMeal?: MealType | null;
   date?: string;
   onAdded: (log: FoodLog) => void;
 }
@@ -59,12 +53,13 @@ function resolveItemHydration(item: FoodItem): number {
 export default function AIFoodLogger({
   open,
   onClose,
-  defaultMeal = 'lunch',
+  defaultMeal,
   date,
   onAdded,
 }: AIFoodLoggerProps) {
   const [tab, setTab] = useState<'text' | 'image'>('text');
-  const [mealType, setMealType] = useState<MealType>(defaultMeal);
+  const [mealType, setMealType] = useState<MealType | null>(defaultMeal ?? null);
+  const [mealError, setMealError] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -86,7 +81,8 @@ export default function AIFoodLogger({
 
   useEffect(() => {
     if (open) {
-      setMealType(defaultMeal);
+      setMealType(defaultMeal ?? null);
+      setMealError(false);
       setTab('text');
       setTextInput('');
       setImageFile(null);
@@ -304,6 +300,10 @@ export default function AIFoodLogger({
 
   async function handleConfirm() {
     if (!result || editedFoods.length === 0) return;
+    if (!mealType) {
+      setMealError(true);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -313,7 +313,7 @@ export default function AIFoodLogger({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
-            meal_type: mealType,
+            meal_type: mealType!,
             calories: Math.round(Number(food.calories) || 0),
             protein: Number(food.protein) || null,
             carbs: Number(food.carbs) || null,
@@ -374,24 +374,12 @@ export default function AIFoodLogger({
       ) : (
         <div className="flex flex-col gap-4">
           {/* Meal type selector */}
-          <div className="flex gap-1.5">
-            {MEAL_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setMealType(opt.value)}
-                className={cn(
-                  'flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-[11px] font-semibold transition-all duration-150',
-                  mealType === opt.value
-                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400'
-                    : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
-                )}
-              >
-                <span className="text-base leading-none">{opt.icon}</span>
-                <span>{opt.label}</span>
-              </button>
-            ))}
-          </div>
+          <MealTypeSelector
+            value={mealType}
+            onChange={(meal) => { setMealType(meal); setMealError(false); }}
+            suggestedType={suggestMealType(new Date().getHours())}
+            error={mealError}
+          />
 
           {/* Mode tabs */}
           {!result && (

@@ -83,20 +83,21 @@ export async function PATCH(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const {
-    id, food_name, calories, protein, carbs, fat,
+    id, meal_type, food_name, calories, protein, carbs, fat,
     hydration_ml, hydration_source, hydration_confidence,
   } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
   const hydration = resolveHydration(food_name, hydration_ml, hydration_source, hydration_confidence);
 
-  const baseUpdate = {
+  const baseUpdate: Record<string, unknown> = {
     food_name,
     calories,
     protein: protein ?? null,
     carbs: carbs ?? null,
     fat: fat ?? null,
   };
+  if (meal_type) baseUpdate.meal_type = meal_type;
 
   let { data: row, error } = await supabase
     .from('food_logs')
