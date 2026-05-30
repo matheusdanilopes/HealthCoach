@@ -1,6 +1,7 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
 import { cn, getMealLabel, getMealIcon } from '@/lib/utils';
 import type { MealType } from '@/types';
 
@@ -31,14 +32,35 @@ export default function MealTypeSelector({
   error,
   errorMessage = 'Selecione a refeição para continuar.',
 }: MealTypeSelectorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shaking, setShaking] = useState(false);
+
+  useEffect(() => {
+    if (!error) return;
+    // Scroll the selector into view inside the modal's overflow container
+    containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Trigger shake — re-arm on every new error trigger
+    setShaking(false);
+    const raf = requestAnimationFrame(() => {
+      setShaking(true);
+      const t = setTimeout(() => setShaking(false), 500);
+      return () => clearTimeout(t);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [error]);
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className={cn(
-        'rounded-2xl border p-2 transition-all duration-200',
-        error
-          ? 'border-red-300 dark:border-red-700/60 bg-red-50/40 dark:bg-red-950/20 ring-2 ring-red-200/50 dark:ring-red-900/30'
-          : 'border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30'
-      )}>
+    <div ref={containerRef} className="flex flex-col gap-2">
+      {/* Chips grid */}
+      <div
+        className={cn(
+          'rounded-2xl border p-2 transition-all duration-200',
+          shaking && 'animate-shake',
+          error
+            ? 'border-red-300 dark:border-red-700/60 bg-red-50/40 dark:bg-red-950/20 ring-2 ring-red-300/50 dark:ring-red-800/40'
+            : 'border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30'
+        )}
+      >
         <div className="grid grid-cols-3 gap-1.5">
           {ALL_MEAL_TYPES.map((meal) => {
             const isSelected = value === meal;
@@ -78,11 +100,16 @@ export default function MealTypeSelector({
         )}
       </div>
 
+      {/* Error banner — appears below the grid, prominent */}
       {error && (
-        <p className="text-[11px] text-red-500 dark:text-red-400 font-medium flex items-center gap-1 px-1">
-          <span>⚠</span>
-          {errorMessage}
-        </p>
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 animate-scale-in">
+          <div className="h-5 w-5 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={11} className="text-red-500" />
+          </div>
+          <p className="text-[12px] font-semibold text-red-600 dark:text-red-400 leading-snug">
+            {errorMessage}
+          </p>
+        </div>
       )}
     </div>
   );

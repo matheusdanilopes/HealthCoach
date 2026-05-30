@@ -768,6 +768,15 @@ export default function AIFoodLogger({
                 Estimativa aproximada baseada na descrição enviada
               </p>
 
+              {mealError && (
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 animate-scale-in">
+                  <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
+                  <p className="text-[12px] font-semibold text-red-600 dark:text-red-400">
+                    Selecione a refeição acima para continuar.
+                  </p>
+                </div>
+              )}
+
               <Button onClick={handleConfirm} loading={saving} className="w-full">
                 Confirmar e salvar
               </Button>

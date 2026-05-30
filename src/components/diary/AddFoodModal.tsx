@@ -5,6 +5,7 @@ import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
+import { AlertTriangle } from 'lucide-react';
 import { suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
 
@@ -138,6 +139,15 @@ export default function AddFoodModal({
             min="0"
           />
         </div>
+
+        {mealError && (
+          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 animate-scale-in">
+            <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
+            <p className="text-[12px] font-semibold text-red-600 dark:text-red-400">
+              Selecione a refeição acima para continuar.
+            </p>
+          </div>
+        )}
 
         <Button type="submit" loading={loading} className="w-full">
           Adicionar
