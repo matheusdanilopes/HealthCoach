@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import {
-  Sparkles, Loader2, ChevronDown, ChevronUp,
+  Sparkles, Loader2,
   ThumbsUp, ThumbsDown, ShoppingCart, CheckCircle2, Plus, Trash2,
   Check, Copy, BookOpen, Send, AlertCircle, ArrowLeft,
 } from 'lucide-react';
@@ -175,7 +175,6 @@ function PlanCard({
   approving: boolean; rejecting: boolean;
   onViewSteps?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   if (plan.isLoading) return <LoadingCard label={plan.label} />;
 
   return (
@@ -219,29 +218,6 @@ function PlanCard({
           {plan.tempo_preparo_min && <span>· ⏱ {plan.tempo_preparo_min + (plan.tempo_cozimento_min ?? 0)} min total</span>}
           {plan.porcoes && plan.porcoes !== mealCount && <span>· {plan.porcoes} porções</span>}
           <span>· R$ {plan.cost_per_meal.toFixed(2)}/marmita</span>
-        </div>
-
-        {/* Meals list */}
-        <div className="space-y-1.5 mb-3">
-          {(expanded ? plan.meals : plan.meals.slice(0, 3)).map((meal, i) => (
-            <div key={i} className="flex items-start gap-1.5">
-              <span className="text-zinc-300 dark:text-zinc-600 mt-0.5 flex-shrink-0">•</span>
-              <div className="min-w-0">
-                <p className="text-[12px] text-zinc-700 dark:text-zinc-300 font-medium leading-snug">{meal.name}</p>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">
-                  {meal.protein_source} · {meal.carb_source} · {meal.vegetable}
-                </p>
-              </div>
-            </div>
-          ))}
-          {plan.meals.length > 3 && (
-            <button onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
-              {expanded
-                ? <><ChevronUp size={11} />Mostrar menos</>
-                : <><ChevronDown size={11} />{plan.meals.length - 3} refeição(ões) a mais</>}
-            </button>
-          )}
         </div>
 
         {/* Macros per meal box */}
