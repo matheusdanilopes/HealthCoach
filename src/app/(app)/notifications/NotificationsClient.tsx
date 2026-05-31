@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Bell, BellOff, CheckCircle, AlertCircle, RefreshCw, Send, Smartphone, Shield, Clock, Activity, ChevronLeft } from 'lucide-react';
+import { Bell, BellOff, CheckCircle, AlertCircle, RefreshCw, Send, Smartphone, Shield, Clock, Activity, ChevronLeft, Droplets, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { requestAndSubscribePush, forceResubscribePush } from '@/components/ServiceWorkerRegistration';
 
@@ -43,6 +43,48 @@ type DiagnosticsData = {
   }>;
 };
 
+type HydrationStatus = {
+  canSend: boolean;
+  blocks: {
+    quietHours: boolean;
+    noSubscription: boolean;
+    goalMet: boolean;
+    recentlyHydrated: boolean;
+    recentlySent: boolean;
+    dailyCapReached: boolean;
+  };
+  hydration: {
+    totalMl: number;
+    targetMl: number;
+    remaining: number;
+    pct: number;
+    minutesSinceLastLog: number | null;
+    lastLogAt: string | null;
+  };
+  notifications: {
+    minutesSinceLastSent: number | null;
+    dailySentCount: number;
+    dailyCap: number;
+    dedupWindowMinutes: number;
+    history: Array<{ sent_at: string; title: string; status: string }>;
+  };
+  timing: {
+    brazilHour: number;
+    isQuietHours: boolean;
+    quietWindow: string;
+  };
+  devices: Array<{ platform: string; endpointHint: string }>;
+};
+
+const BLOCK_LABELS: Record<keyof HydrationStatus['blocks'], string> = {
+  quietHours:       'Horário silencioso (22h–7h BRT)',
+  noSubscription:   'Nenhum dispositivo registrado',
+  goalMet:          'Meta de hidratação já atingida',
+  recentlyHydrated: 'Hidratou há menos de 2h',
+  recentlySent:     'Notificação enviada há menos de 90min',
+  dailyCapReached:  'Limite diário de 4 notificações atingido',
+};
+
 type PrefKey = 'hydration' | 'meals' | 'workouts' | 'insights' | 'goals';
 
 const PREF_LABELS: Record<PrefKey, { label: string; emoji: string }> = {
@@ -69,21 +111,29 @@ function PlatformIcon({ platform }: { platform: string }) {
 }
 
 export default function NotificationsClient() {
-  const [diag, setDiag]         = useState<DiagnosticsData | null>(null);
-  const [prefs, setPrefs]        = useState<DiagnosticsData['preferences'] | null>(null);
-  const [loading, setLoading]    = useState(true);
+  const [diag, setDiag]           = useState<DiagnosticsData | null>(null);
+  const [hydStatus, setHydStatus] = useState<HydrationStatus | null>(null);
+  const [prefs, setPrefs]         = useState<DiagnosticsData['preferences'] | null>(null);
+  const [loading, setLoading]     = useState(true);
   const [permission, setPermission] = useState<NotificationPermission>('default');
-  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [testState, setTestState]   = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [hydTestState, setHydTestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [savingPrefs, setSavingPrefs] = useState(false);
 
   const loadDiag = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/notifications/diagnostics');
-      if (res.ok) {
-        const data = await res.json() as DiagnosticsData;
+      const [diagRes, hydRes] = await Promise.all([
+        fetch('/api/notifications/diagnostics'),
+        fetch('/api/notifications/hydration-status'),
+      ]);
+      if (diagRes.ok) {
+        const data = await diagRes.json() as DiagnosticsData;
         setDiag(data);
         setPrefs(data.preferences);
+      }
+      if (hydRes.ok) {
+        setHydStatus(await hydRes.json() as HydrationStatus);
       }
     } finally {
       setLoading(false);
@@ -130,6 +180,18 @@ export default function NotificationsClient() {
       setTestState('error');
     }
     setTimeout(() => setTestState('idle'), 4000);
+  }
+
+  async function handleHydrationTest() {
+    setHydTestState('sending');
+    try {
+      const res = await fetch('/api/notifications/hydration-status', { method: 'POST' });
+      const data = await res.json() as { result: string };
+      setHydTestState(data.result === 'notified' ? 'sent' : 'error');
+    } catch {
+      setHydTestState('error');
+    }
+    setTimeout(() => setHydTestState('idle'), 5000);
   }
 
   async function togglePref(key: PrefKey) {
@@ -407,6 +469,14 @@ export default function NotificationsClient() {
                   ok={permission === 'granted'}
                   value={permission === 'granted' ? 'Concedida' : permission === 'denied' ? 'Negada' : 'Pendente'}
                 />
+                {hydStatus && (
+                  <StatusRow
+                    icon={<Droplets size={14} />}
+                    label="Hidratação pronta"
+                    ok={hydStatus.canSend}
+                    value={hydStatus.canSend ? 'Sim' : `${Object.values(hydStatus.blocks).filter(Boolean).length} bloqueio(s)`}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -439,6 +509,91 @@ export default function NotificationsClient() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Hydration Diagnostic */}
+          {hydStatus && (
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-50 dark:border-zinc-800/60 flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                  Diagnóstico — Hidratação
+                </p>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${hydStatus.canSend ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400'}`}>
+                  {hydStatus.canSend ? 'Pronta para enviar' : 'Bloqueada'}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="px-4 pt-4 pb-3">
+                <div className="flex items-center justify-between text-[12px] mb-1.5">
+                  <span className="text-zinc-500 dark:text-zinc-400">Hidratação hoje</span>
+                  <span className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+                    {hydStatus.hydration.totalMl}ml / {hydStatus.hydration.targetMl}ml ({hydStatus.hydration.pct}%)
+                  </span>
+                </div>
+                <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, hydStatus.hydration.pct)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  <span>
+                    {hydStatus.hydration.minutesSinceLastLog !== null
+                      ? `Última ingestão: ${hydStatus.hydration.minutesSinceLastLog}min atrás`
+                      : 'Sem registros hoje'}
+                  </span>
+                  <span>Faltam {hydStatus.hydration.remaining}ml</span>
+                </div>
+              </div>
+
+              {/* Blocking conditions */}
+              {!hydStatus.canSend && (
+                <div className="px-4 pb-3">
+                  <p className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 mb-2 uppercase tracking-wide">Condições bloqueando o envio</p>
+                  <div className="space-y-1.5">
+                    {(Object.entries(hydStatus.blocks) as [keyof HydrationStatus['blocks'], boolean][]).map(([key, active]) => (
+                      active ? (
+                        <div key={key} className="flex items-center gap-2">
+                          <XCircle size={13} className="text-red-500 flex-shrink-0" />
+                          <span className="text-[12px] text-red-600 dark:text-red-400">{BLOCK_LABELS[key]}</span>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Today's notification count */}
+              <div className="px-4 pb-3 flex items-center justify-between text-[12px]">
+                <span className="text-zinc-500 dark:text-zinc-400">Notificações hoje</span>
+                <span className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+                  {hydStatus.notifications.dailySentCount} / {hydStatus.notifications.dailyCap}
+                  {hydStatus.notifications.minutesSinceLastSent !== null && ` · última há ${hydStatus.notifications.minutesSinceLastSent}min`}
+                </span>
+              </div>
+
+              {/* Force test button */}
+              {permission === 'granted' && (
+                <div className="px-4 pb-4">
+                  <button
+                    onClick={handleHydrationTest}
+                    disabled={hydTestState === 'sending'}
+                    className="w-full flex items-center justify-center gap-2 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-60 transition-all text-white text-[13px] font-semibold"
+                  >
+                    {hydTestState === 'sending' ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Enviando...</>
+                    ) : hydTestState === 'sent' ? (
+                      <><CheckCircle size={14} /> Notificação de hidratação enviada!</>
+                    ) : hydTestState === 'error' ? (
+                      <><AlertCircle size={14} /> Falha — verifique VAPID/subscription</>
+                    ) : (
+                      <><Droplets size={14} /> Forçar notificação de hidratação</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
