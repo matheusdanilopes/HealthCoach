@@ -714,6 +714,7 @@ export default function HistoryClient({
       {/* ── Approved Meal Prep History ───────────────────────────────── */}
       <MealPrepHistory />
 
+
       {/* ── Hydration ────────────────────────────────────────────────── */}
       {fwat.length > 0 && (
         <SectionCard>
