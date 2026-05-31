@@ -9,6 +9,7 @@ import {
   isBrazilQuietHour,
   brazilHour,
 } from '@/lib/notification-sender';
+import { buildHydrationMessage } from '@/lib/notification-messages';
 
 const HYDRATION_DEDUP_MINUTES = 90;
 const HYDRATION_DAILY_CAP     = 4;
@@ -67,79 +68,44 @@ async function minutesSinceLastHydrationNotif(
   return { minutesAgo, dailyCount: rows.length };
 }
 
-function buildNotification(
-  totalMl: number,
-  target: number,
-  minSince: number,
-  bHour: number,
-): { title: string; body: string; urgency: 'high' | 'normal' } {
-  const remaining = Math.max(0, target - totalMl);
-  const pct       = target > 0 ? Math.round((totalMl / target) * 100) : 0;
-
-  if (minSince >= 240) {
-    return {
-      title:   'Sua meta diária está ficando comprometida 💧',
-      body:    `Você está há mais de 4 horas sem se hidratar. Faltam ${remaining}ml para a meta!`,
-      urgency: 'high',
-    };
-  }
-  if (minSince >= 180) {
-    return {
-      title:   'Sua hidratação está atrasada hoje 💧',
-      body:    `Você está há 3 horas sem tomar água. Faltam ${remaining}ml para completar a meta.`,
-      urgency: 'high',
-    };
-  }
-  if (bHour >= 19 && pct < 50) {
-    return {
-      title:   'Atenção com a hidratação 💧',
-      body:    `Noite chegando e você só tomou ${pct}% da meta. Faltam ${remaining}ml!`,
-      urgency: 'high',
-    };
-  }
-  if (bHour >= 19) {
-    return {
-      title:   'Hidratação do dia quase completa 💧',
-      body:    `Faltam apenas ${remaining}ml para completar a meta de hoje.`,
-      urgency: 'normal',
-    };
-  }
-  return {
-    title:   'Você está há 2 horas sem registrar água 💧',
-    body:    `Beba água agora! Faltam ${remaining}ml para a meta diária.`,
-    urgency: 'normal',
-  };
-}
-
 async function checkUserHydration(userId: string): Promise<'notified' | 'ok' | 'no_sub' | 'skipped' | 'error' | 'opt_out'> {
   if (isBrazilQuietHour()) return 'skipped';
 
-  const bHour  = brazilHour();
-  const target_ = await supabase.from('users').select('target_water_ml').eq('id', userId).single();
-  const target  = (target_.data as { target_water_ml: number } | null)?.target_water_ml ?? 2500;
+  const bHour = brazilHour();
+  const today = brazilToday();
 
-  const { totalMl, lastLogAt } = await getTotalHydration(userId, brazilToday());
+  const profileResult = await supabase
+    .from('users')
+    .select('target_water_ml, full_name')
+    .eq('id', userId)
+    .single();
 
+  const profile  = profileResult.data as { target_water_ml: number; full_name: string | null } | null;
+  const target   = profile?.target_water_ml ?? 2500;
+  const firstName = (profile?.full_name ?? '').trim().split(' ')[0] || 'você';
+
+  const { totalMl, lastLogAt } = await getTotalHydration(userId, today);
   if (totalMl >= target) return 'ok';
 
   const minSince = lastLogAt
     ? Math.floor((Date.now() - new Date(lastLogAt).getTime()) / 60_000)
     : 9999;
-
   if (minSince < 120) return 'ok';
 
-  // Deduplication: avoid sending a hydration notification sent very recently or over daily cap
   const { minutesAgo, dailyCount } = await minutesSinceLastHydrationNotif(userId);
   if (dailyCount >= HYDRATION_DAILY_CAP) return 'ok';
   if (minutesAgo < HYDRATION_DEDUP_MINUTES) return 'ok';
 
-  const { title, body, urgency } = buildNotification(totalMl, target, minSince, bHour);
-  const isEvening = bHour >= 19;
+  const { title, body, urgency } = buildHydrationMessage(
+    { name: firstName, totalMl, targetMl: target, minSince, hour: bHour },
+    userId,
+    today,
+  );
 
   const result = await sendNotificationToUser(
     userId,
     { title, body, tag: 'hc-hydration', url: '/dashboard', category: 'hydration' },
-    { urgency, topic: 'hc-hydration', ttl: isEvening ? 4 * 3600 : 8 * 3600 },
+    { urgency, topic: 'hc-hydration', ttl: bHour >= 18 ? 4 * 3600 : 8 * 3600 },
   );
 
   if (result === 'notified') {
