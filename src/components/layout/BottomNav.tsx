@@ -19,7 +19,6 @@ const BODY_SUB_ITEMS = [
 const SAUDE_PATHS = ['/saude', '/diary', '/history', '/marmitas'];
 
 const SAUDE_SUB_ITEMS = [
-  { href: '/saude',    icon: HeartPulse, label: 'Saúde',    desc: 'Visão geral'           },
   { href: '/diary',    icon: Utensils,   label: 'Diário',   desc: 'Registro de refeições' },
   { href: '/history',  icon: TrendingUp, label: 'Histórico', desc: 'Meu progresso'        },
   { href: '/marmitas', icon: ChefHat,    label: 'Marmitas', desc: 'Planejamento semanal'  },
