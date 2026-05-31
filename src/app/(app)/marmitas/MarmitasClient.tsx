@@ -311,21 +311,34 @@ export default function MarmitasClient() {
   const [confirmReset, setConfirmReset] = useState(false);
 
   const planCounterRef = useRef(0);
+  // Accumulates titles + protein sources of every generated plan (approved, rejected, or pending).
+  // Never shrinks during a session so the AI always avoids all previously seen options.
+  const seenRef        = useRef<string[]>([]);
   const approvedPlans  = plans.filter((p) => p.approved);
   const canGoShopping  = approvedPlans.length >= 1;
 
   // ── API ─────────────────────────────────────────────────────────────────────
 
-  async function callAPI(existingMealNames: string[], planIndex: number): Promise<MealPlan> {
+  function registerSeen(plan: MealPlan) {
+    if (!plan.title) return;
+    const items = [
+      plan.title,
+      ...plan.meals.map((m) => m.protein_source).filter(Boolean),
+      ...plan.meals.map((m) => m.name).filter(Boolean),
+    ];
+    seenRef.current = [...new Set([...seenRef.current, ...items])];
+  }
+
+  async function callAPI(planIndex: number): Promise<MealPlan> {
     const res = await fetch('/api/meal-prep', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config, existingMealNames, planIndex }),
+      body: JSON.stringify({ config, existingMealNames: seenRef.current, planIndex }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    return {
+    const plan: MealPlan = {
       id:                  crypto.randomUUID(),
       label:               PLAN_LABELS[planIndex % 26],
       title:               data.title            ?? 'Cardápio',
@@ -345,12 +358,9 @@ export default function MarmitasClient() {
       porcoes:             data.porcoes,
       approved:            false,
     };
-  }
-
-  function getExistingMeals(currentPlans: MealPlan[]): string[] {
-    const proteins = currentPlans.flatMap((p) => p.meals.map((m) => m.protein_source));
-    const titles   = currentPlans.filter((p) => p.title).map((p) => p.title);
-    return [...new Set([...proteins, ...titles])];
+    // Register immediately — ensures concurrent or sequential calls never duplicate
+    registerSeen(plan);
+    return plan;
   }
 
   function planToModal(plan: MealPlan): RecipeModalData {
@@ -379,6 +389,7 @@ export default function MarmitasClient() {
 
   async function handleGenerate() {
     setGenError(null);
+    seenRef.current = [];
     planCounterRef.current = 2;
     setStep('reviewing');
 
@@ -390,7 +401,9 @@ export default function MarmitasClient() {
     setPlans([stub('A', 'loading-a'), stub('B', 'loading-b')]);
 
     try {
-      const [planA, planB] = await Promise.all([callAPI([], 0), callAPI([], 1)]);
+      // Generate A and B concurrently; protein guide (index 0 vs 1) differentiates them.
+      // Each registers itself in seenRef on arrival, so all later calls see both.
+      const [planA, planB] = await Promise.all([callAPI(0), callAPI(1)]);
       setPlans([planA, planB]);
     } catch {
       setGenError('Não foi possível gerar os cardápios. Tente novamente.');
@@ -421,7 +434,8 @@ export default function MarmitasClient() {
     const idx = planCounterRef.current++;
     setAddingNew(true);
     try {
-      const newPlan = await callAPI(getExistingMeals(plans), idx);
+      // seenRef already contains every plan shown so far (including the one just approved)
+      const newPlan = await callAPI(idx);
       setPlans((prev) => [...prev, newPlan]);
     } catch { /* ignore */ }
     setActingId(null);
@@ -449,7 +463,9 @@ export default function MarmitasClient() {
 
     setAddingNew(true);
     try {
-      const newPlan = await callAPI(getExistingMeals(remaining), idx);
+      // seenRef includes the rejected plan (registered when it was first received),
+      // so the AI will not regenerate it even though it's no longer displayed.
+      const newPlan = await callAPI(idx);
       setPlans((prev) => prev.map((p) => (p.id === loadingId ? newPlan : p)));
     } catch {
       setPlans((prev) => prev.filter((p) => p.id !== loadingId));
@@ -471,6 +487,7 @@ export default function MarmitasClient() {
     setGenError(null);
     setSendState('idle');
     setConfirmReset(false);
+    seenRef.current = [];
     planCounterRef.current = 0;
   }
 

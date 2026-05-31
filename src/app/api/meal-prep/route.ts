@@ -71,11 +71,17 @@ function extractJSON(raw: string): any {
   throw new Error('No valid JSON');
 }
 
-// planIndex even → aves/peixe/ovos ; planIndex odd → carne vermelha/proteína vegetal
+// Cycles through 6 distinct protein categories so repeated generations stay diverse
 function proteinGuide(planIndex: number): string {
-  return planIndex % 2 === 0
-    ? 'Prefira FRANGO, TILÁPIA, SALMÃO ou OVOS como proteína principal.'
-    : 'Prefira CARNE BOVINA (acém, patinho, carne moída), CARNE SUÍNA ou PROTEÍNA VEGETAL (lentilha, grão-de-bico, tofu) como proteína principal.';
+  const guides = [
+    'Use FRANGO como proteína principal (peito grelhado, assado ou desfiado).',
+    'Use CARNE BOVINA como proteína principal (acém, patinho, filé ou carne moída).',
+    'Use PEIXE como proteína principal (TILÁPIA ou SALMÃO — grelhado, assado ou ao forno).',
+    'Use OVOS ou PROTEÍNA VEGETAL como proteína principal (omelete, grão-de-bico, lentilha ou tofu).',
+    'Use CARNE SUÍNA como proteína principal (lombo, filé mignon suíno ou costelinha).',
+    'Use ATUM (em água) ou CAMARÃO como proteína principal.',
+  ];
+  return guides[planIndex % guides.length];
 }
 
 function getFallback(goal: GoalType, mealCount: number, planIndex: number): GeneratedPlan {
@@ -407,8 +413,9 @@ export async function POST(req: Request) {
       massa:         'ganho de massa — superávit calórico, muito proteína, carboidratos generosos',
     };
 
+    const avoidLines = existingMealNames.slice(0, 25).map((n) => `• ${n}`).join('\n');
     const avoidSection = existingMealNames.length > 0
-      ? `\nEVITAR (já em outros cardápios):\n${existingMealNames.slice(0, 12).map((n) => `• ${n}`).join('\n')}\n`
+      ? `\n⚠️ JÁ GERADOS ANTERIORMENTE — NÃO REPITA NENHUM:\n${avoidLines}\n`
       : '';
 
     const prompt = `Você é nutricionista especializado em meal prep saudável para brasileiros.
@@ -424,15 +431,15 @@ CONFIGURAÇÃO:
 • Total de marmitas: ${config.mealCount}
 • Orçamento: ${budgetMap[config.budget]}
 • Refeições únicas: ${uniqueMealsCount} (repetidas para completar ${config.mealCount} marmitas)
-• Guia de proteína (OBRIGATÓRIO): ${proteinGuide(planIndex)}
+• Proteína principal (OBRIGATÓRIO): ${proteinGuide(planIndex)}
 ${avoidSection}
 REGRAS IMPORTANTES:
-1. Gere ${uniqueMealsCount} refeições CLARAMENTE DIFERENTES entre si (variar proteína, preparo e vegetais).
-2. Siga ESTRITAMENTE o guia de proteína acima — não use frango se pedir carne bovina e vice-versa.
+1. Siga ESTRITAMENTE a proteína definida acima — não substitua por outra categoria.
+2. Gere ${uniqueMealsCount} preparos DIFERENTES dentro do plano (variar método de preparo e legumes).
 3. Calcule ingredientes e shopping list para o TOTAL de ${config.mealCount} marmitas com quantidades exatas em kg/g/unidades.
 4. Use preços médios de mercado brasileiro 2025.
 5. O modo de preparo deve ser detalhado e executável (tempos, temperaturas, quantidades por marmita).
-6. Inclua etapa de armazenamento com instruções de geladeira, congelamento e descongelamento.
+6. Inclua etapa de armazenamento com instruções de geladeira, congelamento e descongelamento.${existingMealNames.length > 0 ? '\n7. OBRIGATÓRIO: O título e a proteína principal devem ser COMPLETAMENTE DIFERENTES de todos os itens listados em "JÁ GERADOS". Sem exceções.' : ''}
 
 Retorne SOMENTE JSON válido (sem texto fora, sem markdown):
 {
