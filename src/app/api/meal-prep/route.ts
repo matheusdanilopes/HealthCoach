@@ -19,14 +19,18 @@ export interface ShoppingItem {
 }
 
 export interface MealItem {
-  name:           string;
-  protein_source: string;
-  carb_source:    string;
-  vegetable:      string;
-  calories:       number;
-  protein_g:      number;
-  carbs_g:        number;
-  fat_g:          number;
+  name:                string;
+  protein_source:      string;
+  carb_source:         string;
+  vegetable:           string;
+  calories:            number;
+  protein_g:           number;
+  carbs_g:             number;
+  fat_g:               number;
+  protein_portion_g?:  number;  // grams of protein FOOD per marmita
+  carb_portion_g?:     number;  // grams of carb FOOD per marmita
+  vegetable_portion_g?: number; // grams of vegetable per marmita
+  total_weight_g?:     number;  // total marmita weight
 }
 
 export interface GeneratedPlan {
@@ -84,8 +88,19 @@ function proteinGuide(planIndex: number): string {
   return guides[planIndex % guides.length];
 }
 
-function getFallback(goal: GoalType, mealCount: number, planIndex: number): GeneratedPlan {
+function getFallback(goal: GoalType, mealCount: number, planIndex: number, marmitaWeight: number): GeneratedPlan {
   const s = mealCount / 10;
+
+  // Food-gram distribution per goal (protein food : carb food : vegetable food)
+  const portionRatios: Record<GoalType, [number, number, number]> = {
+    emagrecimento: [0.42, 0.30, 0.28],
+    manutencao:    [0.38, 0.38, 0.24],
+    massa:         [0.35, 0.45, 0.20],
+  };
+  const [pr, cr] = portionRatios[goal];
+  const pPor = Math.round(marmitaWeight * pr);
+  const cPor = Math.round(marmitaWeight * cr);
+  const vPor = marmitaWeight - pPor - cPor;
 
   const base: Record<string, GeneratedPlan> = {
     'emagrecimento-0': {
@@ -94,9 +109,9 @@ function getFallback(goal: GoalType, mealCount: number, planIndex: number): Gene
       tempo_preparo_min: 20,
       tempo_cozimento_min: 60,
       meals: [
-        { name: 'Frango desfiado com arroz integral e brócolis', protein_source: 'Frango desfiado', carb_source: 'Arroz integral', vegetable: 'Brócolis', calories: 420, protein_g: 42, carbs_g: 35, fat_g: 8 },
-        { name: 'Tilápia assada com batata doce e cenoura', protein_source: 'Tilápia assada', carb_source: 'Batata doce', vegetable: 'Cenoura', calories: 400, protein_g: 38, carbs_g: 38, fat_g: 7 },
-        { name: 'Omelete proteico com arroz e espinafre', protein_source: 'Omelete (3 ovos)', carb_source: 'Arroz integral', vegetable: 'Espinafre', calories: 380, protein_g: 30, carbs_g: 32, fat_g: 12 },
+        { name: 'Frango desfiado com arroz integral e brócolis', protein_source: 'Frango desfiado', carb_source: 'Arroz integral', vegetable: 'Brócolis', calories: 420, protein_g: 42, carbs_g: 35, fat_g: 8, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Tilápia assada com batata doce e cenoura', protein_source: 'Tilápia assada', carb_source: 'Batata doce', vegetable: 'Cenoura', calories: 400, protein_g: 38, carbs_g: 38, fat_g: 7, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Omelete proteico com arroz e espinafre', protein_source: 'Omelete (3 ovos)', carb_source: 'Arroz integral', vegetable: 'Espinafre', calories: 380, protein_g: 30, carbs_g: 32, fat_g: 12, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
       ],
       avg_calories: 400, avg_protein: 37, avg_carbs: 35, avg_fat: 9,
       estimated_cost: Math.round(95 * s), cost_per_meal: 9.5,
@@ -138,9 +153,9 @@ function getFallback(goal: GoalType, mealCount: number, planIndex: number): Gene
       tempo_preparo_min: 25,
       tempo_cozimento_min: 55,
       meals: [
-        { name: 'Carne moída refogada com purê de batata-doce e brócolis', protein_source: 'Carne moída magra', carb_source: 'Purê de batata-doce', vegetable: 'Brócolis', calories: 440, protein_g: 38, carbs_g: 42, fat_g: 12 },
-        { name: 'Carne moída com arroz integral e abobrinha', protein_source: 'Carne moída magra', carb_source: 'Arroz integral', vegetable: 'Abobrinha grelhada', calories: 420, protein_g: 36, carbs_g: 38, fat_g: 11 },
-        { name: 'Lentilha refogada com mandioquinha e cenoura', protein_source: 'Lentilha', carb_source: 'Mandioquinha cozida', vegetable: 'Cenoura', calories: 390, protein_g: 22, carbs_g: 55, fat_g: 5 },
+        { name: 'Carne moída refogada com purê de batata-doce e brócolis', protein_source: 'Carne moída magra', carb_source: 'Purê de batata-doce', vegetable: 'Brócolis', calories: 440, protein_g: 38, carbs_g: 42, fat_g: 12, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Carne moída com arroz integral e abobrinha', protein_source: 'Carne moída magra', carb_source: 'Arroz integral', vegetable: 'Abobrinha grelhada', calories: 420, protein_g: 36, carbs_g: 38, fat_g: 11, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Lentilha refogada com mandioquinha e cenoura', protein_source: 'Lentilha', carb_source: 'Mandioquinha cozida', vegetable: 'Cenoura', calories: 390, protein_g: 22, carbs_g: 55, fat_g: 5, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
       ],
       avg_calories: 417, avg_protein: 32, avg_carbs: 45, avg_fat: 9,
       estimated_cost: Math.round(88 * s), cost_per_meal: 8.8,
@@ -182,8 +197,8 @@ function getFallback(goal: GoalType, mealCount: number, planIndex: number): Gene
       tempo_preparo_min: 20,
       tempo_cozimento_min: 65,
       meals: [
-        { name: 'Frango assado com arroz branco e mix de legumes', protein_source: 'Frango assado', carb_source: 'Arroz branco', vegetable: 'Mix de legumes', calories: 520, protein_g: 45, carbs_g: 55, fat_g: 10 },
-        { name: 'Tilápia grelhada com macarrão integral e cenoura', protein_source: 'Tilápia grelhada', carb_source: 'Macarrão integral', vegetable: 'Cenoura refogada', calories: 500, protein_g: 40, carbs_g: 58, fat_g: 9 },
+        { name: 'Frango assado com arroz branco e mix de legumes', protein_source: 'Frango assado', carb_source: 'Arroz branco', vegetable: 'Mix de legumes', calories: 520, protein_g: 45, carbs_g: 55, fat_g: 10, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Tilápia grelhada com macarrão integral e cenoura', protein_source: 'Tilápia grelhada', carb_source: 'Macarrão integral', vegetable: 'Cenoura refogada', calories: 500, protein_g: 40, carbs_g: 58, fat_g: 9, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
       ],
       avg_calories: 510, avg_protein: 43, avg_carbs: 57, avg_fat: 10,
       estimated_cost: Math.round(125 * s), cost_per_meal: 12.5,
@@ -217,8 +232,8 @@ function getFallback(goal: GoalType, mealCount: number, planIndex: number): Gene
       tempo_preparo_min: 25,
       tempo_cozimento_min: 75,
       meals: [
-        { name: 'Patinho assado com quinoa e aspargos', protein_source: 'Patinho assado', carb_source: 'Quinoa', vegetable: 'Aspargos grelhados', calories: 540, protein_g: 44, carbs_g: 52, fat_g: 13 },
-        { name: 'Carne moída com batata e couve', protein_source: 'Carne moída', carb_source: 'Batata cozida', vegetable: 'Couve refogada', calories: 510, protein_g: 40, carbs_g: 55, fat_g: 11 },
+        { name: 'Patinho assado com quinoa e aspargos', protein_source: 'Patinho assado', carb_source: 'Quinoa', vegetable: 'Aspargos grelhados', calories: 540, protein_g: 44, carbs_g: 52, fat_g: 13, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Carne moída com batata e couve', protein_source: 'Carne moída', carb_source: 'Batata cozida', vegetable: 'Couve refogada', calories: 510, protein_g: 40, carbs_g: 55, fat_g: 11, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
       ],
       avg_calories: 525, avg_protein: 42, avg_carbs: 54, avg_fat: 12,
       estimated_cost: Math.round(140 * s), cost_per_meal: 14.0,
@@ -254,9 +269,9 @@ function getFallback(goal: GoalType, mealCount: number, planIndex: number): Gene
       tempo_preparo_min: 25,
       tempo_cozimento_min: 75,
       meals: [
-        { name: 'Frango grelhado com arroz integral, batata doce e brócolis', protein_source: 'Peito de frango', carb_source: 'Arroz integral + Batata doce', vegetable: 'Brócolis', calories: 650, protein_g: 58, carbs_g: 72, fat_g: 10 },
-        { name: 'Frango assado com macarrão integral e legumes', protein_source: 'Coxa de frango', carb_source: 'Macarrão integral', vegetable: 'Mix de legumes', calories: 670, protein_g: 55, carbs_g: 75, fat_g: 14 },
-        { name: 'Omelete proteico com batata e espinafre', protein_source: 'Omelete (4 ovos)', carb_source: 'Batata inglesa', vegetable: 'Espinafre', calories: 590, protein_g: 50, carbs_g: 55, fat_g: 16 },
+        { name: 'Frango grelhado com arroz integral, batata doce e brócolis', protein_source: 'Peito de frango', carb_source: 'Arroz integral + Batata doce', vegetable: 'Brócolis', calories: 650, protein_g: 58, carbs_g: 72, fat_g: 10, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Frango assado com macarrão integral e legumes', protein_source: 'Coxa de frango', carb_source: 'Macarrão integral', vegetable: 'Mix de legumes', calories: 670, protein_g: 55, carbs_g: 75, fat_g: 14, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Omelete proteico com batata e espinafre', protein_source: 'Omelete (4 ovos)', carb_source: 'Batata inglesa', vegetable: 'Espinafre', calories: 590, protein_g: 50, carbs_g: 55, fat_g: 16, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
       ],
       avg_calories: 637, avg_protein: 54, avg_carbs: 67, avg_fat: 13,
       estimated_cost: Math.round(145 * s), cost_per_meal: 14.5,
@@ -299,9 +314,9 @@ function getFallback(goal: GoalType, mealCount: number, planIndex: number): Gene
       tempo_preparo_min: 30,
       tempo_cozimento_min: 80,
       meals: [
-        { name: 'Carne moída com mandioca cozida e couve', protein_source: 'Carne moída', carb_source: 'Mandioca cozida', vegetable: 'Couve refogada', calories: 680, protein_g: 55, carbs_g: 75, fat_g: 14 },
-        { name: 'Frango desfiado com feijão preto e arroz', protein_source: 'Frango desfiado', carb_source: 'Feijão preto + arroz', vegetable: 'Cenoura', calories: 660, protein_g: 52, carbs_g: 72, fat_g: 12 },
-        { name: 'Tilápia com arroz, lentilha e espinafre', protein_source: 'Tilápia grelhada', carb_source: 'Arroz + lentilha', vegetable: 'Espinafre', calories: 610, protein_g: 48, carbs_g: 68, fat_g: 9 },
+        { name: 'Carne moída com mandioca cozida e couve', protein_source: 'Carne moída', carb_source: 'Mandioca cozida', vegetable: 'Couve refogada', calories: 680, protein_g: 55, carbs_g: 75, fat_g: 14, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Frango desfiado com feijão preto e arroz', protein_source: 'Frango desfiado', carb_source: 'Feijão preto + arroz', vegetable: 'Cenoura', calories: 660, protein_g: 52, carbs_g: 72, fat_g: 12, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
+        { name: 'Tilápia com arroz, lentilha e espinafre', protein_source: 'Tilápia grelhada', carb_source: 'Arroz + lentilha', vegetable: 'Espinafre', calories: 610, protein_g: 48, carbs_g: 68, fat_g: 9, protein_portion_g: pPor, carb_portion_g: cPor, vegetable_portion_g: vPor, total_weight_g: marmitaWeight },
       ],
       avg_calories: 650, avg_protein: 52, avg_carbs: 72, avg_fat: 12,
       estimated_cost: Math.round(138 * s), cost_per_meal: 13.8,
@@ -354,9 +369,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Configuração inválida ou ausente' }, { status: 400 });
     }
 
-    const config:           { mealCount: number; budget: BudgetType; goal: GoalType } = body.config;
+    const config:           { mealCount: number; budget: BudgetType; goal: GoalType; marmitaWeight: number } = body.config;
     const existingMealNames: string[] = body.existingMealNames ?? [];
     const planIndex:         number   = body.planIndex ?? 0;
+    const marmitaWeight:     number   = config.marmitaWeight ?? 400;
 
     const today        = brazilToday();
     const thirtyDaysAgo = brazilNDaysAgo(30, today);
@@ -429,6 +445,7 @@ PERFIL:
 
 CONFIGURAÇÃO:
 • Total de marmitas: ${config.mealCount}
+• Peso por marmita: ~${marmitaWeight}g de alimento por marmita
 • Orçamento: ${budgetMap[config.budget]}
 • Refeições únicas: ${uniqueMealsCount} (repetidas para completar ${config.mealCount} marmitas)
 • Proteína principal (OBRIGATÓRIO): ${proteinGuide(planIndex)}
@@ -439,7 +456,8 @@ REGRAS IMPORTANTES:
 3. Calcule ingredientes e shopping list para o TOTAL de ${config.mealCount} marmitas com quantidades exatas em kg/g/unidades.
 4. Use preços médios de mercado brasileiro 2025.
 5. O modo de preparo deve ser detalhado e executável (tempos, temperaturas, quantidades por marmita).
-6. Inclua etapa de armazenamento com instruções de geladeira, congelamento e descongelamento.${existingMealNames.length > 0 ? '\n7. OBRIGATÓRIO: O título e a proteína principal devem ser COMPLETAMENTE DIFERENTES de todos os itens listados em "JÁ GERADOS". Sem exceções.' : ''}
+6. Inclua etapa de armazenamento com instruções de geladeira, congelamento e descongelamento.
+7. Para cada refeição, preencha protein_portion_g, carb_portion_g, vegetable_portion_g (gramas de ALIMENTO, não macronutrientes) e total_weight_g ≈ ${marmitaWeight}g.${existingMealNames.length > 0 ? '\n8. OBRIGATÓRIO: O título e a proteína principal devem ser COMPLETAMENTE DIFERENTES de todos os itens listados em "JÁ GERADOS". Sem exceções.' : ''}
 
 Retorne SOMENTE JSON válido (sem texto fora, sem markdown):
 {
@@ -453,10 +471,14 @@ Retorne SOMENTE JSON válido (sem texto fora, sem markdown):
       "protein_source": "Proteína principal",
       "carb_source": "Carboidrato principal",
       "vegetable": "Legume ou verdura",
-      "calories": 480,
-      "protein_g": 45,
-      "carbs_g": 42,
-      "fat_g": 8
+      "calories": 380,
+      "protein_g": 37,
+      "carbs_g": 35,
+      "fat_g": 9,
+      "protein_portion_g": ${Math.round(marmitaWeight * 0.42)},
+      "carb_portion_g": ${Math.round(marmitaWeight * 0.32)},
+      "vegetable_portion_g": ${marmitaWeight - Math.round(marmitaWeight * 0.42) - Math.round(marmitaWeight * 0.32)},
+      "total_weight_g": ${marmitaWeight}
     }
   ],
   "avg_calories": 480,
@@ -528,7 +550,7 @@ Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "tempero
       } as GeneratedPlan;
     } catch {
       console.warn('[meal-prep] Gemini parse failed, using fallback');
-      plan = getFallback(config.goal, config.mealCount, planIndex);
+      plan = getFallback(config.goal, config.mealCount, planIndex, marmitaWeight);
     }
 
     // Normalize calories from macros (Atwater: P×4 + C×4 + F×9) so the

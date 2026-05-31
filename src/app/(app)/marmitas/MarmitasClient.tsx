@@ -17,11 +17,12 @@ type BudgetType = 'economico' | 'moderado' | 'premium';
 type PageStep   = 'config' | 'reviewing' | 'shopping';
 type ShoppingCat = 'proteinas' | 'carboidratos' | 'hortifruti' | 'temperos' | 'outros';
 
-interface MealPrepConfig { mealCount: number; budget: BudgetType; goal: GoalType }
+interface MealPrepConfig { mealCount: number; budget: BudgetType; goal: GoalType; marmitaWeight: number }
 
 interface MealItem {
   name: string; protein_source: string; carb_source: string; vegetable: string;
   calories: number; protein_g: number; carbs_g: number; fat_g: number;
+  protein_portion_g?: number; carb_portion_g?: number; vegetable_portion_g?: number; total_weight_g?: number;
 }
 
 interface ShoppingItem {
@@ -65,7 +66,8 @@ const CAT_ORDER: Record<ShoppingCat, number> = {
   proteinas: 0, carboidratos: 1, hortifruti: 2, temperos: 3, outros: 4,
 };
 
-const MEAL_COUNTS = [5, 10, 15, 20] as const;
+const MEAL_COUNTS   = [5, 10, 15, 20] as const;
+const WEIGHT_OPTS   = [300, 400, 500, 600] as const;
 
 const GOAL_OPTS: { value: GoalType; label: string; desc: string }[] = [
   { value: 'emagrecimento', label: 'Emagrecer',       desc: 'Déficit calórico e alta proteína' },
@@ -293,7 +295,7 @@ function PlanCard({
 
 export default function MarmitasClient() {
   const [step,         setStep]         = useState<PageStep>('config');
-  const [config,       setConfig]       = useState<MealPrepConfig>({ mealCount: 10, budget: 'economico', goal: 'emagrecimento' });
+  const [config,       setConfig]       = useState<MealPrepConfig>({ mealCount: 10, budget: 'economico', goal: 'emagrecimento', marmitaWeight: 400 });
   const [plans,        setPlans]        = useState<MealPlan[]>([]);
   const [actingId,     setActingId]     = useState<string | null>(null);
   const [actingType,   setActingType]   = useState<'approve' | 'reject' | null>(null);
@@ -382,6 +384,17 @@ export default function MarmitasClient() {
       tempo_preparo_min:   plan.tempo_preparo_min,
       tempo_cozimento_min: plan.tempo_cozimento_min,
       porcoes:             plan.porcoes,
+      marmita_weight_g:    config.marmitaWeight,
+      meals:               plan.meals.map((m) => ({
+        name:                m.name,
+        protein_source:      m.protein_source,
+        protein_portion_g:   m.protein_portion_g,
+        carb_source:         m.carb_source,
+        carb_portion_g:      m.carb_portion_g,
+        vegetable:           m.vegetable,
+        vegetable_portion_g: m.vegetable_portion_g,
+        total_weight_g:      m.total_weight_g,
+      })),
     };
   }
 
@@ -741,6 +754,30 @@ export default function MarmitasClient() {
                   <span className="text-[12px] text-zinc-400 dark:text-zinc-500">marmitas</span>
                 </div>
               )}
+            </div>
+
+            {/* Marmita weight */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
+                Peso esperado por marmita
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {WEIGHT_OPTS.map((w) => (
+                  <button key={w}
+                    onClick={() => setConfig((c) => ({ ...c, marmitaWeight: w }))}
+                    className={cn(
+                      'px-4 py-2 rounded-xl text-[13px] font-semibold transition-all border',
+                      config.marmitaWeight === w
+                        ? 'bg-emerald-500 text-white border-emerald-500'
+                        : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-emerald-300 dark:hover:border-emerald-700'
+                    )}>
+                    {w}g
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-2 leading-relaxed">
+                A receita mostrará as proporções exatas de cada componente por marmita.
+              </p>
             </div>
 
             <button onClick={handleGenerate}

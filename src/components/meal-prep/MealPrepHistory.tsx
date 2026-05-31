@@ -24,6 +24,7 @@ interface SavedRecipe {
   ingredients:    { name: string; quantity: string }[];
   steps:          { title: string; items: string[] }[];
   shopping_list:  { name: string; amount: string; category: string; total_cost: number }[];
+  meals:          { name: string; protein_source: string; protein_portion_g?: number; carb_source: string; carb_portion_g?: number; vegetable: string; vegetable_portion_g?: number; total_weight_g?: number }[];
   ai_explanation:      string | null;
   porcoes:             number | null;
   tempo_preparo_min:   number | null;
@@ -67,6 +68,7 @@ function toModalData(r: SavedRecipe): RecipeModalData {
     ingredients:         r.ingredients ?? [],
     steps:               r.steps ?? [],
     ai_explanation:      r.ai_explanation ?? undefined,
+    meals:               r.meals ?? [],
     porcoes:             r.porcoes             ?? undefined,
     tempo_preparo_min:   r.tempo_preparo_min   ?? undefined,
     tempo_cozimento_min: r.tempo_cozimento_min ?? undefined,

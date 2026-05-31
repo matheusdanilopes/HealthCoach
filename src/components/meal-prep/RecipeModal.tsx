@@ -6,6 +6,17 @@ import Modal from '@/components/ui/Modal';
 interface RecipeIngredient { name: string; quantity: string }
 interface RecipeStep       { title: string; items: string[]; duration?: string }
 
+export interface RecipeMealPortion {
+  name:                string;
+  protein_source:      string;
+  protein_portion_g?:  number;
+  carb_source:         string;
+  carb_portion_g?:     number;
+  vegetable:           string;
+  vegetable_portion_g?: number;
+  total_weight_g?:     number;
+}
+
 export interface RecipeModalData {
   title:               string;
   plan_label?:         string;
@@ -24,6 +35,8 @@ export interface RecipeModalData {
   porcoes?:            number;
   tempo_preparo_min?:  number;
   tempo_cozimento_min?: number;
+  meals?:              RecipeMealPortion[];
+  marmita_weight_g?:   number;
 }
 
 const GOAL_LABELS: Record<string, string> = {
@@ -155,6 +168,44 @@ export default function RecipeModal({ recipe, onClose }: { recipe: RecipeModalDa
           <p className="text-[12px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed px-1">
             {recipe.ai_explanation}
           </p>
+        )}
+
+        {/* Per-meal composition */}
+        {recipe.meals && recipe.meals.some((m) => m.protein_portion_g) && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2.5">
+              Composição por marmita{recipe.marmita_weight_g ? ` (~${recipe.marmita_weight_g}g)` : ''}
+            </p>
+            <div className="space-y-2">
+              {recipe.meals.filter((m) => m.protein_portion_g).map((meal, i) => (
+                <div key={i} className="rounded-xl border border-zinc-100 dark:border-zinc-700/50 overflow-hidden">
+                  <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-800/60">
+                    <p className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 leading-snug">{meal.name}</p>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-1.5 bg-white dark:bg-zinc-900/50">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] text-zinc-500 dark:text-zinc-400">🥩 {meal.protein_source}</span>
+                      <span className="text-[12px] font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">{meal.protein_portion_g}g</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] text-zinc-500 dark:text-zinc-400">🌾 {meal.carb_source}</span>
+                      <span className="text-[12px] font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">{meal.carb_portion_g}g</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] text-zinc-500 dark:text-zinc-400">🥦 {meal.vegetable}</span>
+                      <span className="text-[12px] font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">{meal.vegetable_portion_g}g</span>
+                    </div>
+                    {meal.total_weight_g && (
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                        <span className="text-[11px] text-zinc-400 dark:text-zinc-500">Total</span>
+                        <span className="text-[12px] font-bold tabular-nums text-zinc-600 dark:text-zinc-300">~{meal.total_weight_g}g</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Ingredients */}
