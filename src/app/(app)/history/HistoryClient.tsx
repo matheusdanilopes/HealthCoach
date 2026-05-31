@@ -11,12 +11,11 @@ import { ptBR } from 'date-fns/locale';
 import {
   Scale, BarChart2, Droplets, Dumbbell, Trophy,
   Target, ChevronRight, Activity, Ruler, Zap,
-  TrendingDown, TrendingUp, Minus,
+  TrendingDown, TrendingUp, Minus, UtensilsCrossed, Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
-import SmartMealPrepWidget from '@/components/meal-prep/SmartMealPrepWidget';
 import MealPrepHistory from '@/components/meal-prep/MealPrepHistory';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -690,8 +689,27 @@ export default function HistoryClient({
         )}
       </SectionCard>
 
-      {/* ── Smart Meal Prep Widget ───────────────────────────────────── */}
-      <SmartMealPrepWidget />
+      {/* ── Marmitas Inteligentes ────────────────────────────────────── */}
+      <Link href="/marmitas"
+        className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-emerald-200 dark:hover:border-emerald-800/60 transition-colors group">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 flex items-center justify-center flex-shrink-0">
+            <UtensilsCrossed size={18} className="text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-[13px] font-bold text-zinc-800 dark:text-zinc-200 leading-snug">
+              Marmitas Inteligentes
+            </p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+              Planejamento semanal personalizado com IA
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 group-hover:bg-emerald-600 transition-colors">
+          <Sparkles size={12} className="text-white" />
+          <span className="text-[11px] font-semibold text-white">Gerar</span>
+        </div>
+      </Link>
 
       {/* ── Approved Meal Prep History ───────────────────────────────── */}
       <MealPrepHistory />

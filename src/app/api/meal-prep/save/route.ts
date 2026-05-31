@@ -32,8 +32,12 @@ export async function POST(req: Request) {
         ingredients:    plan.ingredients ?? [],
         steps:          plan.steps ?? [],
         shopping_list:  plan.shopping_list ?? [],
-        ai_explanation: plan.ai_explanation ?? null,
-        is_favorite:    false,
+        ai_explanation:      plan.ai_explanation      ?? null,
+        meals:               plan.meals               ?? [],
+        porcoes:             plan.porcoes             ?? null,
+        tempo_preparo_min:   plan.tempo_preparo_min   ?? null,
+        tempo_cozimento_min: plan.tempo_cozimento_min ?? null,
+        is_favorite:         false,
       })
       .select('id')
       .single();
