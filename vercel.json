@@ -1,11 +1,11 @@
 {
   "crons": [
     {
-      "path": "/api/notifications/run?t=am",
+      "path": "/api/notifications/run",
       "schedule": "0 11 * * *"
     },
     {
-      "path": "/api/notifications/run?t=pm",
+      "path": "/api/notifications/run",
       "schedule": "0 21 * * *"
     }
   ]

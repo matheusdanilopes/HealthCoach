@@ -121,31 +121,24 @@ self.addEventListener('pushsubscriptionchange', e => {
   );
 });
 
-// Periodic background sync — Chrome Android only, used as supplemental layer
-// Primary delivery is handled by Vercel Cron (server-side push).
+// Periodic background sync — Chrome Android only, supplemental to Vercel Cron.
+// Always delegates to the backend API so the server-side deduplication and
+// inactivity-escalation logic applies regardless of whether the app is open.
 self.addEventListener('periodicsync', e => {
   if (e.tag !== 'hc-hydration-check') return;
 
   e.waitUntil((async () => {
-    const hour = new Date().getHours();
-    if (hour >= 22 || hour < 7) return;
-
-    // If app is open, let the client-side hook handle it to avoid duplicates
-    const openWindows = await clients.matchAll({ type: 'window' });
-    if (openWindows.length > 0) {
-      openWindows.forEach(c => c.postMessage({ type: 'HYDRATION_CHECK' }));
-      return;
-    }
-
-    // App is closed — attempt server-side check first (has user context)
     try {
+      // Backend handles quiet-hours check and deduplication internally
       const res = await fetch('/api/notifications/hydration-check', {
         credentials: 'include',
       });
-      if (res.ok) return; // server handled it
+      if (res.ok) return;
     } catch { /**/ }
 
-    // Fallback: generic offline reminder when server call fails
+    // Fallback: generic local notification when the API is unreachable
+    const hour = new Date().getHours();
+    if (hour >= 22 || hour < 7) return;
     await self.registration.showNotification('Hora de beber água 💧', {
       body:     'Não esqueça de se hidratar!',
       icon:     '/icons/icon-192x192.png',

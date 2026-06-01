@@ -1,25 +1,22 @@
-name: Hydration Reminders
+name: Notifications Cron
 
 on:
   schedule:
-    # 12:00 UTC = 09:00 Brasil (lembrete manhã/meio-dia)
-    - cron: '0 12 * * *'
-    # 16:00 UTC = 13:00 Brasil (lembrete tarde)
-    - cron: '0 16 * * *'
-    # 20:00 UTC = 17:00 Brasil (lembrete fim da tarde)
-    - cron: '0 20 * * *'
-  workflow_dispatch: # permite disparo manual
+    # Roda a cada 2 horas (UTC). O backend ignora quiet hours (22h–7h BRT).
+    # Horários ativos em BRT: 7h, 9h, 11h, 13h, 15h, 17h, 19h
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # permite disparo manual pelo GitHub
 
 jobs:
-  hydration-check:
+  run-notifications:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
-      - name: Chamar endpoint de hidratação
+      - name: Disparar agendador de notificações
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/notifications/hydration-check?cron=1")
+            "${{ secrets.APP_URL }}/api/notifications/run")
           echo "Status HTTP: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "Falha no endpoint (status $STATUS)"

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
+import { recomputeReminderState } from '@/lib/hydration-scheduler';
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -38,6 +39,10 @@ export async function POST(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Recalculate next reminder time (fire-and-forget)
+  void recomputeReminderState(session.user.id);
+
   return NextResponse.json({ ok: true, log: data });
 }
 
@@ -56,5 +61,9 @@ export async function DELETE(req: Request) {
     .eq('user_id', session.user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Recalculate next reminder time after deletion (fire-and-forget)
+  void recomputeReminderState(session.user.id);
+
   return NextResponse.json({ ok: true });
 }
