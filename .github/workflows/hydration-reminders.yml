@@ -12,13 +12,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - name: Verificar secrets obrigatórios
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::Secret APP_URL não está configurado. Acesse Settings → Secrets and variables → Actions e adicione APP_URL com a URL base do app (ex: https://seu-app.vercel.app)."
+            exit 1
+          fi
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Secret CRON_SECRET não está configurado. Acesse Settings → Secrets and variables → Actions e adicione CRON_SECRET."
+            exit 1
+          fi
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
       - name: Disparar agendador de notificações
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/notifications/run")
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/notifications/run")
           echo "Status HTTP: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "Falha no endpoint (status $STATUS)"
             exit 1
           fi
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
