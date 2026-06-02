@@ -11,6 +11,7 @@ jobs:
   run-notifications:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    environment: CRON_SECRET
     steps:
       - name: Verificar secrets obrigatórios
         run: |
