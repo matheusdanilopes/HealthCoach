@@ -2,23 +2,41 @@ name: Notifications Cron
 
 on:
   schedule:
-    # Roda a cada 2 horas (UTC). O backend ignora quiet hours (22h–7h BRT).
-    # Horários ativos em BRT: 7h, 9h, 11h, 13h, 15h, 17h, 19h
+    # Runs every 2 hours (UTC). Backend ignores quiet hours (10pm–7am BRT).
+    # Active hours in BRT: 7am, 9am, 11am, 1pm, 3pm, 5pm, 7pm
     - cron: '0 */2 * * *'
-  workflow_dispatch: # permite disparo manual pelo GitHub
+  workflow_dispatch: # allows manual trigger from GitHub
 
 jobs:
   run-notifications:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    environment: CRON_SECRET
     steps:
-      - name: Disparar agendador de notificações
+      - name: Validate required secrets
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/notifications/run")
-          echo "Status HTTP: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "Falha no endpoint (status $STATUS)"
+          if [ -z "$APP_URL" ]; then
+            echo "::error::Secret APP_URL is not configured. Go to Settings → Secrets and variables → Actions and add APP_URL with the app base URL (e.g. https://your-app.vercel.app)."
             exit 1
           fi
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Secret CRON_SECRET is not configured. Go to Settings → Secrets and variables → Actions and add CRON_SECRET."
+            exit 1
+          fi
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Trigger notification scheduler
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/notifications/run")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Endpoint failed (status $STATUS)"
+            exit 1
+          fi
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
