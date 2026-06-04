@@ -49,13 +49,13 @@ const DOW_NAME = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', '
 
 // Daily focus rotates so the card never feels repetitive day after day
 const DOW_FOCUS: Record<number, string> = {
-  1: 'PLANEJAMENTO SEMANAL: Avalie a semana anterior (calorias, treinos, hidratação) e oriente como começar esta semana com foco nas metas.',
-  2: 'MACROS E NUTRIÇÃO: Analise o equilíbrio de proteína/carbs/gordura nos últimos dias. Sugira ajuste específico e prático para hoje.',
-  3: 'HIDRATAÇÃO: Avalie o padrão de hidratação dos últimos dias comparado à meta. Dê dica concreta com base nos dados reais.',
-  4: 'TREINOS E RECUPERAÇÃO: Analise frequência e consistência dos treinos nos últimos 30 dias. Oriente sobre recuperação ou próxima sessão.',
-  5: 'CONSISTÊNCIA E MOTIVAÇÃO: Destaque a sequência de registros, tendências positivas ou dê motivação empática para fechar a semana bem.',
-  6: 'COMPOSIÇÃO CORPORAL: Analise tendência de peso, gordura ou músculo se disponível. Comente progresso ou sugira ajuste de meta.',
-  0: 'RECUPERAÇÃO DOMINICAL: Oriente sobre hidratação, proteína para recuperação muscular e preparação mental para a semana.',
+  1: 'PLANEJAMENTO SEMANAL: Avalie a semana anterior (calorias, treinos, hidratação) e oriente como começar esta semana com foco nas metas. Correlacione treinos com ingestão proteica e hidratação.',
+  2: 'MACROS E NUTRIÇÃO: Analise o equilíbrio de proteína/carbs/gordura nos últimos dias. Sugira ajuste específico e prático para hoje, considerando o objetivo do usuário.',
+  3: 'HIDRATAÇÃO E ALIMENTAÇÃO: Avalie o padrão de hidratação e sua relação com o consumo alimentar (fibras, proteínas, volume de refeições). Dê dica concreta baseada nos dados reais.',
+  4: 'TREINOS E RECUPERAÇÃO: Analise frequência de treinos, consumo proteico e hidratação. Correlacione: dias treinados × proteína consumida × recuperação esperada.',
+  5: 'CONSISTÊNCIA E MOTIVAÇÃO: Destaque sequência de registros, tendências positivas ou dê motivação empática. Correlacione comportamento semanal com resultados.',
+  6: 'COMPOSIÇÃO CORPORAL: Analise tendência de peso, gordura, músculo e medidas. Correlacione com padrão alimentar e de hidratação. Sugira ajuste com base no objetivo.',
+  0: 'RECUPERAÇÃO DOMINICAL: Oriente sobre hidratação, proteína para recuperação muscular e preparação nutricional para a semana. Sugira uma refeição prática se o contexto permitir.',
 };
 
 // Varied fallbacks — rotated by recent insight types to avoid repetition
@@ -144,7 +144,7 @@ export async function GET(req: Request) {
         .single(),
       supabase
         .from('food_logs')
-        .select('food_name, meal_type, calories, protein, carbs, fat, created_at')
+        .select('food_name, meal_type, calories, protein, carbs, fat, hydration_ml, created_at')
         .eq('user_id', userId)
         .eq('log_date', today)
         .order('created_at', { ascending: true }),
@@ -200,7 +200,11 @@ export async function GET(req: Request) {
     const todayProt   = Math.round(todayFood.reduce((s, l) => s + (l.protein ?? 0), 0));
     const todayCarbs  = Math.round(todayFood.reduce((s, l) => s + (l.carbs ?? 0), 0));
     const todayFat    = Math.round(todayFood.reduce((s, l) => s + (l.fat ?? 0), 0));
-    const todayWater  = (waterLogs ?? []).reduce((s, l) => s + l.amount_ml, 0);
+
+    // Manual water logs + beverage hydration from food logs combined
+    const todayWater     = (waterLogs ?? []).reduce((s, l) => s + l.amount_ml, 0);
+    const todayFoodWater = todayFood.reduce((s, l) => s + ((l as { hydration_ml?: number }).hydration_ml ?? 0), 0);
+    const totalTodayWater = todayWater + todayFoodWater;
 
     const targetCal   = profile?.target_calories ?? 0;
     const targetProt  = Number(profile?.target_protein_g ?? 0) ||
@@ -208,7 +212,7 @@ export async function GET(req: Request) {
     const targetWater = profile?.target_water_ml ?? 2500;
     const remainCal   = targetCal - todayCal + todayBurned;
     const remainProt  = Math.max(0, targetProt - todayProt);
-    const waterPct    = targetWater > 0 ? Math.round((todayWater / targetWater) * 100) : 0;
+    const waterPct    = targetWater > 0 ? Math.round((totalTodayWater / targetWater) * 100) : 0;
 
     // Hours since last meal
     const lastMeal = [...todayFood]
@@ -303,6 +307,46 @@ export async function GET(req: Request) {
     const waterGoalRate = waterDates.length > 0
       ? Math.round((waterGoalDays / waterDates.length) * 100) : 0;
 
+    // ── 7-day window for local habit score calculation ──────────────────
+    const sevenDaysAgo = brazilNDaysAgo(7, today);
+    const week7Dates   = histDates.filter((d) => d >= sevenDaysAgo);
+    const week7Vals    = week7Dates.map((d) => byDate[d]);
+    const avg7Cal      = week7Vals.length > 0
+      ? Math.round(week7Vals.reduce((s, v) => s + v.cal,  0) / week7Vals.length)
+      : avgCal;
+    const avg7Prot     = week7Vals.length > 0
+      ? Math.round(week7Vals.reduce((s, v) => s + v.prot, 0) / week7Vals.length)
+      : avgProt;
+
+    // Nutrition score: calorie adherence + protein adherence + logging frequency
+    let nutritionScore = 50;
+    if (histDates.length > 0) {
+      const calBase  = targetCal  > 0 ? Math.max(0, 100 - Math.round(Math.abs(avg7Cal  - targetCal)  / targetCal  * 100)) : 50;
+      const protBase = targetProt > 0 ? Math.min(100, Math.round((avg7Prot / targetProt) * 100)) : 50;
+      const logFreq  = Math.min(100, Math.round((week7Dates.length / 7) * 100));
+      nutritionScore = Math.min(100, Math.round(calBase * 0.35 + protBase * 0.35 + logFreq * 0.30));
+    }
+
+    // Hydration score: 7-day average vs daily target
+    const week7WaterDates = Object.keys(waterByDate).filter((d) => d >= sevenDaysAgo);
+    const avg7Water       = week7WaterDates.length > 0
+      ? Math.round(week7WaterDates.reduce((s, d) => s + waterByDate[d], 0) / week7WaterDates.length)
+      : avgWater;
+    const hydrationScore  = targetWater > 0 ? Math.min(100, Math.round((avg7Water / targetWater) * 100)) : 50;
+
+    // Consistency score: current streak + historical logging frequency
+    const streakScore      = Math.min(60, streak * 10);
+    const histFreqScore    = Math.min(40, Math.round((histDates.length / 30) * 40));
+    const consistencyScore = Math.min(100, streakScore + histFreqScore);
+
+    // Derive user goal from TDEE vs target calories
+    const tdeeVal  = profile?.tdee ?? 0;
+    let   userGoal = 'manutenção';
+    if (tdeeVal > 0 && targetCal > 0) {
+      if (targetCal < tdeeVal * 0.93)      userGoal = 'emagrecimento';
+      else if (targetCal > tdeeVal * 1.03) userGoal = 'ganho de massa';
+    }
+
     // Body composition trend (last 90 days)
     const latestMetrics = bodyMetrics?.[bodyMetrics.length - 1];
     const oldestMetrics = bodyMetrics?.[0];
@@ -351,8 +395,8 @@ export async function GET(req: Request) {
       urgentNote = `🎉 CELEBRAÇÃO: Sequência incrível de ${streak} dias consecutivos com registro! Comemore este marco e dê uma dica estratégica de manutenção.`;
     } else if (weekendSpike >= 30 && (dow === 5 || dow === 6 || dow === 0)) {
       urgentNote = `📊 PADRÃO IDENTIFICADO: Fins de semana têm ${weekendSpike}% mais calorias que dias úteis. Oriente sobre refeição livre consciente sem culpa nem restrição excessiva.`;
-    } else if (todayWater < targetWater * 0.3 && todayFood.length >= 2) {
-      urgentNote = `💧 HIDRATAÇÃO BAIXA: Apenas ${todayWater}ml de ${targetWater}ml consumidos hoje mesmo com refeições registradas. Dê dica específica e prática para hidratação.`;
+    } else if (totalTodayWater < targetWater * 0.3 && todayFood.length >= 2) {
+      urgentNote = `💧 HIDRATAÇÃO BAIXA: Apenas ${totalTodayWater}ml de ${targetWater}ml consumidos hoje mesmo com refeições registradas. Dê dica específica e prática para hidratação.`;
     }
 
     const focusText = urgentNote || DOW_FOCUS[dow] || DOW_FOCUS[1];
@@ -376,14 +420,25 @@ INSIGHTS RECENTES — NÃO repita estes temas/tipos:
 → Gere um insight de tipo DIFERENTE ou com ângulo completamente distinto dos listados acima.`
       : '';
 
+    const goalFocus = userGoal === 'emagrecimento'
+      ? '→ Priorizar déficit calórico, saciedade, fibras, proteínas'
+      : userGoal === 'ganho de massa'
+        ? '→ Priorizar proteínas, recuperação, hidratação, superávit controlado'
+        : '→ Priorizar equilíbrio alimentar, constância';
+
+    const waterLine = todayFoodWater > 0
+      ? `→ Água hoje: ${totalTodayWater}ml/${targetWater}ml (${waterPct}%) [${todayWater}ml manual + ${todayFoodWater}ml de alimentos/bebidas]`
+      : `→ Água hoje: ${totalTodayWater}ml/${targetWater}ml (${waterPct}%)`;
+
     const contextPrompt =
 `PERFIL: ${firstName} | Peso: ${weightStr} | Meta: ${targetCal}kcal/dia | Proteína: ${targetProt}g/dia | Água: ${targetWater}ml/dia${profile?.sex ? ` | Sexo: ${profile.sex === 'male' ? 'M' : 'F'}` : ''}
+OBJETIVO: ${userGoal} ${goalFocus}
 
 HOJE — ${today} (${DOW_NAME[dow]}):
 ${mealLines}
 → Total: ${todayCal}kcal | ${todayProt}g prot | ${todayCarbs}g carbs | ${todayFat}g gord${todayBurned > 0 ? ` | ${todayBurned}kcal queimadas` : ''}
 → Restante: ${remainCal}kcal | ${remainProt}g prot
-→ Água hoje: ${todayWater}ml/${targetWater}ml (${waterPct}%)${hoursSinceLastMeal !== null ? ` | Última refeição: ${hoursSinceLastMeal}h atrás` : ''}
+${waterLine}${hoursSinceLastMeal !== null ? ` | Última refeição: ${hoursSinceLastMeal}h atrás` : ''}
 
 HISTÓRICO 30 dias (${histDates.length} dias com registro):
 → Calorias: média ${avgCal}kcal/dia | Proteína: ${avgProt}g | Carbs: ${avgCarbs}g | Gordura: ${avgFat}g
@@ -392,18 +447,22 @@ HISTÓRICO 30 dias (${histDates.length} dias com registro):
 → Sequência atual: ${streak > 0 ? `${streak} dias consecutivos` : 'nenhum dia consecutivo'}
 ${hydrationHistSection}${bodySection}${antiRepSection}
 
-PRIORIDADE DE ANÁLISE (mais importante primeiro):
+SCORES DE HÁBITOS (últimos 7 dias — use como contexto para personalizar):
+→ Nutrição: ${nutritionScore}/100 | Hidratação: ${hydrationScore}/100 | Consistência: ${consistencyScore}/100
+
+PRIORIDADE DE ANÁLISE:
 1. Situações críticas com ação imediata necessária
-2. Oportunidades de melhoria baseadas em tendências
-3. Evolução positiva e conquistas
-4. Informações contextuais e educacionais
+2. Correlações entre dados (alimentação × hidratação × treino × peso)
+3. Oportunidades de melhoria baseadas em tendências
+4. Evolução positiva e conquistas
 
 FOCO ATUAL: ${focusText}
 
 Retorne APENAS JSON válido (sem markdown):
-{"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras específicas e diretas","message":"2-3 frases com dados reais, causa e recomendação clara","expanded":"2-3 frases adicionais com análise mais profunda ou contexto extra (ou null)","cta":"texto curto do botão para abrir o chat (ex: 'Ver estratégias', 'Me ajude') ou null"}`;
+{"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras específicas e diretas","message":"2-3 frases com dados reais, causa e recomendação clara","expanded":"2-3 frases com análise mais profunda ou correlação entre dados (ou null)","cta":"texto curto do botão para abrir o chat ou null","nextSteps":["ação específica 1 para hoje/amanhã","ação específica 2","ação específica 3"],"mealIdea":{"title":"título da sugestão","items":["item 1","item 2","item 3"],"protein":35}}
+Nota: nextSteps = 2-3 ações curtas (≤10 palavras) e realizáveis hoje/amanhã, com emojis contextuais. mealIdea = inclua SOMENTE quando o insight envolver nutrição/proteína insuficiente e uma sugestão de refeição for naturalmente relevante; omita o campo em todos os outros casos.`;
 
-    console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes}`);
+    console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
         model: 'gemini-2.5-flash',
@@ -413,12 +472,16 @@ Retorne APENAS JSON válido (sem markdown):
 REGRAS:
 1. Tom: sempre positivo, encorajador, sem julgamentos. Exageros alimentares → "Dias assim acontecem — o equilíbrio a longo prazo é o que importa."
 2. Especificidade: cite alimentos, quantidades, percentuais e tendências reais dos dados. NUNCA invente padrões não evidenciados.
-3. Acionável: todo insight deve responder implicitamente "o que aconteceu?", "por que importa?" e "o que posso fazer?".
-4. Variedade: siga o FOCO indicado. Respeite a seção de INSIGHTS RECENTES — não repita tipos nem temas.
-5. Compacidade: message = 2-3 frases diretas e informativas. expanded = 2-3 frases extras que aprofundam (pode ser null).
-6. cta: rótulo curto e específico para abrir o chat (ex: "Ver estratégias", "Me ajude"). Use null se não houver ação clara.
-7. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
-          maxOutputTokens: 500,
+3. Acionável: todo insight responde "o que aconteceu?", "por que importa?" e "o que posso fazer?".
+4. Correlações: identifique e explique relações entre dados. Ex: "Você treinou 4x mas a proteína ficou abaixo — isso impacta a recuperação." Ex: "Seu consumo de fibras aumentou mas a hidratação caiu — aumentar água melhora o funcionamento intestinal."
+5. Personalização: considere o OBJETIVO do usuário (emagrecimento/manutenção/ganho de massa) e adapte análise e recomendações. Nunca dê recomendações genéricas iguais para todos.
+6. Variedade: siga o FOCO indicado. Respeite INSIGHTS RECENTES — não repita tipos nem temas.
+7. nextSteps: 2-3 ações concretas e realizáveis HOJE ou AMANHÃ, curtas (≤10 palavras), com emojis contextuais.
+8. mealIdea: inclua APENAS quando o insight envolver nutrição/proteína insuficiente E uma sugestão de refeição for naturalmente relevante para o contexto. Omita em todos os outros casos.
+9. message = 2-3 frases diretas com dados reais. expanded = 2-3 frases que aprofundam ou correlacionam (pode ser null).
+10. cta: rótulo curto para abrir o chat (ex: "Ver estratégias", "Me ajude"). Use null se não couber.
+11. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
+          maxOutputTokens: 800,
           temperature: 0.9,
           thinkingConfig: { thinkingBudget: 0 },
         },
@@ -433,6 +496,8 @@ REGRAS:
       message: string;
       expanded?: string | null;
       cta?: string | null;
+      nextSteps?: unknown[];
+      mealIdea?: unknown;
     };
     try {
       parsed = extractJSON(raw);
@@ -441,6 +506,25 @@ REGRAS:
       const recentTypeSet = new Set(recentTypeList);
       const fallback = FALLBACK_INSIGHTS.find((f) => !recentTypeSet.has(f.type)) ?? FALLBACK_INSIGHTS[0];
       parsed = fallback;
+    }
+
+    // Safely extract and validate nextSteps
+    const nextSteps = Array.isArray(parsed.nextSteps)
+      ? (parsed.nextSteps as unknown[]).map((s) => String(s).slice(0, 80)).slice(0, 3)
+      : null;
+
+    // Safely extract and validate mealIdea
+    let mealIdea: { title: string; items: string[]; protein: number | null } | null = null;
+    if (parsed.mealIdea && typeof parsed.mealIdea === 'object' && parsed.mealIdea !== null) {
+      const m = parsed.mealIdea as Record<string, unknown>;
+      mealIdea = {
+        title:   String(m.title ?? '').slice(0, 80),
+        items:   Array.isArray(m.items)
+          ? (m.items as unknown[]).map((i) => String(i).slice(0, 60)).slice(0, 4)
+          : [],
+        protein: typeof m.protein === 'number' ? m.protein : null,
+      };
+      if (!mealIdea.items.length) mealIdea = null;
     }
 
     const insightData = {
@@ -453,7 +537,10 @@ REGRAS:
       metadata: {
         todayCal, todayProt, remainCal, remainProt,
         avgCal, avgProt, workoutDays, histDays: histDates.length, streak, weekendSpike,
-        expanded: parsed.expanded ? String(parsed.expanded).slice(0, 800) : null,
+        expanded:  parsed.expanded ? String(parsed.expanded).slice(0, 800) : null,
+        scores:    { nutrition: nutritionScore, hydration: hydrationScore, consistency: consistencyScore },
+        nextSteps,
+        mealIdea,
       },
     };
 
@@ -464,7 +551,7 @@ REGRAS:
         .select()
         .single();
       if (!error && saved) {
-        console.log(`[insights] Saved | type=${insightData.type} | priority=${insightData.priority}`);
+        console.log(`[insights] Saved | type=${insightData.type} | priority=${insightData.priority} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
         return NextResponse.json(saved);
       }
       if (error) console.error('[insights] Save error:', error.message);

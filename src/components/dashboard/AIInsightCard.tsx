@@ -3,7 +3,8 @@
 import { memo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   Sparkles, Apple, Dumbbell, TrendingUp, Brain,
-  ChevronRight, RefreshCw, Droplets, Star, ChevronDown,
+  ChevronRight, RefreshCw, Droplets, Star, ChevronDown, CheckCircle2,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AIInsight } from '@/types';
@@ -43,6 +44,25 @@ const PRIORITY_CONFIG = {
     label: 'Info',
   },
 };
+
+function ScorePill({ label, score }: { label: string; score: number }) {
+  const color = score >= 75
+    ? 'text-emerald-700 dark:text-emerald-400'
+    : score >= 50
+      ? 'text-amber-700 dark:text-amber-400'
+      : 'text-red-600 dark:text-red-400';
+  const bg = score >= 75
+    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-800/40'
+    : score >= 50
+      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-800/40'
+      : 'bg-red-50 dark:bg-red-950/40 border-red-200/60 dark:border-red-800/40';
+  return (
+    <div className={cn('flex items-center gap-1 px-2 py-0.5 rounded-full border', bg)}>
+      <span className={cn('text-[12px] font-bold tabular-nums', color)}>{score}</span>
+      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">{label}</span>
+    </div>
+  );
+}
 
 function InsightSkeleton() {
   return (
@@ -162,6 +182,20 @@ const AIInsightCard = memo(function AIInsightCard({
     ? insight.metadata.expanded
     : null;
 
+  const scores = insight.metadata?.scores as { nutrition: number; hydration: number; consistency: number } | null ?? null;
+
+  const nextSteps = Array.isArray(insight.metadata?.nextSteps) && (insight.metadata.nextSteps as unknown[]).length > 0
+    ? insight.metadata.nextSteps as string[]
+    : null;
+
+  const mealIdea = insight.metadata?.mealIdea as {
+    title: string;
+    items: string[];
+    protein: number | null;
+  } | null ?? null;
+
+  const hasExpandable = !!(expandedText || mealIdea);
+
   function handleCTA() {
     if (!onOpenChat) return;
     const msg = `Quero saber mais sobre: "${insight!.title}". ${insight!.message}`;
@@ -218,16 +252,69 @@ const AIInsightCard = memo(function AIInsightCard({
               {insight.message}
             </p>
 
-            {/* Expandable deeper analysis */}
-            {expandedText && (
+            {/* Habit scores row */}
+            {scores && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                <ScorePill label="Nutrição" score={scores.nutrition} />
+                <ScorePill label="Hidratação" score={scores.hydration} />
+                <ScorePill label="Consistência" score={scores.consistency} />
+              </div>
+            )}
+
+            {/* Next steps — always visible when present */}
+            {nextSteps && nextSteps.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
+                  O que fazer agora
+                </p>
+                <ul className="space-y-1.5">
+                  {nextSteps.map((step, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0 mt-px" />
+                      <span className="text-[12px] text-zinc-600 dark:text-zinc-400 leading-snug">{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Expandable: deeper analysis + meal idea */}
+            {hasExpandable && (
               <>
                 <div
                   className="overflow-hidden transition-all duration-300 ease-in-out"
-                  style={{ maxHeight: expanded ? '500px' : '0' }}
+                  style={{ maxHeight: expanded ? '600px' : '0' }}
                 >
-                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                    {expandedText}
-                  </p>
+                  <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+                    {expandedText && (
+                      <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        {expandedText}
+                      </p>
+                    )}
+                    {mealIdea && mealIdea.items.length > 0 && (
+                      <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 p-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <UtensilsCrossed size={12} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                          <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                            {mealIdea.title}
+                          </p>
+                        </div>
+                        <ul className="space-y-0.5">
+                          {mealIdea.items.map((item, i) => (
+                            <li key={i} className="text-[12px] text-zinc-600 dark:text-zinc-400 flex items-start gap-1">
+                              <span className="text-emerald-500 flex-shrink-0">•</span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                        {mealIdea.protein != null && (
+                          <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-1.5 font-medium">
+                            ≈ {mealIdea.protein}g proteína
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setExpanded(!expanded)}
