@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BookOpen, BarChart2, ChefHat, ChevronRight, Droplets, Dumbbell, Scale } from 'lucide-react';
+import { BookOpen, BarChart2, ChefHat, ChevronRight } from 'lucide-react';
 
 const ITEMS = [
   {
@@ -38,12 +38,12 @@ const ITEMS = [
 
 export default function SaudeClient() {
   return (
-    <div className="flex flex-col gap-4 pt-8 pb-6 animate-fade-in">
+    <div className="flex flex-col gap-4 pt-7 pb-6 animate-fade-in">
       <div>
-        <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+        <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-tight">
           Saúde
         </h1>
-        <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5 font-medium">
+        <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1 font-medium">
           Sua central de acompanhamento
         </p>
       </div>
@@ -53,7 +53,7 @@ export default function SaudeClient() {
           <Link
             key={href}
             href={href}
-            className={`flex items-start gap-4 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none ring-1 ${ring} hover:ring-2 active:scale-[0.99] transition-all duration-150`}
+            className={`flex items-start gap-4 bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none ring-1 ${ring} hover:ring-2 active:scale-[0.99] transition-all duration-150`}
           >
             <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${color} ring-1 ${ring} mt-0.5`}>
               <Icon size={22} strokeWidth={1.75} />
@@ -65,7 +65,7 @@ export default function SaudeClient() {
               <p className="text-[12px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-snug">
                 {desc}
               </p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
                 {highlights.map((h) => (
                   <span key={h} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${highlightColor}`}>
                     {h}

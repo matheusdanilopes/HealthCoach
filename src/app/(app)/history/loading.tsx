@@ -1,15 +1,15 @@
 function Skel({ className }: { className?: string }) {
-  return <div className={`animate-shimmer rounded-2xl ${className ?? ''}`} />;
+  return <div className={`skeleton rounded-2xl ${className ?? ''}`} />;
 }
 
 export default function HistoryLoading() {
   return (
-    <div className="flex flex-col gap-5 pt-8 pb-8">
+    <div className="flex flex-col gap-4 pt-7 pb-8">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-2">
-          <Skel className="h-6 w-24 rounded-xl" />
-          <Skel className="h-3 w-32 rounded-full" />
+          <Skel className="h-7 w-28 rounded-xl" />
+          <Skel className="h-3 w-36 rounded-full" />
         </div>
         <Skel className="h-9 w-28 rounded-xl" />
       </div>
@@ -19,23 +19,20 @@ export default function HistoryLoading() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-3">
-        <Skel className="h-[100px]" />
-        <Skel className="h-[100px]" />
-        <Skel className="h-[100px]" />
-        <Skel className="h-[100px]" />
+        {[1,2,3,4].map((i) => <Skel key={i} className="h-[100px]" />)}
       </div>
 
       {/* Weight chart */}
-      <Skel className="h-[272px]" />
+      <Skel className="h-[260px]" />
 
       {/* Nutrition chart */}
-      <Skel className="h-[304px]" />
+      <Skel className="h-[290px]" />
 
-      {/* Projection */}
-      <Skel className="h-[156px]" />
+      {/* Workouts */}
+      <Skel className="h-[140px]" />
 
       {/* Milestones */}
-      <Skel className="h-[228px]" />
+      <Skel className="h-[220px]" />
 
       {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">

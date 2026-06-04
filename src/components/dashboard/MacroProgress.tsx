@@ -23,41 +23,30 @@ interface MacroBarProps {
   label: string;
   value: number;
   target: number;
-  splitPct: number;
-  kcalPerG: number;
   color: string;
   trackColor: string;
   textColor: string;
+  emoji: string;
 }
 
-const MacroBar = memo(function MacroBar({ label, value, target, splitPct, kcalPerG, color, trackColor, textColor }: MacroBarProps) {
+const MacroBar = memo(function MacroBar({ label, value, target, color, trackColor, textColor, emoji }: MacroBarProps) {
   const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0;
   const isOver = value > target && target > 0;
-  const kcalConsumed = Math.round(value * kcalPerG);
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        {/* Label + split percentage origin */}
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex-shrink-0">
+          <span className="text-[13px] leading-none">{emoji}</span>
+          <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 flex-shrink-0">
             {label}
           </span>
-          <span className="text-[10px] font-medium text-zinc-300 dark:text-zinc-600 flex-shrink-0">
-            {splitPct}% das kcal
-          </span>
         </div>
-
-        {/* Consumed grams + kcal equivalent / target grams */}
         <div className="flex items-baseline gap-0.5 tabular-nums flex-shrink-0">
           <span className={cn('text-[13px] font-bold', isOver ? 'text-red-500' : textColor)}>
             {Math.round(value)}g
           </span>
-          <span className="text-[10px] text-zinc-300 dark:text-zinc-600 mx-0.5">·</span>
-          <span className={cn('text-[11px] font-medium', isOver ? 'text-red-400' : 'text-zinc-400 dark:text-zinc-500')}>
-            {kcalConsumed} kcal
-          </span>
-          <span className="text-[11px] text-zinc-300 dark:text-zinc-600 mx-0.5">/</span>
+          <span className="text-[10px] text-zinc-300 dark:text-zinc-600 ml-0.5">/</span>
           <span className="text-[11px] text-zinc-400 dark:text-zinc-500">{target}g</span>
         </div>
       </div>
@@ -75,55 +64,41 @@ const MacroBar = memo(function MacroBar({ label, value, target, splitPct, kcalPe
 const MacroProgress = memo(function MacroProgress({ protein, carbs, fat, targetCalories }: MacroProgressProps) {
   const targets = useMemo(() => getTargetMacros(targetCalories), [targetCalories]);
 
-  const totalKcalFromMacros =
-    Math.round(protein * KCAL_PER_G.protein) +
-    Math.round(carbs   * KCAL_PER_G.carbs)   +
-    Math.round(fat     * KCAL_PER_G.fat);
-
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none">
-      <div className="flex gap-0.5 mb-4">
-        <div className="h-[3px] flex-1 rounded-full bg-emerald-500" />
-        <div className="h-[3px] flex-1 rounded-full bg-amber-400" />
-        <div className="h-[3px] flex-1 rounded-full bg-rose-400" />
-      </div>
-
-      <div className="flex items-baseline justify-between mb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-          Macros
-        </p>
-        <p className="text-[10px] text-zinc-300 dark:text-zinc-600 tabular-nums">
-          {totalKcalFromMacros.toLocaleString('pt-BR')} kcal de macros
-        </p>
+    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
+      <div className="flex items-center justify-between mb-4">
+        <p className="label-xs">Macronutrientes</p>
+        <div className="flex gap-0.5">
+          <div className="h-[3px] w-6 rounded-full bg-emerald-500" />
+          <div className="h-[3px] w-6 rounded-full bg-amber-400" />
+          <div className="h-[3px] w-6 rounded-full bg-rose-400" />
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <MacroBar
-          label="Prot."
+          label="Proteína"
           value={protein}
           target={targets.protein}
-          splitPct={30}
-          kcalPerG={KCAL_PER_G.protein}
+          emoji="🥩"
           color="bg-emerald-500"
           trackColor="bg-emerald-100 dark:bg-emerald-900/25"
           textColor="text-emerald-600 dark:text-emerald-400"
         />
         <MacroBar
-          label="Carb."
+          label="Carboidrato"
           value={carbs}
           target={targets.carbs}
-          splitPct={40}
-          kcalPerG={KCAL_PER_G.carbs}
+          emoji="🌾"
           color="bg-amber-400"
           trackColor="bg-amber-100 dark:bg-amber-900/25"
           textColor="text-amber-600 dark:text-amber-400"
         />
         <MacroBar
-          label="Gord."
+          label="Gordura"
           value={fat}
           target={targets.fat}
-          splitPct={30}
-          kcalPerG={KCAL_PER_G.fat}
+          emoji="🥑"
           color="bg-rose-400"
           trackColor="bg-rose-100 dark:bg-rose-900/25"
           textColor="text-rose-600 dark:text-rose-400"

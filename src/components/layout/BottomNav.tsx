@@ -10,14 +10,14 @@ const BODY_PATHS = ['/body-metrics', '/body-measurements'];
 const SAUDE_PATHS = ['/diary', '/history', '/marmitas'];
 
 const BODY_SUB_ITEMS = [
-  { href: '/body-metrics',      icon: Scale,  label: 'Pesagem', desc: 'Peso e composição' },
-  { href: '/body-measurements', icon: Ruler,  label: 'Medidas', desc: 'Circunferências'   },
+  { href: '/body-metrics',      icon: Scale,  label: 'Pesagem',  desc: 'Peso e composição' },
+  { href: '/body-measurements', icon: Ruler,  label: 'Medidas',  desc: 'Circunferências'   },
 ];
 
 const SAUDE_SUB_ITEMS = [
-  { href: '/diary',    icon: BookOpen,   label: 'Diário',               desc: 'Refeições e hábitos do dia' },
-  { href: '/history',  icon: TrendingUp, label: 'Evolução',             desc: 'Gráficos e progresso'       },
-  { href: '/marmitas', icon: ChefHat,    label: 'Marmitas Inteligentes', desc: 'Planeje com IA'            },
+  { href: '/diary',    icon: BookOpen,   label: 'Diário',               desc: 'Refeições e hábitos' },
+  { href: '/history',  icon: TrendingUp, label: 'Evolução',             desc: 'Gráficos e progresso' },
+  { href: '/marmitas', icon: ChefHat,    label: 'Marmitas IA',          desc: 'Planejamento semanal' },
 ];
 
 function SubMenu({
@@ -30,8 +30,8 @@ function SubMenu({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden min-w-[200px]">
+    <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden min-w-[210px]">
         {items.map(({ href, icon: Icon, label, desc }) => {
           const active = pathname === href;
           return (
@@ -49,7 +49,7 @@ function SubMenu({
               <div className={cn(
                 'h-8 w-8 rounded-[10px] flex items-center justify-center flex-shrink-0',
                 active
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
                   : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
               )}>
                 <Icon size={14} />
@@ -67,8 +67,9 @@ function SubMenu({
           );
         })}
       </div>
+      {/* Arrow pointer */}
       <div className="flex justify-center">
-        <div className="w-2.5 h-2.5 bg-white dark:bg-zinc-900 border-b border-r border-zinc-100 dark:border-zinc-800 rotate-45 -mt-[5px]" />
+        <div className="w-2.5 h-2.5 bg-white dark:bg-zinc-900 border-b border-r border-zinc-200/60 dark:border-zinc-800/60 rotate-45 -mt-[5px]" />
       </div>
     </div>
   );
@@ -84,10 +85,8 @@ export default function BottomNav() {
   const isSaudeActive = SAUDE_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
   const isBodyActive  = BODY_PATHS.includes(pathname);
 
-  // Close both menus on navigation
   useEffect(() => { setSaudeOpen(false); setBodyOpen(false); }, [pathname]);
 
-  // Close body menu on outside click
   useEffect(() => {
     if (!saudeOpen && !bodyOpen) return;
     function onPointerDown(e: PointerEvent) {
@@ -100,31 +99,31 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-200/60 dark:border-zinc-800/50"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white/92 dark:bg-zinc-950/97 backdrop-blur-xl border-t border-zinc-200/50 dark:border-zinc-800/40"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="flex items-center max-w-2xl mx-auto h-[56px] px-3">
+      <div className="flex items-center max-w-2xl mx-auto h-[60px] px-2">
 
         {/* Início */}
         <Link
           href="/dashboard"
           className={cn(
-            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200',
+            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5',
             pathname === '/dashboard'
               ? 'text-emerald-600 dark:text-emerald-400'
               : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
           )}
         >
           {pathname === '/dashboard' && (
-            <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
           )}
-          <LayoutDashboard size={19} strokeWidth={pathname === '/dashboard' ? 2.25 : 1.75} className="transition-all duration-200" />
-          <span className={cn('text-[10px] font-medium tracking-tight transition-all duration-200', pathname === '/dashboard' ? 'opacity-100' : 'opacity-60')}>
+          <LayoutDashboard size={20} strokeWidth={pathname === '/dashboard' ? 2.25 : 1.75} className="transition-all duration-200" />
+          <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', pathname === '/dashboard' ? 'opacity-100' : 'opacity-55')}>
             Início
           </span>
         </Link>
 
-        {/* Saúde — floating submenu */}
+        {/* Saúde */}
         <div ref={saudeRef} className="relative flex-1 flex items-center justify-center h-full">
           {saudeOpen && (
             <SubMenu items={SAUDE_SUB_ITEMS} pathname={pathname} onClose={() => setSaudeOpen(false)} />
@@ -132,23 +131,23 @@ export default function BottomNav() {
           <button
             onClick={() => { setSaudeOpen((v) => !v); setBodyOpen(false); }}
             className={cn(
-              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200',
+              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5',
               isSaudeActive || saudeOpen
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
             )}
           >
             {(isSaudeActive || saudeOpen) && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+              <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             )}
-            <HeartPulse size={19} strokeWidth={isSaudeActive || saudeOpen ? 2.25 : 1.75} className="transition-all duration-200" />
-            <span className={cn('text-[10px] font-medium tracking-tight transition-all duration-200', isSaudeActive || saudeOpen ? 'opacity-100' : 'opacity-60')}>
+            <HeartPulse size={20} strokeWidth={isSaudeActive || saudeOpen ? 2.25 : 1.75} className="transition-all duration-200" />
+            <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', isSaudeActive || saudeOpen ? 'opacity-100' : 'opacity-55')}>
               Saúde
             </span>
           </button>
         </div>
 
-        {/* Corpo — floating submenu */}
+        {/* Corpo */}
         <div ref={bodyRef} className="relative flex-1 flex items-center justify-center h-full">
           {bodyOpen && (
             <SubMenu items={BODY_SUB_ITEMS} pathname={pathname} onClose={() => setBodyOpen(false)} />
@@ -156,17 +155,17 @@ export default function BottomNav() {
           <button
             onClick={() => { setBodyOpen((v) => !v); setSaudeOpen(false); }}
             className={cn(
-              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200',
+              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5',
               isBodyActive || bodyOpen
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
             )}
           >
             {(isBodyActive || bodyOpen) && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+              <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             )}
-            <Scale size={19} strokeWidth={isBodyActive || bodyOpen ? 2.25 : 1.75} className="transition-all duration-200" />
-            <span className={cn('text-[10px] font-medium tracking-tight transition-all duration-200', isBodyActive || bodyOpen ? 'opacity-100' : 'opacity-60')}>
+            <Scale size={20} strokeWidth={isBodyActive || bodyOpen ? 2.25 : 1.75} className="transition-all duration-200" />
+            <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', isBodyActive || bodyOpen ? 'opacity-100' : 'opacity-55')}>
               Corpo
             </span>
           </button>
@@ -176,17 +175,17 @@ export default function BottomNav() {
         <Link
           href="/profile"
           className={cn(
-            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200',
+            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5',
             pathname === '/profile'
               ? 'text-emerald-600 dark:text-emerald-400'
               : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
           )}
         >
           {pathname === '/profile' && (
-            <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
           )}
-          <User size={19} strokeWidth={pathname === '/profile' ? 2.25 : 1.75} className="transition-all duration-200" />
-          <span className={cn('text-[10px] font-medium tracking-tight transition-all duration-200', pathname === '/profile' ? 'opacity-100' : 'opacity-60')}>
+          <User size={20} strokeWidth={pathname === '/profile' ? 2.25 : 1.75} className="transition-all duration-200" />
+          <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', pathname === '/profile' ? 'opacity-100' : 'opacity-55')}>
             Perfil
           </span>
         </Link>

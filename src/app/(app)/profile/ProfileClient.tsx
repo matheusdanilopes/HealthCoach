@@ -54,7 +54,7 @@ const MULTIPLIERS: Record<string, number> = {
 
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
       <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
           {title}
@@ -305,11 +305,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     <div className="flex flex-col gap-4 pt-6 pb-8 animate-fade-in">
       {/* Identity header */}
       <div className="flex items-center gap-4 px-1">
-        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/20">
+        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/20">
           <span className="text-lg font-bold text-white tracking-tight">{initials}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 leading-tight truncate tracking-tight">
+          <h1 className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100 leading-tight truncate tracking-tight">
             {profile?.full_name || 'Meu perfil'}
           </h1>
           <p className="text-[13px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">{email}</p>
@@ -319,7 +319,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       {/* Stats bar */}
       {(tdeePreview || metaNum || profile?.tdee || profile?.target_calories) ? (
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-4">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/30 rounded-2xl p-4 shadow-[0_1px_4px_0_rgb(0,0,0,0.04)]">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Zap size={12} className="text-amber-500" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -331,7 +331,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">kcal/dia</p>
           </div>
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/30 rounded-2xl p-4">
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/30 rounded-2xl p-4 shadow-[0_1px_4px_0_rgb(0,0,0,0.04)]">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Target size={12} className="text-emerald-600 dark:text-emerald-400" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -565,7 +565,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           type="submit"
           loading={loading}
           variant={saved ? 'secondary' : 'primary'}
-          className="w-full"
+          className="w-full rounded-2xl"
         >
           {saved ? <Check size={14} /> : <Save size={14} />}
           {saved ? 'Salvo com sucesso!' : 'Salvar alterações'}
@@ -573,7 +573,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       </form>
 
       {/* Notificações */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
         <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60 flex items-center justify-between">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Notificações
@@ -738,7 +738,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
       </div>
 
       {/* Conta */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-3xl overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+      <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
         <div className="px-5 py-3.5 border-b border-zinc-50 dark:border-zinc-800/60 flex items-center justify-between">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Conta

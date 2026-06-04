@@ -20,7 +20,7 @@ html.dark {
 }
 
 body {
-  background: #f8f8f8;
+  background: #f4f4f6;
   color: #09090b;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -29,7 +29,7 @@ body {
 }
 
 html.dark body {
-  background: #0a0a0b;
+  background: #0c0c0e;
   color: #fafafa;
 }
 
@@ -78,14 +78,64 @@ html.dark .label-xs {
 
 .surface {
   background: #ffffff;
-  border: 1px solid #f0f0f0;
-  border-radius: 16px;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.02);
+  border: 1px solid #ebebed;
+  border-radius: 20px;
+  box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.03);
 }
 html.dark .surface {
-  background: #111113;
-  border-color: #1f1f23;
+  background: #141416;
+  border-color: #1e1e22;
   box-shadow: none;
+}
+
+/* Premium card variant — stronger shadow for elevated content */
+.surface-elevated {
+  background: #ffffff;
+  border: 1px solid #ebebed;
+  border-radius: 20px;
+  box-shadow: 0 4px 16px 0 rgb(0 0 0 / 0.06), 0 1px 4px 0 rgb(0 0 0 / 0.04);
+}
+html.dark .surface-elevated {
+  background: #141416;
+  border-color: #1e1e22;
+  box-shadow: 0 4px 16px 0 rgb(0 0 0 / 0.4);
+}
+
+/* Page header utility */
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #09090b;
+  line-height: 1.2;
+}
+html.dark .page-title {
+  color: #fafafa;
+}
+
+/* ─── Skeleton loading ─── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f2 25%,
+    #e8e8eb 50%,
+    #f0f0f2 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+  border-radius: 8px;
+}
+
+html.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    #1e1e22 25%,
+    #252528 50%,
+    #1e1e22 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
 }
 
 /* ─── Keyframes ─── */
@@ -111,7 +161,7 @@ html.dark .surface {
 }
 
 @keyframes scale-in {
-  from { transform: scale(0.97); opacity: 0; }
+  from { transform: scale(0.96); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
 }
 
@@ -132,6 +182,17 @@ html.dark .surface {
 
 @keyframes progress-fill {
   from { width: 0%; }
+}
+
+@keyframes pop-in {
+  0%   { transform: scale(0.92); opacity: 0; }
+  60%  { transform: scale(1.02); }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes count-up {
+  from { transform: translateY(6px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
 }
 
 /* ─── Animation classes ─── */
@@ -161,12 +222,21 @@ html.dark .surface {
   will-change: transform, opacity;
 }
 
+.animate-pop-in {
+  animation: pop-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-count-up {
+  animation: count-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .animate-shimmer {
   background: linear-gradient(
     90deg,
-    #f0f0f0 25%,
-    #e8e8e8 50%,
-    #f0f0f0 75%
+    #f0f0f2 25%,
+    #e8e8eb 50%,
+    #f0f0f2 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -175,9 +245,9 @@ html.dark .surface {
 html.dark .animate-shimmer {
   background: linear-gradient(
     90deg,
-    #1f1f23 25%,
-    #27272a 50%,
-    #1f1f23 75%
+    #1e1e22 25%,
+    #252528 50%,
+    #1e1e22 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -204,4 +274,9 @@ html.dark .animate-shimmer {
 /* ─── Progress bar fill animation ─── */
 .progress-animated {
   animation: progress-fill 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Touch feedback ─── */
+.touch-highlight {
+  -webkit-tap-highlight-color: transparent;
 }

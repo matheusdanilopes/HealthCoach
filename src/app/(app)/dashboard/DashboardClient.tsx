@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Scale, Plus, Dumbbell, Flame, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Scale, Plus, Dumbbell, ChevronLeft, ChevronRight } from 'lucide-react';
 import CalorieCard from '@/components/dashboard/CalorieCard';
 import MacroProgress from '@/components/dashboard/MacroProgress';
 import WaterTracker from '@/components/dashboard/WaterTracker';
@@ -55,16 +55,13 @@ export default function DashboardClient({
 
   const greetingText = useMemo(() => getGreeting(), []);
 
-  // Derive water total from logs list
   const water = useMemo(() => waterLogs.reduce((s, l) => s + l.amount_ml, 0), [waterLogs]);
 
-  // Meal-sourced hydration (from beverages logged as food)
   const mealHydrationMl = useMemo(
     () => foodLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0),
     [foodLogs]
   );
 
-  // Hydration reminders (browser notifications when tab is open)
   useHydrationReminder(waterLogs, profile?.target_water_ml ?? 2500, mealHydrationMl);
 
   useEffect(() => {
@@ -140,68 +137,75 @@ export default function DashboardClient({
   const displayDate = format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR });
 
   return (
-    <div className="flex flex-col gap-6 pt-8 pb-6 animate-fade-in">
-      {/* Page header */}
-      <div className="flex items-start justify-between">
+    <div className="flex flex-col gap-5 pt-7 pb-6 animate-fade-in">
+
+      {/* ── Page Header ── */}
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight mb-3">
             {isToday
-              ? `${greetingText}${firstName ? `, ${firstName}` : ''}`
-              : `Diário${firstName ? `, ${firstName}` : ''}`}
+              ? `${greetingText}${firstName ? `, ${firstName}` : ''} 👋`
+              : `Histórico${firstName ? `, ${firstName}` : ''}`}
           </h1>
+
+          {/* Date navigation */}
           <div className="flex items-center gap-2">
             <div className={cn(
-              'flex items-center flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl h-9 px-1 transition-opacity',
+              'flex items-center flex-1 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/60 rounded-xl h-9 px-1 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none transition-opacity',
               loadingDate && 'opacity-50'
             )}>
               <button
                 onClick={() => changeDate(-1)}
                 disabled={loadingDate}
-                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-40 active:scale-95"
+                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500 transition-colors disabled:opacity-40 active:scale-95"
                 aria-label="Dia anterior"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={15} />
               </button>
-              <p className="flex-1 text-center text-[13px] font-medium text-zinc-700 dark:text-zinc-200 capitalize select-none">
-                {displayDate}
+              <p className="flex-1 text-center text-[12px] font-semibold text-zinc-600 dark:text-zinc-300 capitalize select-none">
+                {isToday ? 'Hoje' : displayDate}
               </p>
               <button
                 onClick={() => changeDate(1)}
                 disabled={isToday || loadingDate}
-                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
                 aria-label="Próximo dia"
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={15} />
               </button>
             </div>
             {!isToday && (
               <button
                 onClick={() => navigateTo(todayISO())}
-                className="h-9 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/50 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-95 whitespace-nowrap"
+                className="h-9 px-3.5 rounded-xl bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-500 transition-colors active:scale-95 whitespace-nowrap shadow-sm shadow-emerald-600/25"
               >
                 Hoje
               </button>
             )}
           </div>
         </div>
+
+        {/* Weight pill */}
         {isToday && (
           <button
             onClick={() => setWeightModalOpen(true)}
-            className="flex items-center gap-2 h-9 px-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 text-sm text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95"
+            className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/60 text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95 mt-[38px]"
           >
-            <Scale size={13} className="text-zinc-400" />
-            <span className="font-semibold tabular-nums text-[13px]">{latestWeight}kg</span>
+            <Scale size={12} className="text-zinc-400 dark:text-zinc-500" />
+            <span className="font-bold tabular-nums text-[13px]">{latestWeight}kg</span>
           </button>
         )}
       </div>
 
-      <div className="flex flex-col gap-4">
+      {/* ── Main Stats ── */}
+      <div className="flex flex-col gap-3">
         <CalorieCard
           consumed={stats.calories}
           burned={workoutBurned}
           target={profile?.target_calories ?? 2000}
         />
 
+        {/* AI Insight */}
         {isToday && (
           <AIInsightCard
             userId={userId}
@@ -213,46 +217,54 @@ export default function DashboardClient({
           />
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-2.5">
           <button
             onClick={() => setAddFoodOpen(true)}
-            className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium shadow-sm shadow-emerald-600/25 transition-all active:scale-[0.97]"
+            className="flex items-center justify-center gap-2 h-12 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-[13px] font-semibold shadow-sm shadow-emerald-600/25 transition-all active:scale-[0.97]"
           >
-            <Plus size={15} strokeWidth={2.5} />
+            <Plus size={16} strokeWidth={2.5} />
             Registrar refeição
           </button>
           <button
             onClick={() => setAddWorkoutOpen(true)}
-            className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-700 dark:text-zinc-300 text-sm font-medium shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-[0.97]"
+            className="flex items-center justify-center gap-2 h-12 px-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/60 text-zinc-700 dark:text-zinc-300 text-[13px] font-semibold shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-700 transition-all active:scale-[0.97]"
           >
             <Dumbbell size={15} />
             Registrar treino
           </button>
         </div>
 
+        {/* TDEE / Deficit row */}
         {profile?.tdee && (
-          <div className="flex items-center justify-between px-1 py-0.5">
-            <div className="flex items-center gap-1.5">
-              <Flame size={11} className="text-zinc-300 dark:text-zinc-600" />
-              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                TDEE{' '}
-                <span className="text-zinc-600 dark:text-zinc-400 font-semibold tabular-nums">
+          <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/40 rounded-xl shadow-[0_1px_2px_0_rgb(0,0,0,0.03)] dark:shadow-none">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded-md bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+                <span className="text-[11px]">⚡</span>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">TDEE</p>
+                <p className="text-[13px] font-bold tabular-nums text-zinc-800 dark:text-zinc-200">
                   {profile.tdee.toLocaleString('pt-BR')} kcal
-                </span>
-              </span>
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <TrendingDown size={11} className="text-emerald-500" />
-              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                Déficit{' '}
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
+            <div className="h-8 w-px bg-zinc-100 dark:bg-zinc-800" />
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+                <span className="text-[11px]">📉</span>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Déficit</p>
+                <p className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                   {(profile.tdee - (profile.target_calories ?? 0)).toLocaleString('pt-BR')} kcal
-                </span>
-              </span>
+                </p>
+              </div>
             </div>
           </div>
         )}
 
+        {/* Macros + Water */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <MacroProgress
@@ -274,6 +286,7 @@ export default function DashboardClient({
         </div>
       </div>
 
+      {/* ── Modals ── */}
       <AIFoodLogger
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
