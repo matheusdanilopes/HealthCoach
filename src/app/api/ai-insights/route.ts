@@ -307,34 +307,18 @@ export async function GET(req: Request) {
     const waterGoalRate = waterDates.length > 0
       ? Math.round((waterGoalDays / waterDates.length) * 100) : 0;
 
-    // ── 7-day window for local habit score calculation ──────────────────
-    const sevenDaysAgo = brazilNDaysAgo(7, today);
-    const week7Dates   = histDates.filter((d) => d >= sevenDaysAgo);
-    const week7Vals    = week7Dates.map((d) => byDate[d]);
-    const avg7Cal      = week7Vals.length > 0
-      ? Math.round(week7Vals.reduce((s, v) => s + v.cal,  0) / week7Vals.length)
-      : avgCal;
-    const avg7Prot     = week7Vals.length > 0
-      ? Math.round(week7Vals.reduce((s, v) => s + v.prot, 0) / week7Vals.length)
-      : avgProt;
+    // ── Habit scores — based on today's data ───────────────────────────
+    // Nutrition score: today's calorie progress + protein progress toward daily targets
+    const calProgressPct  = targetCal  > 0 ? Math.min(100, Math.round((todayCal  / targetCal)  * 100)) : 50;
+    const protProgressPct = targetProt > 0 ? Math.min(100, Math.round((todayProt / targetProt) * 100)) : 50;
+    const nutritionScore  = todayFood.length === 0
+      ? 0
+      : Math.min(100, Math.round(calProgressPct * 0.5 + protProgressPct * 0.5));
 
-    // Nutrition score: calorie adherence + protein adherence + logging frequency
-    let nutritionScore = 50;
-    if (histDates.length > 0) {
-      const calBase  = targetCal  > 0 ? Math.max(0, 100 - Math.round(Math.abs(avg7Cal  - targetCal)  / targetCal  * 100)) : 50;
-      const protBase = targetProt > 0 ? Math.min(100, Math.round((avg7Prot / targetProt) * 100)) : 50;
-      const logFreq  = Math.min(100, Math.round((week7Dates.length / 7) * 100));
-      nutritionScore = Math.min(100, Math.round(calBase * 0.35 + protBase * 0.35 + logFreq * 0.30));
-    }
+    // Hydration score: today's total water vs daily target (already computed as waterPct)
+    const hydrationScore = Math.min(100, waterPct);
 
-    // Hydration score: 7-day average vs daily target
-    const week7WaterDates = Object.keys(waterByDate).filter((d) => d >= sevenDaysAgo);
-    const avg7Water       = week7WaterDates.length > 0
-      ? Math.round(week7WaterDates.reduce((s, d) => s + waterByDate[d], 0) / week7WaterDates.length)
-      : avgWater;
-    const hydrationScore  = targetWater > 0 ? Math.min(100, Math.round((avg7Water / targetWater) * 100)) : 50;
-
-    // Consistency score: current streak + historical logging frequency
+    // Consistency score: streak-based (habit over time, not a single-day metric)
     const streakScore      = Math.min(60, streak * 10);
     const histFreqScore    = Math.min(40, Math.round((histDates.length / 30) * 40));
     const consistencyScore = Math.min(100, streakScore + histFreqScore);
@@ -447,8 +431,8 @@ HISTÓRICO 30 dias (${histDates.length} dias com registro):
 → Sequência atual: ${streak > 0 ? `${streak} dias consecutivos` : 'nenhum dia consecutivo'}
 ${hydrationHistSection}${bodySection}${antiRepSection}
 
-SCORES DE HÁBITOS (últimos 7 dias — use como contexto para personalizar):
-→ Nutrição: ${nutritionScore}/100 | Hidratação: ${hydrationScore}/100 | Consistência: ${consistencyScore}/100
+SCORES DE HÁBITOS (hoje):
+→ Nutrição: ${nutritionScore}/100 (cal ${calProgressPct}% + prot ${protProgressPct}% da meta) | Hidratação: ${hydrationScore}/100 (${waterPct}% da meta) | Consistência: ${consistencyScore}/100 (${streak}d streak)
 
 PRIORIDADE DE ANÁLISE:
 1. Situações críticas com ação imediata necessária
