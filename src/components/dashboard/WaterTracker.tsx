@@ -15,10 +15,10 @@ interface WaterTrackerProps {
 }
 
 const AMOUNTS = [200, 300, 500, 750];
-const RADIUS  = 46;
-const STROKE  = 7;
+const RADIUS  = 44;
+const STROKE  = 6;
 const CIRC    = 2 * Math.PI * RADIUS;
-const SIZE    = 112;
+const SIZE    = 108;
 
 function timeSince(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -31,18 +31,17 @@ function timeSince(iso: string): string {
 
 function smartStatus(pct: number, lastLog: WaterLogEntry | undefined, mealMl: number): string {
   if (pct >= 100) return 'Meta atingida! 🎉';
-  if (mealMl > 0 && pct >= 80) return 'Quase lá! Suas refeições ajudaram muito ✨';
+  if (mealMl > 0 && pct >= 80) return 'Quase lá! ✨';
   if (!lastLog) {
     return new Date().getHours() < 10
-      ? 'Comece o dia bem hidratado 💧'
-      : 'Registre sua primeira ingestão de água';
+      ? 'Comece bem hidratado 💧'
+      : 'Adicione sua primeira ingestão';
   }
   const minSince = Math.floor((Date.now() - new Date(lastLog.created_at).getTime()) / 60_000);
-  if (minSince > 120) return 'Mais de 2h sem água — beba agora! 💧';
-  if (pct >= 75) return 'Quase lá! Só mais um pouco ✨';
-  if (pct >= 50) return 'Bom ritmo! Continue assim 👍';
-  if (pct >= 25) return 'Lembre-se de se hidratar ao longo do dia';
-  return 'Beba água com frequência para manter a saúde';
+  if (minSince > 120) return 'Mais de 2h sem água 💧';
+  if (pct >= 75) return 'Quase lá! ✨';
+  if (pct >= 50) return 'Bom ritmo! 👍';
+  return 'Continue se hidratando';
 }
 
 export default memo(function WaterTracker({ logs, target, date, onAdded, mealHydrationMl = 0 }: WaterTrackerProps) {
@@ -88,32 +87,27 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
     setLoading(null);
   }, [date, onAdded]);
 
-  const colorBase  = isDone ? 'text-emerald-500' : 'text-teal-500';
-  const colorDark  = isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400';
-  const bgLight    = isDone ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-teal-50 dark:bg-teal-950/30';
-  const bgSolid    = isDone ? 'bg-emerald-500' : 'bg-teal-500';
-  const badgeCls   = isDone
-    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
-    : 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400';
+  const ringColor = isDone ? 'text-emerald-500' : 'text-teal-500';
+  const valueColor = isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400';
+  const btnBg = isDone ? 'bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' : 'bg-teal-50 dark:bg-teal-950/30 hover:bg-teal-100 dark:hover:bg-teal-900/30';
+  const btnLoading = isDone ? 'bg-emerald-500' : 'bg-teal-500';
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.05)] dark:shadow-none flex flex-col gap-4">
+    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Droplets size={13} className={cn(colorBase)} />
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-            Hidratação
-          </p>
+          <Droplets size={13} className={cn(ringColor)} />
+          <p className="label-xs">Hidratação</p>
         </div>
         {notifSupported && (
           <button
             onClick={handleBell}
-            title={notifGranted ? 'Lembretes de água ativos' : 'Ativar lembretes de água'}
-            className="p-1.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            title={notifGranted ? 'Lembretes ativos' : 'Ativar lembretes de água'}
+            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             {notifGranted
-              ? <Bell size={13} className={cn(colorBase)} />
+              ? <Bell size={13} className={cn(ringColor)} />
               : <BellOff size={13} className="text-zinc-300 dark:text-zinc-600" />
             }
           </button>
@@ -138,19 +132,19 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
               strokeLinecap="round"
               strokeDasharray={CIRC}
               strokeDashoffset={dashOff}
-              className={cn('transition-all duration-700', colorBase)}
+              className={cn('transition-all duration-700', ringColor)}
               stroke="currentColor"
             />
           </svg>
 
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-            <span className={cn('text-[20px] font-bold tabular-nums leading-none tracking-tight', colorDark)}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={cn('text-[18px] font-bold tabular-nums leading-none tracking-tight', valueColor)}>
               {current >= 1000 ? `${(current / 1000).toFixed(1)}L` : `${current}`}
             </span>
             {current < 1000 && (
-              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-none">ml</span>
+              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-none mt-0.5">ml</span>
             )}
-            <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-0.5', badgeCls)}>
+            <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1', isDone ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400')}>
               {Math.round(pct)}%
             </span>
           </div>
@@ -163,7 +157,7 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
 
       {/* Meal hydration badge */}
       {mealHydrationMl > 0 && (
-        <div className="flex items-center justify-center gap-1.5 -mt-2 bg-teal-50 dark:bg-teal-950/30 rounded-xl px-3 py-1.5 border border-teal-100 dark:border-teal-900/40">
+        <div className="flex items-center justify-center gap-1.5 -mt-1 bg-teal-50 dark:bg-teal-950/30 rounded-xl px-3 py-1.5 border border-teal-100 dark:border-teal-900/40">
           <Utensils size={10} className="text-teal-500 flex-shrink-0" />
           <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">
             +{mealHydrationMl >= 1000
@@ -174,16 +168,16 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
       )}
 
       {/* Last log + status */}
-      <div className="text-center space-y-1">
+      <div className="text-center space-y-0.5">
         {lastLog && (
           <div className="flex items-center justify-center gap-1.5" key={tick}>
             <Clock size={10} className="text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
               {timeSince(lastLog.created_at)} · {lastLog.amount_ml}ml
             </span>
           </div>
         )}
-        <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-snug">
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
           {smartStatus(pct, lastLog, mealHydrationMl)}
         </p>
       </div>
@@ -199,7 +193,7 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
               disabled={loading !== null}
               className={cn(
                 'py-2 rounded-xl text-[11px] font-semibold tabular-nums transition-all duration-150 active:scale-95 disabled:pointer-events-none disabled:opacity-50',
-                isLoading ? cn(bgSolid, 'text-white') : cn(bgLight, colorDark, 'hover:opacity-80'),
+                isLoading ? cn(btnLoading, 'text-white') : cn(btnBg, valueColor),
               )}
             >
               {isLoading
