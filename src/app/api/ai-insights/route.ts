@@ -376,10 +376,15 @@ export async function GET(req: Request) {
       ? ` | 🎉 BÔNUS: mencione o streak de ${streak} dias em 1 frase curta no final da message.`
       : '';
 
+    const calExcessPct = targetCal > 0 ? Math.round((todayCal / targetCal - 1) * 100) : 0;
+    const calExcess    = todayCal - targetCal;
+
     if (hoursSinceLastMeal !== null && hoursSinceLastMeal >= 5) {
       urgentNote = `⚠️ URGENTE: Última refeição há ${hoursSinceLastMeal}h. Cite este dado. Sugira lanche específico com calorias e proteína aproximados (ex: iogurte grego 150g ≈ 15g prot). Tom gentil.`;
-    } else if (targetCal > 0 && todayCal > targetCal * 1.15) {
-      urgentNote = `⚠️ EMPATIA: Meta calórica excedida hoje (${todayCal}kcal vs meta ${targetCal}kcal, +${Math.round((todayCal/targetCal-1)*100)}%). Tom gentil. Oriente o restante do dia com sugestões concretas para equilibrar.`;
+    } else if (targetCal > 0 && todayCal > targetCal * 1.25) {
+      urgentNote = `🚨 BRONCA FORTE — tom de treinador pessoal, direto e sem rodeios (NÃO suavize): meta estourada em +${calExcessPct}% (${todayCal}kcal vs meta ${targetCal}kcal — excesso de ${calExcess}kcal). Diga claramente que passou da conta. Explique o impacto no objetivo (${userGoal}). Dê 1 ação imediata para compensar HOJE com quantidade específica (ex: substituir jantar por refeição leve de ~400kcal, ou 30min de caminhada). Tom: firme e motivador como um personal trainer — sem floreio, mas sem crueldade.`;
+    } else if (targetCal > 0 && todayCal > targetCal * 1.08) {
+      urgentNote = `⚠️ PUXÃO DE ORELHA — tom direto, sem suavizar: meta excedida em +${calExcessPct}% (${todayCal}kcal vs meta ${targetCal}kcal, excesso de ${calExcess}kcal). Seja direto sobre o excesso, cite os dados, explique o impacto no objetivo, e sugira como equilibrar o restante do dia com ação concreta e específica.`;
     } else if (weekendSpike >= 30 && (dow === 5 || dow === 6 || dow === 0)) {
       urgentNote = `📊 PADRÃO: Fins de semana +${weekendSpike}% calorias (${avgWeekend}kcal vs ${avgWeekday}kcal dias úteis). Cite estes números. Oriente refeição livre consciente sem culpa.`;
     } else if (totalTodayWater < targetWater * 0.3 && todayFood.length >= 2) {
@@ -454,7 +459,7 @@ OBRIGATÓRIO: message deve conter números reais dos dados acima. nextSteps deve
         config: {
           systemInstruction: `Você é um health coach nutricional empático, inteligente e motivador.
 REGRAS:
-1. Tom: sempre positivo, encorajador, sem julgamentos. Exageros alimentares → "Dias assim acontecem — o equilíbrio a longo prazo é o que importa."
+1. Tom padrão: positivo, encorajador, sem julgamentos. EXCEÇÃO — quando o FOCO indicar BRONCA FORTE ou PUXÃO DE ORELHA: use tom de treinador pessoal — direto, firme, sem suavizar o excesso. Diga claramente "você passou da conta" ou "hoje não foi seu melhor dia alimentar". Foco no comportamento, nunca na pessoa. Termine SEMPRE com uma ação concreta e motivadora. Proibido: floreios, "está tudo bem", "acontece com todos".
 2. DADOS OBRIGATÓRIOS: a "message" DEVE citar pelo menos 2 valores numéricos reais dos dados fornecidos (ex: "Você consumiu 187g de proteína", "sua hidratação está em 1.200ml de 2.500ml", "média de 2.100kcal nos últimos 30 dias"). PROIBIDO gerar message sem números reais.
 3. Acionável: todo insight responde "o que aconteceu?" (dado real), "por que importa?" (consequência) e "o que fazer?" (ação concreta).
 4. Correlações: identifique relações entre dados. Ex: "Você treinou 4x esta semana mas consumiu apenas ${avgProt}g de proteína — abaixo dos ${targetProt}g recomendados para recuperação." Ex: "Hidratação em ${waterPct}% com alto consumo de proteína pode dificultar a digestão."
