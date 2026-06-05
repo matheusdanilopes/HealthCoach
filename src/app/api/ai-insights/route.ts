@@ -369,21 +369,24 @@ export async function GET(req: Request) {
     const firstName = profile?.full_name?.split(' ')[0] ?? 'Usuário';
     const dow       = brazilDayOfWeek();
 
-    // ── Urgency overrides — take priority over day-based focus ────────────
+    // ── Urgency overrides — situações reais que requerem atenção imediata ──
+    // Streak é nota adicional (não substitui análise nutricional)
     let urgentNote = '';
+    const streakBonus = streak >= 5
+      ? ` | 🎉 BÔNUS: mencione o streak de ${streak} dias em 1 frase curta no final da message.`
+      : '';
+
     if (hoursSinceLastMeal !== null && hoursSinceLastMeal >= 5) {
-      urgentNote = `⚠️ URGENTE: Última refeição há ${hoursSinceLastMeal}h. Sugira um lanche leve e nutritivo com empatia (tom gentil, sem alarmismo).`;
+      urgentNote = `⚠️ URGENTE: Última refeição há ${hoursSinceLastMeal}h. Cite este dado. Sugira lanche específico com calorias e proteína aproximados (ex: iogurte grego 150g ≈ 15g prot). Tom gentil.`;
     } else if (targetCal > 0 && todayCal > targetCal * 1.15) {
-      urgentNote = `⚠️ EMPATIA: Meta calórica excedida hoje (${todayCal} vs ${targetCal}kcal). Tom gentil e construtivo: "Dias assim acontecem — o equilíbrio no longo prazo é o que importa." Oriente o restante do dia sem culpa.`;
-    } else if (streak >= 5) {
-      urgentNote = `🎉 CELEBRAÇÃO: Sequência incrível de ${streak} dias consecutivos com registro! Comemore este marco e dê uma dica estratégica de manutenção.`;
+      urgentNote = `⚠️ EMPATIA: Meta calórica excedida hoje (${todayCal}kcal vs meta ${targetCal}kcal, +${Math.round((todayCal/targetCal-1)*100)}%). Tom gentil. Oriente o restante do dia com sugestões concretas para equilibrar.`;
     } else if (weekendSpike >= 30 && (dow === 5 || dow === 6 || dow === 0)) {
-      urgentNote = `📊 PADRÃO IDENTIFICADO: Fins de semana têm ${weekendSpike}% mais calorias que dias úteis. Oriente sobre refeição livre consciente sem culpa nem restrição excessiva.`;
+      urgentNote = `📊 PADRÃO: Fins de semana +${weekendSpike}% calorias (${avgWeekend}kcal vs ${avgWeekday}kcal dias úteis). Cite estes números. Oriente refeição livre consciente sem culpa.`;
     } else if (totalTodayWater < targetWater * 0.3 && todayFood.length >= 2) {
-      urgentNote = `💧 HIDRATAÇÃO BAIXA: Apenas ${totalTodayWater}ml de ${targetWater}ml consumidos hoje mesmo com refeições registradas. Dê dica específica e prática para hidratação.`;
+      urgentNote = `💧 HIDRATAÇÃO BAIXA: Apenas ${totalTodayWater}ml de ${targetWater}ml hoje (${waterPct}%). Cite estes valores. Dê estratégia específica com volume e horário.`;
     }
 
-    const focusText = urgentNote || DOW_FOCUS[dow] || DOW_FOCUS[1];
+    const focusText = (urgentNote || DOW_FOCUS[dow] || DOW_FOCUS[1]) + streakBonus;
 
     // ── Build the context prompt ─────────────────────────────────────────
     const bodySection = (bodyFatStr || muscleMassStr || waistStr)
@@ -432,19 +435,16 @@ HISTÓRICO 30 dias (${histDates.length} dias com registro):
 ${hydrationHistSection}${bodySection}${antiRepSection}
 
 SCORES DE HÁBITOS (hoje):
-→ Nutrição: ${nutritionScore}/100 (cal ${calProgressPct}% + prot ${protProgressPct}% da meta) | Hidratação: ${hydrationScore}/100 (${waterPct}% da meta) | Consistência: ${consistencyScore}/100 (${streak}d streak)
-
-PRIORIDADE DE ANÁLISE:
-1. Situações críticas com ação imediata necessária
-2. Correlações entre dados (alimentação × hidratação × treino × peso)
-3. Oportunidades de melhoria baseadas em tendências
-4. Evolução positiva e conquistas
+→ Nutrição: ${nutritionScore}/100 (calorias ${calProgressPct}% + proteína ${protProgressPct}% da meta diária)
+→ Hidratação: ${hydrationScore}/100 (${totalTodayWater}ml de ${targetWater}ml, ${waterPct}%)
+→ Consistência: ${consistencyScore}/100 (${streak} dias consecutivos, ${histDates.length}/30 dias com registro)
+${nutritionScore < 65 ? `⚠️ ATENÇÃO: score de Nutrição baixo (${nutritionScore}/100) — ${calProgressPct < 65 ? `calorias abaixo (${todayCal}/${targetCal}kcal)` : ''}${protProgressPct < 65 ? `${calProgressPct < 65 ? ', ' : ''}proteína abaixo (${todayProt}/${targetProt}g)` : ''}. O insight DEVE abordar o score mais baixo com dados reais e recomendação concreta.` : ''}${hydrationScore < 65 ? `\n⚠️ ATENÇÃO: score de Hidratação baixo (${hydrationScore}/100) — apenas ${totalTodayWater}ml de ${targetWater}ml. O insight DEVE mencionar este dado e sugerir ação prática com volume.` : ''}
 
 FOCO ATUAL: ${focusText}
 
 Retorne APENAS JSON válido (sem markdown):
-{"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras específicas e diretas","message":"2-3 frases com dados reais, causa e recomendação clara","expanded":"2-3 frases com análise mais profunda ou correlação entre dados (ou null)","cta":"texto curto do botão para abrir o chat ou null","nextSteps":["ação específica 1 para hoje/amanhã","ação específica 2","ação específica 3"],"mealIdea":{"title":"título da sugestão","items":["item 1","item 2","item 3"],"protein":35}}
-Nota: nextSteps = 2-3 ações curtas (≤10 palavras) e realizáveis hoje/amanhã, com emojis contextuais. mealIdea = inclua SOMENTE quando o insight envolver nutrição/proteína insuficiente e uma sugestão de refeição for naturalmente relevante; omita o campo em todos os outros casos.`;
+{"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras com dado real","message":"2-3 frases com MÍNIMO 2 valores numéricos reais (ex: 187g proteína, 1.800ml, 2.100kcal), causa e recomendação clara","expanded":"2-3 frases que aprofundam com dados ou correlações (ou null)","cta":"texto curto para abrir chat ou null","nextSteps":["emoji + ação com quantidade específica (ex: Beber 500ml agora)","emoji + ação com quantidade específica","emoji + ação com quantidade específica"],"mealIdea":{"title":"título","items":["item 1 com quantidade","item 2","item 3"],"protein":35}}
+OBRIGATÓRIO: message deve conter números reais dos dados acima. nextSteps devem ter quantidade ou especificidade (não "beba mais água" — sim "💧 Beber 400ml agora"). mealIdea = inclua SOMENTE quando proteína ou calorias estiverem abaixo da meta e uma sugestão de refeição for pertinente.`;
 
     console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
     const response = await withGeminiRetry(() =>
@@ -455,18 +455,18 @@ Nota: nextSteps = 2-3 ações curtas (≤10 palavras) e realizáveis hoje/amanh�
           systemInstruction: `Você é um health coach nutricional empático, inteligente e motivador.
 REGRAS:
 1. Tom: sempre positivo, encorajador, sem julgamentos. Exageros alimentares → "Dias assim acontecem — o equilíbrio a longo prazo é o que importa."
-2. Especificidade: cite alimentos, quantidades, percentuais e tendências reais dos dados. NUNCA invente padrões não evidenciados.
-3. Acionável: todo insight responde "o que aconteceu?", "por que importa?" e "o que posso fazer?".
-4. Correlações: identifique e explique relações entre dados. Ex: "Você treinou 4x mas a proteína ficou abaixo — isso impacta a recuperação." Ex: "Seu consumo de fibras aumentou mas a hidratação caiu — aumentar água melhora o funcionamento intestinal."
-5. Personalização: considere o OBJETIVO do usuário (emagrecimento/manutenção/ganho de massa) e adapte análise e recomendações. Nunca dê recomendações genéricas iguais para todos.
+2. DADOS OBRIGATÓRIOS: a "message" DEVE citar pelo menos 2 valores numéricos reais dos dados fornecidos (ex: "Você consumiu 187g de proteína", "sua hidratação está em 1.200ml de 2.500ml", "média de 2.100kcal nos últimos 30 dias"). PROIBIDO gerar message sem números reais.
+3. Acionável: todo insight responde "o que aconteceu?" (dado real), "por que importa?" (consequência) e "o que fazer?" (ação concreta).
+4. Correlações: identifique relações entre dados. Ex: "Você treinou 4x esta semana mas consumiu apenas ${avgProt}g de proteína — abaixo dos ${targetProt}g recomendados para recuperação." Ex: "Hidratação em ${waterPct}% com alto consumo de proteína pode dificultar a digestão."
+5. Personalização: adapte análise e recomendações ao OBJETIVO informado. Nunca use recomendações genéricas.
 6. Variedade: siga o FOCO indicado. Respeite INSIGHTS RECENTES — não repita tipos nem temas.
-7. nextSteps: 2-3 ações concretas e realizáveis HOJE ou AMANHÃ, curtas (≤10 palavras), com emojis contextuais.
-8. mealIdea: inclua APENAS quando o insight envolver nutrição/proteína insuficiente E uma sugestão de refeição for naturalmente relevante para o contexto. Omita em todos os outros casos.
-9. message = 2-3 frases diretas com dados reais. expanded = 2-3 frases que aprofundam ou correlacionam (pode ser null).
-10. cta: rótulo curto para abrir o chat (ex: "Ver estratégias", "Me ajude"). Use null se não couber.
+7. nextSteps: 2-3 ações com QUANTIDADE ESPECÍFICA (ex: "💧 Beber 500ml agora", "🥩 Adicionar 30g proteína no jantar", "📏 Registrar peso amanhã cedo"). PROIBIDO: "beba mais água", "inclua proteínas", "continue assim" — sempre com número.
+8. mealIdea: inclua APENAS quando proteína ou calorias estiverem abaixo da meta E uma sugestão for pertinente. Omita nos demais casos.
+9. message = 2-3 frases com dados reais. expanded = 2-3 frases que aprofundam ou correlacionam (pode ser null).
+10. cta: rótulo curto para abrir o chat. Use null se não couber.
 11. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
           maxOutputTokens: 800,
-          temperature: 0.9,
+          temperature: 0.7,
           thinkingConfig: { thinkingBudget: 0 },
         },
       })
