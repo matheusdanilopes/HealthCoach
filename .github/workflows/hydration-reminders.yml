@@ -29,9 +29,10 @@ jobs:
 
       - name: Trigger notification scheduler
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          CLEAN_URL="${APP_URL%/}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$APP_URL/api/notifications/run")
+            "$CLEAN_URL/api/notifications/run")
           echo "HTTP status: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "Endpoint failed (status $STATUS)"
