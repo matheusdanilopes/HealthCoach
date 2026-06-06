@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
-import { brazilToday, brazilDayOfWeek, brazilNDaysAgo } from '@/lib/timezone';
+import { brazilToday, brazilDayOfWeek, brazilNDaysAgo, brazilHour } from '@/lib/timezone';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -378,6 +378,18 @@ export async function GET(req: Request) {
 
     const calExcessPct = targetCal > 0 ? Math.round((todayCal / targetCal - 1) * 100) : 0;
     const calExcess    = todayCal - targetCal;
+    const currentHour  = brazilHour();
+
+    // Déficit saudável — só é real se for tarde o suficiente e houver refeições registradas
+    // Para ganho de massa déficit é preocupação, não recompensa
+    const deficitKcal  = remainCal; // remainCal = targetCal - todayCal + todayBurned
+    const deficitPct   = targetCal > 0 && deficitKcal > 0 ? Math.round((deficitKcal / targetCal) * 100) : 0;
+    const mealsLogged  = todayFood.length >= 2;
+    // Considera "dia praticamente encerrado" após as 20h; "boa parte do dia feita" após as 17h
+    const isNightDeficit     = currentHour >= 20 && mealsLogged && deficitPct >= 10 && deficitPct <= (userGoal === 'emagrecimento' ? 38 : 22) && userGoal !== 'ganho de massa';
+    const isAfternoonDeficit = currentHour >= 17 && currentHour < 20 && mealsLogged && deficitPct >= 15 && deficitPct <= 30 && userGoal !== 'ganho de massa';
+    // Déficit excessivo é preocupante em qualquer objetivo
+    const isExcessiveDeficit = currentHour >= 20 && mealsLogged && deficitPct > (userGoal === 'emagrecimento' ? 38 : 25);
 
     if (hoursSinceLastMeal !== null && hoursSinceLastMeal >= 5) {
       urgentNote = `⚠️ URGENTE: Última refeição há ${hoursSinceLastMeal}h. Cite este dado. Sugira lanche específico com calorias e proteína aproximados (ex: iogurte grego 150g ≈ 15g prot). Tom gentil.`;
@@ -385,6 +397,12 @@ export async function GET(req: Request) {
       urgentNote = `🚨 BRONCA FORTE — tom de treinador pessoal, direto e sem rodeios (NÃO suavize): meta estourada em +${calExcessPct}% (${todayCal}kcal vs meta ${targetCal}kcal — excesso de ${calExcess}kcal). Diga claramente que passou da conta. Explique o impacto no objetivo (${userGoal}). Dê 1 ação imediata para compensar HOJE com quantidade específica (ex: substituir jantar por refeição leve de ~400kcal, ou 30min de caminhada). Tom: firme e motivador como um personal trainer — sem floreio, mas sem crueldade.`;
     } else if (targetCal > 0 && todayCal > targetCal * 1.08) {
       urgentNote = `⚠️ PUXÃO DE ORELHA — tom direto, sem suavizar: meta excedida em +${calExcessPct}% (${todayCal}kcal vs meta ${targetCal}kcal, excesso de ${calExcess}kcal). Seja direto sobre o excesso, cite os dados, explique o impacto no objetivo, e sugira como equilibrar o restante do dia com ação concreta e específica.`;
+    } else if (isExcessiveDeficit) {
+      urgentNote = `⚠️ DÉFICIT EXCESSIVO (tom de cuidado, não bronca): apenas ${todayCal}kcal registradas de uma meta de ${targetCal}kcal (${deficitPct}% abaixo, faltam ${deficitKcal}kcal). Déficits tão grandes comprometem músculo, metabolismo e aumentam risco de compulsão amanhã. São ${currentHour}h — sugira uma refeição leve específica antes de dormir com aprox. ${Math.min(Math.round(deficitKcal * 0.4), 400)}kcal.`;
+    } else if (isNightDeficit) {
+      urgentNote = `🏆 RECOMPENSA — tom caloroso, entusiasmado e orgulhoso (NÃO contenha o elogio): são ${currentHour}h e você termina o dia com um déficit saudável de ${deficitKcal}kcal (${todayCal}kcal de ${targetCal}kcal, ${deficitPct}% abaixo). Isso é excelente para o objetivo de ${userGoal}. Parabenize genuinamente, cite os números, explique o impacto positivo (ex: "isso representa X% do seu objetivo semanal"). Opcionalmente, ofereça uma pequena recompensa alimentar leve e saudável se o déficit permitir (ex: uma fruta, chocolate amargo 20g ≈ 120kcal). Finalize com motivação para manter amanhã.`;
+    } else if (isAfternoonDeficit) {
+      urgentNote = `✨ INCENTIVO POSITIVO — tom animado e encorajador: são ${currentHour}h e você está ${deficitPct}% abaixo da meta (${todayCal}kcal de ${targetCal}kcal). Parabenize o controle até agora com os dados reais. Ainda há o jantar — oriente como manter o déficit de forma saudável e saborosa até o fim do dia, sugerindo opções de jantar específicas.`;
     } else if (weekendSpike >= 30 && (dow === 5 || dow === 6 || dow === 0)) {
       urgentNote = `📊 PADRÃO: Fins de semana +${weekendSpike}% calorias (${avgWeekend}kcal vs ${avgWeekday}kcal dias úteis). Cite estes números. Oriente refeição livre consciente sem culpa.`;
     } else if (totalTodayWater < targetWater * 0.3 && todayFood.length >= 2) {
@@ -459,7 +477,9 @@ OBRIGATÓRIO: message deve conter números reais dos dados acima. nextSteps deve
         config: {
           systemInstruction: `Você é um health coach nutricional empático, inteligente e motivador.
 REGRAS:
-1. Tom padrão: positivo, encorajador, sem julgamentos. EXCEÇÃO — quando o FOCO indicar BRONCA FORTE ou PUXÃO DE ORELHA: use tom de treinador pessoal — direto, firme, sem suavizar o excesso. Diga claramente "você passou da conta" ou "hoje não foi seu melhor dia alimentar". Foco no comportamento, nunca na pessoa. Termine SEMPRE com uma ação concreta e motivadora. Proibido: floreios, "está tudo bem", "acontece com todos".
+1. Tom padrão: positivo, encorajador, sem julgamentos.
+   → BRONCA FORTE / PUXÃO DE ORELHA: treinador pessoal — direto, firme, sem suavizar. Diga "você passou da conta". Foco no comportamento, não na pessoa. Termine com ação concreta. Proibido: floreios, "está tudo bem", "acontece com todos".
+   → RECOMPENSA / INCENTIVO POSITIVO: solte o elogio — seja genuinamente entusiasmado, caloroso, como um técnico que viu o atleta superar o desafio. Cite os números como conquista. Pode sugerir uma pequena recompensa saudável. Proibido: elogios genéricos sem dados, exageros que soem falsos.
 2. DADOS OBRIGATÓRIOS: a "message" DEVE citar pelo menos 2 valores numéricos reais dos dados fornecidos (ex: "Você consumiu 187g de proteína", "sua hidratação está em 1.200ml de 2.500ml", "média de 2.100kcal nos últimos 30 dias"). PROIBIDO gerar message sem números reais.
 3. Acionável: todo insight responde "o que aconteceu?" (dado real), "por que importa?" (consequência) e "o que fazer?" (ação concreta).
 4. Correlações: identifique relações entre dados. Ex: "Você treinou 4x esta semana mas consumiu apenas ${avgProt}g de proteína — abaixo dos ${targetProt}g recomendados para recuperação." Ex: "Hidratação em ${waterPct}% com alto consumo de proteína pode dificultar a digestão."
