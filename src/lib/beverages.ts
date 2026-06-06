@@ -127,7 +127,36 @@ function extractRawMl(text: string): number | null {
   return null;
 }
 
+// Zero/diet/light variants of normally-excluded sodas — hydrate like sparkling water
+const ZERO_SODA_PATTERNS: RegExp[] = [
+  // "refrigerante zero/diet/light" in any order
+  /(?<![\p{L}])refrigerante.{0,25}(?:zero|diet|light|sem\s*a[cç][uú]car)(?![\p{L}])/iu,
+  /(?<![\p{L}])(?:zero|diet|light).{0,10}refrigerante(?![\p{L}])/iu,
+  // Brand + zero/diet/light
+  /(?<![\p{L}])coca.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])pepsi.{0,10}(?:zero|diet|black|light)(?![\p{L}])/iu,
+  /(?<![\p{L}])guaran[aá].{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])fanta.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])sprite.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])schweppes.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])soda.{0,10}(?:zero|diet|light)(?![\p{L}])/iu,
+];
+
 export function detectBeverage(foodName: string): BeverageDetection {
+  // Zero/diet/light sodas detected before general exclusions — they're mostly water
+  for (const pattern of ZERO_SODA_PATTERNS) {
+    if (pattern.test(foodName)) {
+      const rawMl = extractRawMl(foodName);
+      const volMl = Math.min(rawMl ?? 350, 2000);
+      return {
+        isBeverage: true,
+        hydrationFactor: 0.75,
+        estimatedMl: Math.round(volMl * 0.75),
+        confidence: rawMl ? 'high' : 'medium',
+      };
+    }
+  }
+
   // Check exclusions first
   for (const ex of EXCLUDED) {
     if (ex.test(foodName)) {

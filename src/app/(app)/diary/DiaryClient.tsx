@@ -91,6 +91,8 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
 
   const { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs, mealHydrationMl } = useMemo(() => {
     const positiveLogs = logs.filter((l) => l.calories > 0);
+    // Include zero-calorie items (e.g. diet sodas) in meals and hydration, but not in calorie totals
+    const nonWorkoutLogs = logs.filter((l) => l.calories >= 0);
     const totalCalories = positiveLogs.reduce((s, l) => s + l.calories, 0);
     const workouts = logs.filter((l) => l.calories < 0);
     const workoutCalories = Math.abs(workouts.reduce((s, l) => s + l.calories, 0));
@@ -101,13 +103,13 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
     const mealLogs = Object.fromEntries(
       ALL_MEAL_TYPES.map((type) => [
         type,
-        positiveLogs.filter((l) =>
+        nonWorkoutLogs.filter((l) =>
           l.meal_type === type ||
           (type === 'afternoon_snack' && l.meal_type === 'snack')
         ),
       ])
     ) as Record<MealType, FoodLog[]>;
-    const mealHydrationMl = positiveLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
+    const mealHydrationMl = nonWorkoutLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
     return { totalCalories, workouts, workoutCalories, net, remaining, pct, isOver, mealLogs, mealHydrationMl };
   }, [logs, targetCalories]);
 
