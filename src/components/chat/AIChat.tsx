@@ -105,16 +105,6 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: trimmed.map((m) => ({ role: m.role, content: m.content })),
-          userContext: {
-            userId,
-            name: profile.full_name,
-            targetCalories: profile.target_calories,
-            dailyCalories,
-            remaining: (profile.target_calories ?? 0) - dailyCalories,
-            dailyWater,
-            targetWater: profile.target_water_ml,
-            weight: profile.current_weight,
-          },
         }),
       });
       const data = await res.json();
@@ -142,7 +132,7 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, profile, dailyCalories, dailyWater, userId, onFoodLogged]);
+  }, [input, loading, messages, onFoodLogged]);
 
   return (
     <>

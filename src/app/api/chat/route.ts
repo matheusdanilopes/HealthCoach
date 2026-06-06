@@ -3,6 +3,7 @@ import { GoogleGenAI, FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
+import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -30,44 +31,12 @@ const LOG_FOOD_DECLARATION = {
   },
 };
 
-interface UserContext {
-  userId: string;
-  name?: string;
-  targetCalories?: number;
-  dailyCalories?: number;
-  remaining?: number;
-  dailyWater?: number;
-  targetWater?: number;
-  weight?: number;
-}
-
 interface IncomingMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export async function POST(req: Request) {
-  try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const user = session.user;
-
-    const { messages, userContext }: { messages: IncomingMessage[]; userContext: UserContext } =
-      await req.json();
-
-    const systemInstruction = `Você é um coach de saúde e nutrição personalizado, amigável e motivador. Você está ajudando o usuário a emagrecer de forma saudável através do controle do déficit calórico.
-
-DADOS ATUAIS DO USUÁRIO:
-- Nome: ${userContext.name ?? 'Usuário'}
-- Peso atual: ${userContext.weight ? `${userContext.weight}kg` : 'não informado'}
-- Meta calórica diária: ${userContext.targetCalories ?? 'não definida'} kcal
-- Calorias consumidas hoje: ${userContext.dailyCalories ?? 0} kcal
-- Calorias restantes: ${userContext.remaining ?? 0} kcal
-- Água consumida hoje: ${userContext.dailyWater ? `${userContext.dailyWater}ml` : '0ml'} / ${userContext.targetWater ?? 2500}ml
-
-INSTRUÇÕES:
+const FOOD_COACHING_RULES = `INSTRUÇÕES:
 1. Quando o usuário mencionar que comeu algo, use a função log_food para registrar.
 2. Estime calorias e macros com MÁXIMO CONSERVADORISMO (referências TACO):
    - NUNCA assuma 100g para porções vagas — prefira sempre subestimar
@@ -81,9 +50,34 @@ INSTRUÇÕES:
 3. Seja encorajador e use os dados reais para personalizar suas respostas.
 4. Responda sempre em português do Brasil.
 5. Seja conciso — respostas curtas e diretas, com emojis quando apropriado.
-6. Dê feedback sobre o progresso do dia baseado nas calorias restantes.`;
+6. Dê feedback sobre o progresso baseado nos dados do contexto.`;
 
-    // Convert messages to Gemini content format (role: 'user' | 'model')
+export async function POST(req: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const user = session.user;
+
+    const { messages }: { messages: IncomingMessage[] } = await req.json();
+
+    // Detect intent from the latest user message
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const intent = lastUserMsg ? detectIntent(lastUserMsg.content) : 'general_coaching';
+
+    // Build dynamic context — fetches only data relevant to the detected intent
+    const dynamicContext = await buildDynamicContext(user.id, intent);
+
+    console.log(`[chat] intent=${intent} | user=${user.id}`);
+
+    const systemInstruction = `Você é um coach de saúde e nutrição personalizado, amigável e motivador. Você está ajudando o usuário a alcançar seus objetivos de saúde através do controle alimentar e de hábitos.
+
+CONTEXTO DO USUÁRIO:
+${dynamicContext}
+
+${FOOD_COACHING_RULES}`;
+
     const contents = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
@@ -145,7 +139,6 @@ INSTRUÇÕES:
           ? 'Erro ao registrar'
           : `Registrado: ${args.food_name}, ${args.calories} kcal`;
 
-        // Follow-up with the function response
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
         const followUp = await withGeminiRetry(() =>
           getGemini().models.generateContent({
