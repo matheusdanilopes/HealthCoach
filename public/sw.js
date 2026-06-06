@@ -43,7 +43,7 @@ self.addEventListener('push', e => {
 
   const notifOptions = {
     body:     data.body,
-    icon:     '/icons/icon-192x192.png',
+    icon:     '/icons/icon-notification.png',
     badge:    '/icons/icon-96x96.png',
     tag:      data.tag ?? 'hc-general',
     renotify: true,
@@ -141,7 +141,7 @@ self.addEventListener('periodicsync', e => {
     if (hour >= 22 || hour < 7) return;
     await self.registration.showNotification('Hora de beber água 💧', {
       body:     'Não esqueça de se hidratar!',
-      icon:     '/icons/icon-192x192.png',
+      icon:     '/icons/icon-notification.png',
       badge:    '/icons/icon-96x96.png',
       tag:      'hc-hydration',
       renotify: true,
