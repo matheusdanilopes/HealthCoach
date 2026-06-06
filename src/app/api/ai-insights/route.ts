@@ -202,8 +202,10 @@ export async function GET(req: Request) {
     const todayFat    = Math.round(todayFood.reduce((s, l) => s + (l.fat ?? 0), 0));
 
     // Manual water logs + beverage hydration from food logs combined
+    // Include zero-calorie beverages (diet sodas etc.) in hydration even though they're excluded from calorie count
     const todayWater     = (waterLogs ?? []).reduce((s, l) => s + l.amount_ml, 0);
-    const todayFoodWater = todayFood.reduce((s, l) => s + ((l as { hydration_ml?: number }).hydration_ml ?? 0), 0);
+    const todayFoodWater = (todayLogs ?? []).filter((l) => l.calories >= 0)
+      .reduce((s, l) => s + ((l as { hydration_ml?: number }).hydration_ml ?? 0), 0);
     const totalTodayWater = todayWater + todayFoodWater;
 
     const targetCal   = profile?.target_calories ?? 0;

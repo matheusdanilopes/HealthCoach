@@ -151,7 +151,8 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent): P
   const todayFat   = Math.round(todayFood.reduce((s, l) => s + (l.fat ?? 0), 0));
   const workoutKcal = Math.abs(allLogs.filter(l => l.calories < 0).reduce((s, l) => s + l.calories, 0));
   const manualWater = ((todayWaterData as WaterLogRow[] | null) ?? []).reduce((s, l) => s + l.amount_ml, 0);
-  const foodWater   = todayFood.reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
+  // Include zero-calorie beverages (diet sodas etc.) in hydration
+  const foodWater   = allLogs.filter(l => l.calories >= 0).reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
   const todayWater  = manualWater + foodWater;
 
   const remainCal  = targetCal - todayCal + workoutKcal;
