@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
-import { brazilToday, brazilDayOfWeek, brazilNDaysAgo } from '@/lib/timezone';
+import { brazilToday, brazilDayOfWeek, brazilNDaysAgo, brazilHour } from '@/lib/timezone';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -49,13 +49,13 @@ const DOW_NAME = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', '
 
 // Daily focus rotates so the card never feels repetitive day after day
 const DOW_FOCUS: Record<number, string> = {
-  1: 'PLANEJAMENTO SEMANAL: Avalie a semana anterior (calorias, treinos, hidratação) e oriente como começar esta semana com foco nas metas.',
-  2: 'MACROS E NUTRIÇÃO: Analise o equilíbrio de proteína/carbs/gordura nos últimos dias. Sugira ajuste específico e prático para hoje.',
-  3: 'HIDRATAÇÃO: Avalie o padrão de hidratação dos últimos dias comparado à meta. Dê dica concreta com base nos dados reais.',
-  4: 'TREINOS E RECUPERAÇÃO: Analise frequência e consistência dos treinos nos últimos 30 dias. Oriente sobre recuperação ou próxima sessão.',
-  5: 'CONSISTÊNCIA E MOTIVAÇÃO: Destaque a sequência de registros, tendências positivas ou dê motivação empática para fechar a semana bem.',
-  6: 'COMPOSIÇÃO CORPORAL: Analise tendência de peso, gordura ou músculo se disponível. Comente progresso ou sugira ajuste de meta.',
-  0: 'RECUPERAÇÃO DOMINICAL: Oriente sobre hidratação, proteína para recuperação muscular e preparação mental para a semana.',
+  1: 'PLANEJAMENTO SEMANAL: Avalie a semana anterior (calorias, treinos, hidratação) e oriente como começar esta semana com foco nas metas. Correlacione treinos com ingestão proteica e hidratação.',
+  2: 'MACROS E NUTRIÇÃO: Analise o equilíbrio de proteína/carbs/gordura nos últimos dias. Sugira ajuste específico e prático para hoje, considerando o objetivo do usuário.',
+  3: 'HIDRATAÇÃO E ALIMENTAÇÃO: Avalie o padrão de hidratação e sua relação com o consumo alimentar (fibras, proteínas, volume de refeições). Dê dica concreta baseada nos dados reais.',
+  4: 'TREINOS E RECUPERAÇÃO: Analise frequência de treinos, consumo proteico e hidratação. Correlacione: dias treinados × proteína consumida × recuperação esperada.',
+  5: 'CONSISTÊNCIA E MOTIVAÇÃO: Destaque sequência de registros, tendências positivas ou dê motivação empática. Correlacione comportamento semanal com resultados.',
+  6: 'COMPOSIÇÃO CORPORAL: Analise tendência de peso, gordura, músculo e medidas. Correlacione com padrão alimentar e de hidratação. Sugira ajuste com base no objetivo.',
+  0: 'RECUPERAÇÃO DOMINICAL: Oriente sobre hidratação, proteína para recuperação muscular e preparação nutricional para a semana. Sugira uma refeição prática se o contexto permitir.',
 };
 
 // Varied fallbacks — rotated by recent insight types to avoid repetition
@@ -144,7 +144,7 @@ export async function GET(req: Request) {
         .single(),
       supabase
         .from('food_logs')
-        .select('food_name, meal_type, calories, protein, carbs, fat, created_at')
+        .select('food_name, meal_type, calories, protein, carbs, fat, hydration_ml, created_at')
         .eq('user_id', userId)
         .eq('log_date', today)
         .order('created_at', { ascending: true }),
@@ -200,7 +200,11 @@ export async function GET(req: Request) {
     const todayProt   = Math.round(todayFood.reduce((s, l) => s + (l.protein ?? 0), 0));
     const todayCarbs  = Math.round(todayFood.reduce((s, l) => s + (l.carbs ?? 0), 0));
     const todayFat    = Math.round(todayFood.reduce((s, l) => s + (l.fat ?? 0), 0));
-    const todayWater  = (waterLogs ?? []).reduce((s, l) => s + l.amount_ml, 0);
+
+    // Manual water logs + beverage hydration from food logs combined
+    const todayWater     = (waterLogs ?? []).reduce((s, l) => s + l.amount_ml, 0);
+    const todayFoodWater = todayFood.reduce((s, l) => s + ((l as { hydration_ml?: number }).hydration_ml ?? 0), 0);
+    const totalTodayWater = todayWater + todayFoodWater;
 
     const targetCal   = profile?.target_calories ?? 0;
     const targetProt  = Number(profile?.target_protein_g ?? 0) ||
@@ -208,7 +212,7 @@ export async function GET(req: Request) {
     const targetWater = profile?.target_water_ml ?? 2500;
     const remainCal   = targetCal - todayCal + todayBurned;
     const remainProt  = Math.max(0, targetProt - todayProt);
-    const waterPct    = targetWater > 0 ? Math.round((todayWater / targetWater) * 100) : 0;
+    const waterPct    = targetWater > 0 ? Math.round((totalTodayWater / targetWater) * 100) : 0;
 
     // Hours since last meal
     const lastMeal = [...todayFood]
@@ -303,6 +307,30 @@ export async function GET(req: Request) {
     const waterGoalRate = waterDates.length > 0
       ? Math.round((waterGoalDays / waterDates.length) * 100) : 0;
 
+    // ── Habit scores — based on today's data ───────────────────────────
+    // Nutrition score: today's calorie progress + protein progress toward daily targets
+    const calProgressPct  = targetCal  > 0 ? Math.min(100, Math.round((todayCal  / targetCal)  * 100)) : 50;
+    const protProgressPct = targetProt > 0 ? Math.min(100, Math.round((todayProt / targetProt) * 100)) : 50;
+    const nutritionScore  = todayFood.length === 0
+      ? 0
+      : Math.min(100, Math.round(calProgressPct * 0.5 + protProgressPct * 0.5));
+
+    // Hydration score: today's total water vs daily target (already computed as waterPct)
+    const hydrationScore = Math.min(100, waterPct);
+
+    // Consistency score: streak-based (habit over time, not a single-day metric)
+    const streakScore      = Math.min(60, streak * 10);
+    const histFreqScore    = Math.min(40, Math.round((histDates.length / 30) * 40));
+    const consistencyScore = Math.min(100, streakScore + histFreqScore);
+
+    // Derive user goal from TDEE vs target calories
+    const tdeeVal  = profile?.tdee ?? 0;
+    let   userGoal = 'manutenção';
+    if (tdeeVal > 0 && targetCal > 0) {
+      if (targetCal < tdeeVal * 0.93)      userGoal = 'emagrecimento';
+      else if (targetCal > tdeeVal * 1.03) userGoal = 'ganho de massa';
+    }
+
     // Body composition trend (last 90 days)
     const latestMetrics = bodyMetrics?.[bodyMetrics.length - 1];
     const oldestMetrics = bodyMetrics?.[0];
@@ -341,21 +369,47 @@ export async function GET(req: Request) {
     const firstName = profile?.full_name?.split(' ')[0] ?? 'Usuário';
     const dow       = brazilDayOfWeek();
 
-    // ── Urgency overrides — take priority over day-based focus ────────────
+    // ── Urgency overrides — situações reais que requerem atenção imediata ──
+    // Streak é nota adicional (não substitui análise nutricional)
     let urgentNote = '';
+    const streakBonus = streak >= 5
+      ? ` | 🎉 BÔNUS: mencione o streak de ${streak} dias em 1 frase curta no final da message.`
+      : '';
+
+    const calExcessPct = targetCal > 0 ? Math.round((todayCal / targetCal - 1) * 100) : 0;
+    const calExcess    = todayCal - targetCal;
+    const currentHour  = brazilHour();
+
+    // Déficit saudável — só é real se for tarde o suficiente e houver refeições registradas
+    // Para ganho de massa déficit é preocupação, não recompensa
+    const deficitKcal  = remainCal; // remainCal = targetCal - todayCal + todayBurned
+    const deficitPct   = targetCal > 0 && deficitKcal > 0 ? Math.round((deficitKcal / targetCal) * 100) : 0;
+    const mealsLogged  = todayFood.length >= 2;
+    // Considera "dia praticamente encerrado" após as 20h; "boa parte do dia feita" após as 17h
+    const isNightDeficit     = currentHour >= 20 && mealsLogged && deficitPct >= 10 && deficitPct <= (userGoal === 'emagrecimento' ? 38 : 22) && userGoal !== 'ganho de massa';
+    const isAfternoonDeficit = currentHour >= 17 && currentHour < 20 && mealsLogged && deficitPct >= 15 && deficitPct <= 30 && userGoal !== 'ganho de massa';
+    // Déficit excessivo é preocupante em qualquer objetivo
+    const isExcessiveDeficit = currentHour >= 20 && mealsLogged && deficitPct > (userGoal === 'emagrecimento' ? 38 : 25);
+
     if (hoursSinceLastMeal !== null && hoursSinceLastMeal >= 5) {
-      urgentNote = `⚠️ URGENTE: Última refeição há ${hoursSinceLastMeal}h. Sugira um lanche leve e nutritivo com empatia (tom gentil, sem alarmismo).`;
-    } else if (targetCal > 0 && todayCal > targetCal * 1.15) {
-      urgentNote = `⚠️ EMPATIA: Meta calórica excedida hoje (${todayCal} vs ${targetCal}kcal). Tom gentil e construtivo: "Dias assim acontecem — o equilíbrio no longo prazo é o que importa." Oriente o restante do dia sem culpa.`;
-    } else if (streak >= 5) {
-      urgentNote = `🎉 CELEBRAÇÃO: Sequência incrível de ${streak} dias consecutivos com registro! Comemore este marco e dê uma dica estratégica de manutenção.`;
+      urgentNote = `⚠️ URGENTE: Última refeição há ${hoursSinceLastMeal}h. Cite este dado. Sugira lanche específico com calorias e proteína aproximados (ex: iogurte grego 150g ≈ 15g prot). Tom gentil.`;
+    } else if (targetCal > 0 && todayCal > targetCal * 1.25) {
+      urgentNote = `🚨 BRONCA FORTE — tom de treinador pessoal, direto e sem rodeios (NÃO suavize): meta estourada em +${calExcessPct}% (${todayCal}kcal vs meta ${targetCal}kcal — excesso de ${calExcess}kcal). Diga claramente que passou da conta. Explique o impacto no objetivo (${userGoal}). Dê 1 ação imediata para compensar HOJE com quantidade específica (ex: substituir jantar por refeição leve de ~400kcal, ou 30min de caminhada). Tom: firme e motivador como um personal trainer — sem floreio, mas sem crueldade.`;
+    } else if (targetCal > 0 && todayCal > targetCal * 1.08) {
+      urgentNote = `⚠️ PUXÃO DE ORELHA — tom direto, sem suavizar: meta excedida em +${calExcessPct}% (${todayCal}kcal vs meta ${targetCal}kcal, excesso de ${calExcess}kcal). Seja direto sobre o excesso, cite os dados, explique o impacto no objetivo, e sugira como equilibrar o restante do dia com ação concreta e específica.`;
+    } else if (isExcessiveDeficit) {
+      urgentNote = `⚠️ DÉFICIT EXCESSIVO (tom de cuidado, não bronca): apenas ${todayCal}kcal registradas de uma meta de ${targetCal}kcal (${deficitPct}% abaixo, faltam ${deficitKcal}kcal). Déficits tão grandes comprometem músculo, metabolismo e aumentam risco de compulsão amanhã. São ${currentHour}h — sugira uma refeição leve específica antes de dormir com aprox. ${Math.min(Math.round(deficitKcal * 0.4), 400)}kcal.`;
+    } else if (isNightDeficit) {
+      urgentNote = `🏆 RECOMPENSA — tom caloroso, entusiasmado e orgulhoso (NÃO contenha o elogio): são ${currentHour}h e você termina o dia com um déficit saudável de ${deficitKcal}kcal (${todayCal}kcal de ${targetCal}kcal, ${deficitPct}% abaixo). Isso é excelente para o objetivo de ${userGoal}. Parabenize genuinamente, cite os números, explique o impacto positivo (ex: "isso representa X% do seu objetivo semanal"). Opcionalmente, ofereça uma pequena recompensa alimentar leve e saudável se o déficit permitir (ex: uma fruta, chocolate amargo 20g ≈ 120kcal). Finalize com motivação para manter amanhã.`;
+    } else if (isAfternoonDeficit) {
+      urgentNote = `✨ INCENTIVO POSITIVO — tom animado e encorajador: são ${currentHour}h e você está ${deficitPct}% abaixo da meta (${todayCal}kcal de ${targetCal}kcal). Parabenize o controle até agora com os dados reais. Ainda há o jantar — oriente como manter o déficit de forma saudável e saborosa até o fim do dia, sugerindo opções de jantar específicas.`;
     } else if (weekendSpike >= 30 && (dow === 5 || dow === 6 || dow === 0)) {
-      urgentNote = `📊 PADRÃO IDENTIFICADO: Fins de semana têm ${weekendSpike}% mais calorias que dias úteis. Oriente sobre refeição livre consciente sem culpa nem restrição excessiva.`;
-    } else if (todayWater < targetWater * 0.3 && todayFood.length >= 2) {
-      urgentNote = `💧 HIDRATAÇÃO BAIXA: Apenas ${todayWater}ml de ${targetWater}ml consumidos hoje mesmo com refeições registradas. Dê dica específica e prática para hidratação.`;
+      urgentNote = `📊 PADRÃO: Fins de semana +${weekendSpike}% calorias (${avgWeekend}kcal vs ${avgWeekday}kcal dias úteis). Cite estes números. Oriente refeição livre consciente sem culpa.`;
+    } else if (totalTodayWater < targetWater * 0.3 && todayFood.length >= 2) {
+      urgentNote = `💧 HIDRATAÇÃO BAIXA: Apenas ${totalTodayWater}ml de ${targetWater}ml hoje (${waterPct}%). Cite estes valores. Dê estratégia específica com volume e horário.`;
     }
 
-    const focusText = urgentNote || DOW_FOCUS[dow] || DOW_FOCUS[1];
+    const focusText = (urgentNote || DOW_FOCUS[dow] || DOW_FOCUS[1]) + streakBonus;
 
     // ── Build the context prompt ─────────────────────────────────────────
     const bodySection = (bodyFatStr || muscleMassStr || waistStr)
@@ -376,14 +430,25 @@ INSIGHTS RECENTES — NÃO repita estes temas/tipos:
 → Gere um insight de tipo DIFERENTE ou com ângulo completamente distinto dos listados acima.`
       : '';
 
+    const goalFocus = userGoal === 'emagrecimento'
+      ? '→ Priorizar déficit calórico, saciedade, fibras, proteínas'
+      : userGoal === 'ganho de massa'
+        ? '→ Priorizar proteínas, recuperação, hidratação, superávit controlado'
+        : '→ Priorizar equilíbrio alimentar, constância';
+
+    const waterLine = todayFoodWater > 0
+      ? `→ Água hoje: ${totalTodayWater}ml/${targetWater}ml (${waterPct}%) [${todayWater}ml manual + ${todayFoodWater}ml de alimentos/bebidas]`
+      : `→ Água hoje: ${totalTodayWater}ml/${targetWater}ml (${waterPct}%)`;
+
     const contextPrompt =
 `PERFIL: ${firstName} | Peso: ${weightStr} | Meta: ${targetCal}kcal/dia | Proteína: ${targetProt}g/dia | Água: ${targetWater}ml/dia${profile?.sex ? ` | Sexo: ${profile.sex === 'male' ? 'M' : 'F'}` : ''}
+OBJETIVO: ${userGoal} ${goalFocus}
 
 HOJE — ${today} (${DOW_NAME[dow]}):
 ${mealLines}
 → Total: ${todayCal}kcal | ${todayProt}g prot | ${todayCarbs}g carbs | ${todayFat}g gord${todayBurned > 0 ? ` | ${todayBurned}kcal queimadas` : ''}
 → Restante: ${remainCal}kcal | ${remainProt}g prot
-→ Água hoje: ${todayWater}ml/${targetWater}ml (${waterPct}%)${hoursSinceLastMeal !== null ? ` | Última refeição: ${hoursSinceLastMeal}h atrás` : ''}
+${waterLine}${hoursSinceLastMeal !== null ? ` | Última refeição: ${hoursSinceLastMeal}h atrás` : ''}
 
 HISTÓRICO 30 dias (${histDates.length} dias com registro):
 → Calorias: média ${avgCal}kcal/dia | Proteína: ${avgProt}g | Carbs: ${avgCarbs}g | Gordura: ${avgFat}g
@@ -392,18 +457,19 @@ HISTÓRICO 30 dias (${histDates.length} dias com registro):
 → Sequência atual: ${streak > 0 ? `${streak} dias consecutivos` : 'nenhum dia consecutivo'}
 ${hydrationHistSection}${bodySection}${antiRepSection}
 
-PRIORIDADE DE ANÁLISE (mais importante primeiro):
-1. Situações críticas com ação imediata necessária
-2. Oportunidades de melhoria baseadas em tendências
-3. Evolução positiva e conquistas
-4. Informações contextuais e educacionais
+SCORES DE HÁBITOS (hoje):
+→ Nutrição: ${nutritionScore}/100 (calorias ${calProgressPct}% + proteína ${protProgressPct}% da meta diária)
+→ Hidratação: ${hydrationScore}/100 (${totalTodayWater}ml de ${targetWater}ml, ${waterPct}%)
+→ Consistência: ${consistencyScore}/100 (${streak} dias consecutivos, ${histDates.length}/30 dias com registro)
+${nutritionScore < 65 ? `⚠️ ATENÇÃO: score de Nutrição baixo (${nutritionScore}/100) — ${calProgressPct < 65 ? `calorias abaixo (${todayCal}/${targetCal}kcal)` : ''}${protProgressPct < 65 ? `${calProgressPct < 65 ? ', ' : ''}proteína abaixo (${todayProt}/${targetProt}g)` : ''}. O insight DEVE abordar o score mais baixo com dados reais e recomendação concreta.` : ''}${hydrationScore < 65 ? `\n⚠️ ATENÇÃO: score de Hidratação baixo (${hydrationScore}/100) — apenas ${totalTodayWater}ml de ${targetWater}ml. O insight DEVE mencionar este dado e sugerir ação prática com volume.` : ''}
 
 FOCO ATUAL: ${focusText}
 
 Retorne APENAS JSON válido (sem markdown):
-{"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras específicas e diretas","message":"2-3 frases com dados reais, causa e recomendação clara","expanded":"2-3 frases adicionais com análise mais profunda ou contexto extra (ou null)","cta":"texto curto do botão para abrir o chat (ex: 'Ver estratégias', 'Me ajude') ou null"}`;
+{"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras com dado real","message":"2-3 frases com MÍNIMO 2 valores numéricos reais (ex: 187g proteína, 1.800ml, 2.100kcal), causa e recomendação clara","expanded":"2-3 frases que aprofundam com dados ou correlações (ou null)","cta":"texto curto para abrir chat ou null","nextSteps":["emoji + ação com quantidade específica (ex: Beber 500ml agora)","emoji + ação com quantidade específica","emoji + ação com quantidade específica"],"mealIdea":{"title":"título","items":["item 1 com quantidade","item 2","item 3"],"protein":35}}
+OBRIGATÓRIO: message deve conter números reais dos dados acima. nextSteps devem ter quantidade ou especificidade (não "beba mais água" — sim "💧 Beber 400ml agora"). mealIdea = inclua SOMENTE quando proteína ou calorias estiverem abaixo da meta e uma sugestão de refeição for pertinente.`;
 
-    console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes}`);
+    console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
         model: 'gemini-2.5-flash',
@@ -411,15 +477,21 @@ Retorne APENAS JSON válido (sem markdown):
         config: {
           systemInstruction: `Você é um health coach nutricional empático, inteligente e motivador.
 REGRAS:
-1. Tom: sempre positivo, encorajador, sem julgamentos. Exageros alimentares → "Dias assim acontecem — o equilíbrio a longo prazo é o que importa."
-2. Especificidade: cite alimentos, quantidades, percentuais e tendências reais dos dados. NUNCA invente padrões não evidenciados.
-3. Acionável: todo insight deve responder implicitamente "o que aconteceu?", "por que importa?" e "o que posso fazer?".
-4. Variedade: siga o FOCO indicado. Respeite a seção de INSIGHTS RECENTES — não repita tipos nem temas.
-5. Compacidade: message = 2-3 frases diretas e informativas. expanded = 2-3 frases extras que aprofundam (pode ser null).
-6. cta: rótulo curto e específico para abrir o chat (ex: "Ver estratégias", "Me ajude"). Use null se não houver ação clara.
-7. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
-          maxOutputTokens: 500,
-          temperature: 0.9,
+1. Tom padrão: positivo, encorajador, sem julgamentos.
+   → BRONCA FORTE / PUXÃO DE ORELHA: treinador pessoal — direto, firme, sem suavizar. Diga "você passou da conta". Foco no comportamento, não na pessoa. Termine com ação concreta. Proibido: floreios, "está tudo bem", "acontece com todos".
+   → RECOMPENSA / INCENTIVO POSITIVO: solte o elogio — seja genuinamente entusiasmado, caloroso, como um técnico que viu o atleta superar o desafio. Cite os números como conquista. Pode sugerir uma pequena recompensa saudável. Proibido: elogios genéricos sem dados, exageros que soem falsos.
+2. DADOS OBRIGATÓRIOS: a "message" DEVE citar pelo menos 2 valores numéricos reais dos dados fornecidos (ex: "Você consumiu 187g de proteína", "sua hidratação está em 1.200ml de 2.500ml", "média de 2.100kcal nos últimos 30 dias"). PROIBIDO gerar message sem números reais.
+3. Acionável: todo insight responde "o que aconteceu?" (dado real), "por que importa?" (consequência) e "o que fazer?" (ação concreta).
+4. Correlações: identifique relações entre dados. Ex: "Você treinou 4x esta semana mas consumiu apenas ${avgProt}g de proteína — abaixo dos ${targetProt}g recomendados para recuperação." Ex: "Hidratação em ${waterPct}% com alto consumo de proteína pode dificultar a digestão."
+5. Personalização: adapte análise e recomendações ao OBJETIVO informado. Nunca use recomendações genéricas.
+6. Variedade: siga o FOCO indicado. Respeite INSIGHTS RECENTES — não repita tipos nem temas.
+7. nextSteps: 2-3 ações com QUANTIDADE ESPECÍFICA (ex: "💧 Beber 500ml agora", "🥩 Adicionar 30g proteína no jantar", "📏 Registrar peso amanhã cedo"). PROIBIDO: "beba mais água", "inclua proteínas", "continue assim" — sempre com número.
+8. mealIdea: inclua APENAS quando proteína ou calorias estiverem abaixo da meta E uma sugestão for pertinente. Omita nos demais casos.
+9. message = 2-3 frases com dados reais. expanded = 2-3 frases que aprofundam ou correlacionam (pode ser null).
+10. cta: rótulo curto para abrir o chat. Use null se não couber.
+11. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
+          maxOutputTokens: 800,
+          temperature: 0.7,
           thinkingConfig: { thinkingBudget: 0 },
         },
       })
@@ -433,6 +505,8 @@ REGRAS:
       message: string;
       expanded?: string | null;
       cta?: string | null;
+      nextSteps?: unknown[];
+      mealIdea?: unknown;
     };
     try {
       parsed = extractJSON(raw);
@@ -441,6 +515,25 @@ REGRAS:
       const recentTypeSet = new Set(recentTypeList);
       const fallback = FALLBACK_INSIGHTS.find((f) => !recentTypeSet.has(f.type)) ?? FALLBACK_INSIGHTS[0];
       parsed = fallback;
+    }
+
+    // Safely extract and validate nextSteps
+    const nextSteps = Array.isArray(parsed.nextSteps)
+      ? (parsed.nextSteps as unknown[]).map((s) => String(s).slice(0, 80)).slice(0, 3)
+      : null;
+
+    // Safely extract and validate mealIdea
+    let mealIdea: { title: string; items: string[]; protein: number | null } | null = null;
+    if (parsed.mealIdea && typeof parsed.mealIdea === 'object' && parsed.mealIdea !== null) {
+      const m = parsed.mealIdea as Record<string, unknown>;
+      mealIdea = {
+        title:   String(m.title ?? '').slice(0, 80),
+        items:   Array.isArray(m.items)
+          ? (m.items as unknown[]).map((i) => String(i).slice(0, 60)).slice(0, 4)
+          : [],
+        protein: typeof m.protein === 'number' ? m.protein : null,
+      };
+      if (!mealIdea.items.length) mealIdea = null;
     }
 
     const insightData = {
@@ -453,7 +546,10 @@ REGRAS:
       metadata: {
         todayCal, todayProt, remainCal, remainProt,
         avgCal, avgProt, workoutDays, histDays: histDates.length, streak, weekendSpike,
-        expanded: parsed.expanded ? String(parsed.expanded).slice(0, 800) : null,
+        expanded:  parsed.expanded ? String(parsed.expanded).slice(0, 800) : null,
+        scores:    { nutrition: nutritionScore, hydration: hydrationScore, consistency: consistencyScore },
+        nextSteps,
+        mealIdea,
       },
     };
 
@@ -464,7 +560,7 @@ REGRAS:
         .select()
         .single();
       if (!error && saved) {
-        console.log(`[insights] Saved | type=${insightData.type} | priority=${insightData.priority}`);
+        console.log(`[insights] Saved | type=${insightData.type} | priority=${insightData.priority} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
         return NextResponse.json(saved);
       }
       if (error) console.error('[insights] Save error:', error.message);

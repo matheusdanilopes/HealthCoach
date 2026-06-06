@@ -16,6 +16,10 @@ export function brazilDayOfWeek(): number {
   return brazilDate().getDay();
 }
 
+export function brazilHour(): number {
+  return brazilDate().getHours();
+}
+
 export function brazilNDaysAgo(n: number, fromDate?: string): string {
   const base = fromDate ?? brazilToday();
   const d = new Date(base + 'T12:00:00');
