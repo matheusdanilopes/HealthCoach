@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI, FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
+import { withGeminiRetry, geminiErrorResponse } from '@/lib/gemini-retry';
 import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
 
 let gemini: GoogleGenAI | null = null;
@@ -165,23 +165,6 @@ ${FOOD_COACHING_RULES}`;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Chat API error:', msg);
-    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
-    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
-    if (is503) {
-      return NextResponse.json(
-        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
-        { status: 503 }
-      );
-    }
-    if (is429) {
-      return NextResponse.json(
-        { error: 'Limite de requisições da API atingido. Aguarde 1-2 minutos e tente novamente. Se o problema persistir, o limite diário pode ter sido atingido.' },
-        { status: 429 }
-      );
-    }
-    return NextResponse.json(
-      { error: 'Erro interno. Verifique se a chave GEMINI_API_KEY está configurada.' },
-      { status: 500 }
-    );
+    return geminiErrorResponse(error) ?? NextResponse.json({ error: msg }, { status: 500 });
   }
 }

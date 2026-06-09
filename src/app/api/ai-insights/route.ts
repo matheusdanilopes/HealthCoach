@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
+import { withGeminiRetry, geminiErrorResponse } from '@/lib/gemini-retry';
 import { brazilToday, brazilDayOfWeek, brazilNDaysAgo, brazilHour } from '@/lib/timezone';
 
 let gemini: GoogleGenAI | null = null;
@@ -581,10 +581,6 @@ REGRAS:
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('[insights] Error:', msg);
-    if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand'))
-      return NextResponse.json({ error: 'O modelo de IA está com alta demanda. Tente em instantes.' }, { status: 503 });
-    if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota'))
-      return NextResponse.json({ error: 'Limite de requisições da API atingido. Aguarde 1-2 minutos e tente novamente. Se o problema persistir, o limite diário pode ter sido atingido.' }, { status: 429 });
-    return NextResponse.json({ error: 'Erro ao gerar insight.' }, { status: 500 });
+    return geminiErrorResponse(error) ?? NextResponse.json({ error: 'Erro ao gerar insight.' }, { status: 500 });
   }
 }

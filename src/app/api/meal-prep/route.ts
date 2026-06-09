@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
+import { withGeminiRetry, geminiErrorResponse } from '@/lib/gemini-retry';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
 
 type GoalType   = 'emagrecimento' | 'manutencao' | 'massa';
@@ -510,6 +510,6 @@ Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "tempero
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('[meal-prep] Error:', msg);
-    return NextResponse.json({ error: 'Erro ao gerar cardápio' }, { status: 500 });
+    return geminiErrorResponse(error) ?? NextResponse.json({ error: 'Erro ao gerar cardápio' }, { status: 500 });
   }
 }
