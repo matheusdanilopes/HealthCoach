@@ -584,7 +584,7 @@ REGRAS:
     if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand'))
       return NextResponse.json({ error: 'O modelo de IA está com alta demanda. Tente em instantes.' }, { status: 503 });
     if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota'))
-      return NextResponse.json({ error: 'Limite de requisições atingido. Aguarde e tente novamente.' }, { status: 429 });
+      return NextResponse.json({ error: 'Limite de requisições da API atingido. Aguarde 1-2 minutos e tente novamente. Se o problema persistir, o limite diário pode ter sido atingido.' }, { status: 429 });
     return NextResponse.json({ error: 'Erro ao gerar insight.' }, { status: 500 });
   }
 }

@@ -181,7 +181,7 @@ export async function POST(req: Request) {
     }
     if (is429) {
       return NextResponse.json(
-        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
+        { error: 'Limite de requisições da API atingido. Aguarde 1-2 minutos e tente novamente. Se o problema persistir, o limite diário pode ter sido atingido.' },
         { status: 429 }
       );
     }
