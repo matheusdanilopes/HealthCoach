@@ -14,10 +14,7 @@ interface ModalProps {
 
 export default function Modal({ open, onClose, title, children, className }: ModalProps) {
   const [rendered, setRendered] = useState(open);
-
-  useEffect(() => {
-    if (open) setRendered(true);
-  }, [open]);
+  if (open && !rendered) setRendered(true);
 
   const isClosing = !open && rendered;
 

@@ -67,6 +67,10 @@ export default function DashboardClient({
   useEffect(() => {
     const today = todayISO();
     if (today !== serverDate) {
+      // The server date was computed at request time; the client's clock/timezone
+      // can disagree (or a day may have rolled over while the page sat cached).
+      // Correcting this can only happen after mount, to avoid a hydration mismatch.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedDate(today);
       setLoadingDate(true);
       fetch(`/api/logs?date=${today}`)

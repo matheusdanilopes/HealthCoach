@@ -157,11 +157,20 @@ const AIInsightCard = memo(function AIInsightCard({
     }
   }, []);
 
-  useEffect(() => { fetchInsight(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial fetch on mount — loading/refreshing are toggled inside fetchInsight
+  // itself since the same function also drives the manual retry button.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  useEffect(() => { fetchInsight(); }, []);
+
+  // Show the "refreshing" spinner immediately when a new refreshKey comes in.
+  const [prevRefreshKey, setPrevRefreshKey] = useState(refreshKey);
+  if (refreshKey !== 0 && refreshKey !== prevRefreshKey) {
+    setPrevRefreshKey(refreshKey);
+    setRefreshing(true);
+  }
 
   useEffect(() => {
     if (refreshKey === 0) return;
-    setRefreshing(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchInsight(true), AUTO_REFRESH_DEBOUNCE_MS);
     return () => {

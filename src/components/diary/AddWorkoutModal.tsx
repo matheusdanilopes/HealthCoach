@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -76,7 +76,20 @@ const INPUT_CLS = cn(
   'placeholder:text-zinc-300 dark:placeholder:text-zinc-600'
 );
 
-export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWorkoutModalProps) {
+export default function AddWorkoutModal(props: AddWorkoutModalProps) {
+  const { open } = props;
+  // Remount the modal's internal state fresh every time it opens, instead of
+  // resetting every state variable by hand inside an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  const [epoch, setEpoch] = useState(0);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setEpoch(epoch + 1);
+  }
+  return <AddWorkoutModalBody key={epoch} {...props} />;
+}
+
+function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalProps) {
   const [step, setStep] = useState(0);
   const [workoutType, setWorkoutType] = useState<WorkoutType | null>(null);
   const [description, setDescription] = useState('');
@@ -92,26 +105,6 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
   const [result, setResult] = useState<WorkoutAnalysis | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setStep(0);
-      setWorkoutType(null);
-      setDescription('');
-      setIntensity(null);
-      setDuration('');
-      setHeartRate('');
-      setDistance('');
-      setLoad('');
-      setRpe('');
-      setSmartwatchKcal('');
-      setShowOptional(false);
-      setResult(null);
-      setError(null);
-      setSaving(false);
-      setAnalyzing(false);
-    }
-  }, [open]);
 
   function adjustDuration(delta: number) {
     setDuration((prev) => {

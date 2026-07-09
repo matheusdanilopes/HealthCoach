@@ -32,12 +32,13 @@ export default async function DashboardPage() {
       .order('created_at'),
   ]);
 
-  let { data: foodData, error: foodError } = await supabase
+  const { data: initialFoodData, error: foodError } = await supabase
     .from('food_logs')
     .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at')
     .eq('user_id', userId)
     .eq('log_date', today)
     .order('created_at');
+  let foodData = initialFoodData;
 
   if (foodError) {
     // Migration not yet applied — fall back to legacy schema

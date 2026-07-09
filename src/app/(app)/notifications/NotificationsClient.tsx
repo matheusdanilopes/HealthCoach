@@ -141,6 +141,9 @@ export default function NotificationsClient() {
   }, []);
 
   useEffect(() => {
+    // Notification API only exists client-side; read it after mount to avoid
+    // a hydration mismatch against the SSR-safe 'default' initial state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if ('Notification' in window) setPermission(Notification.permission);
     loadDiag();
   }, [loadDiag]);

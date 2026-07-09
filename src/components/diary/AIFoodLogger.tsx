@@ -54,7 +54,20 @@ function resolveItemHydration(item: FoodItem): number {
   return detectBeverage(text).estimatedMl;
 }
 
-export default function AIFoodLogger({
+export default function AIFoodLogger(props: AIFoodLoggerProps) {
+  const { open } = props;
+  // Remount the modal's internal state fresh every time it opens, instead of
+  // resetting ~12 state variables by hand inside an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  const [epoch, setEpoch] = useState(0);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setEpoch(epoch + 1);
+  }
+  return <AIFoodLoggerModal key={epoch} {...props} />;
+}
+
+function AIFoodLoggerModal({
   open,
   onClose,
   defaultMeal,
@@ -70,6 +83,7 @@ export default function AIFoodLogger({
   const [isDragging, setIsDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [prevResult, setPrevResult] = useState<AnalysisResult | null>(null);
   const [editedFoods, setEditedFoods] = useState<FoodItem[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editBuffer, setEditBuffer] = useState<FoodItem | null>(null);
@@ -83,35 +97,10 @@ export default function AIFoodLogger({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setMealType(defaultMeal ?? null);
-      setMealError(false);
-      setTab('text');
-      setTextInput('');
-      setImageFile(null);
-      setImagePreview(null);
-      setResult(null);
-      setEditedFoods([]);
-      setEditingIndex(null);
-      setEditBuffer(null);
-      setBufferNeedsReanalysis(false);
-      setConfirmClose(false);
-      setError(null);
-      setSaving(false);
-    }
-  }, [open, defaultMeal]);
-
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }, [textInput]);
-
-  useEffect(() => {
+  // Merge AI hydration with local fallback detection whenever a new result comes in.
+  if (result !== prevResult) {
+    setPrevResult(result);
     if (result) {
-      // Merge AI hydration with local fallback detection
       setEditedFoods(result.foods.map((f) => ({
         ...f,
         hydration_ml: resolveItemHydration(f),
@@ -121,7 +110,14 @@ export default function AIFoodLogger({
     } else {
       setEditedFoods([]);
     }
-  }, [result]);
+  }
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [textInput]);
 
   const computedTotal = useMemo(
     () =>
