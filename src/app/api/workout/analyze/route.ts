@@ -142,7 +142,6 @@ export async function POST(req: Request) {
           systemInstruction: SYSTEM,
           maxOutputTokens: 300,
           temperature: 0.15,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
     );

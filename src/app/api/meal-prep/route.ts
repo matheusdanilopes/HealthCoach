@@ -473,7 +473,6 @@ Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "tempero
           systemInstruction: 'Nutricionista de meal prep. Retorne SOMENTE JSON válido, sem texto fora, sem markdown.',
           maxOutputTokens: 3000,
           temperature: 0.85,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
     );

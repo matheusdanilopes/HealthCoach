@@ -93,7 +93,6 @@ ${FOOD_COACHING_RULES}`;
           toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
           maxOutputTokens: 500,
           temperature: 0.7,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
     );
@@ -151,7 +150,7 @@ ${FOOD_COACHING_RULES}`;
                 parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
               },
             ],
-            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
+            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7 },
           })
         );
 

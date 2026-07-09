@@ -494,7 +494,6 @@ REGRAS:
 11. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
           maxOutputTokens: 800,
           temperature: 0.7,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
     );
