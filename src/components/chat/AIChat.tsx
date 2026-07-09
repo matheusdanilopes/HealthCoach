@@ -60,7 +60,9 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTrigger = useRef(0);
   const initialInputRef = useRef(initialInput);
-  initialInputRef.current = initialInput;
+  useEffect(() => {
+    initialInputRef.current = initialInput;
+  }, [initialInput]);
 
   // Scroll to bottom only when messages change
   useEffect(() => {

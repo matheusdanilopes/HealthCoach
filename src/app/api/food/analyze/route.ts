@@ -92,6 +92,15 @@ REGRAS FINAIS:
 4. total* = soma exata dos itens listados
 5. Em caso de dúvida → SUBESTIME`;
 
+const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // decoded size
+
+function base64ByteLength(base64: string): number {
+  const len = base64.length;
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((len * 3) / 4) - padding;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractJSON(raw: string): any {
   const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
@@ -122,7 +131,16 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await req.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Não foi possível ler a requisição. A imagem pode ser grande demais ou os dados estão corrompidos.' },
+        { status: 400 }
+      );
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let parts: any[];
@@ -132,11 +150,24 @@ export async function POST(req: Request) {
       }
       parts = [{ text: `Refeição: ${body.description}` }];
     } else if (body.type === 'image') {
-      if (!body.imageBase64) {
+      if (!body.imageBase64 || typeof body.imageBase64 !== 'string') {
         return NextResponse.json({ error: 'Missing image' }, { status: 400 });
       }
+      const mimeType = body.mimeType || 'image/jpeg';
+      if (!ALLOWED_IMAGE_MIME_TYPES.includes(mimeType)) {
+        return NextResponse.json(
+          { error: 'Formato de imagem não suportado. Use JPG, PNG ou WEBP.' },
+          { status: 400 }
+        );
+      }
+      if (base64ByteLength(body.imageBase64) > MAX_IMAGE_BYTES) {
+        return NextResponse.json(
+          { error: 'Imagem muito grande. Tente uma foto com menor resolução.' },
+          { status: 413 }
+        );
+      }
       parts = [
-        { inlineData: { mimeType: body.mimeType || 'image/jpeg', data: body.imageBase64 } },
+        { inlineData: { mimeType, data: body.imageBase64 } },
         { text: 'Analise esta foto de refeição.' },
       ];
     } else {
@@ -145,13 +176,12 @@ export async function POST(req: Request) {
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{ role: 'user', parts }],
         config: {
           systemInstruction: SYSTEM,
           maxOutputTokens: 2048,
           temperature: 0.2,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
     );

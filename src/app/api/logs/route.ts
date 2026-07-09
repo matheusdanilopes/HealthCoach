@@ -10,12 +10,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date') ?? brazilToday();
 
-  let { data: foodData, error: foodError } = await supabase
+  const { data: initialFoodData, error: foodError } = await supabase
     .from('food_logs')
     .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at')
     .eq('user_id', session.user.id)
     .eq('log_date', date)
     .order('created_at');
+  let foodData = initialFoodData;
 
   if (foodError) {
     // Migration not yet applied — fall back to legacy schema

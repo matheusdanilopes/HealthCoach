@@ -52,6 +52,35 @@ const MULTIPLIERS: Record<string, number> = {
   active: 1.725,
 };
 
+// Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
+function deriveInitialCalcState(profile: Profile | null) {
+  const w = parseFloat(String(profile?.current_weight ?? ''));
+  const h = parseFloat(String(profile?.height_cm ?? ''));
+  const bd = profile?.birth_date;
+  const s = profile?.sex;
+  const hasFormulaInputs = !!(w && h && bd && s);
+  const savedMeta = String(profile?.target_calories ?? '');
+
+  if (profile?.tdee && profile?.activity_level && MULTIPLIERS[profile.activity_level]) {
+    const reversed = Math.round(profile.tdee / MULTIPLIERS[profile.activity_level]);
+    // Threshold > 3 avoids false positives from rounding
+    const isManual = hasFormulaInputs
+      ? Math.abs(reversed - calculateTMB(w, h, calculateAge(bd!), s!)) > 3
+      : false;
+    return { tmb: String(reversed), isManual, meta: savedMeta };
+  }
+
+  if (hasFormulaInputs) {
+    const tmb = calculateTMB(w, h, calculateAge(bd!), s!);
+    const meta = profile?.target_calories
+      ? savedMeta
+      : String(calculateTargetCalories(calculateTDEE(tmb, (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active')));
+    return { tmb: String(tmb), isManual: false, meta };
+  }
+
+  return { tmb: '', isManual: false, meta: savedMeta };
+}
+
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
@@ -80,10 +109,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active'
   );
 
-  // Caloric goals — TMB initialized in useEffect to preserve manual values
-  const [customTmb, setCustomTmb] = useState('');
-  const [isTmbManual, setIsTmbManual] = useState(false);
-  const [customMeta, setCustomMeta] = useState(String(profile?.target_calories ?? ''));
+  // Caloric goals — TMB initialized from profile to preserve manual values
+  const initialCalc = deriveInitialCalcState(profile);
+  const [customTmb, setCustomTmb] = useState(initialCalc.tmb);
+  const [isTmbManual, setIsTmbManual] = useState(initialCalc.isManual);
+  const [customMeta, setCustomMeta] = useState(initialCalc.meta);
 
   // UI states
   const [loading, setLoading] = useState(false);
@@ -98,37 +128,6 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [notifDevices, setNotifDevices] = useState<number | null>(null);
   const [notifToggling, setNotifToggling] = useState(false);
   const [notifForcing, setNotifForcing] = useState(false);
-
-  // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
-  useEffect(() => {
-    const w = parseFloat(String(profile?.current_weight ?? ''));
-    const h = parseFloat(String(profile?.height_cm ?? ''));
-    const bd = profile?.birth_date;
-    const s = profile?.sex;
-    const hasFormulaInputs = !!(w && h && bd && s);
-
-    if (profile?.tdee && profile?.activity_level && MULTIPLIERS[profile.activity_level]) {
-      const reversed = Math.round(profile.tdee / MULTIPLIERS[profile.activity_level]);
-      setCustomTmb(String(reversed));
-      if (hasFormulaInputs) {
-        const formulaTmb = calculateTMB(w, h, calculateAge(bd!), s!);
-        // Threshold > 3 avoids false positives from rounding
-        setIsTmbManual(Math.abs(reversed - formulaTmb) > 3);
-      }
-      return;
-    }
-
-    if (hasFormulaInputs) {
-      const tmb = calculateTMB(w, h, calculateAge(bd!), s!);
-      setCustomTmb(String(tmb));
-      setIsTmbManual(false);
-      if (!profile?.target_calories) {
-        const tdee = calculateTDEE(tmb, (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active');
-        setCustomMeta(String(calculateTargetCalories(tdee)));
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     const checkSW = () => {
@@ -147,7 +146,10 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   }, []);
 
   useEffect(() => {
+    // Notification API only exists client-side; read it after mount to avoid
+    // a hydration mismatch against the SSR-safe 'unsupported' initial state.
     if ('Notification' in window) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifPerm(Notification.permission);
     }
     fetch('/api/notifications/status')
@@ -157,8 +159,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   }, []);
 
   useEffect(() => {
+    // window.__pwaInstallEvent is set by a client-only init script; only
+    // readable after mount, so it can't be part of the initial render state.
     const stored = (window as { __pwaInstallEvent?: typeof installPrompt }).__pwaInstallEvent;
     if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInstallPrompt(stored);
       return;
     }

@@ -54,6 +54,10 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
 
   useEffect(() => {
     const today = todayISO();
+    // The server date was computed at request time; the client's clock/timezone
+    // can disagree. Correcting this can only happen after mount, to avoid a
+    // hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedDate(today);
     fetch(`/api/logs?date=${today}`)
       .then((r) => r.json())
@@ -63,7 +67,6 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
       })
       .catch(() => { setLogs([]); setWaterLogs([]); })
       .finally(() => setLoadingDate(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function navigateTo(date: string) {

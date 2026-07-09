@@ -85,7 +85,7 @@ ${FOOD_COACHING_RULES}`;
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents,
         config: {
           systemInstruction,
@@ -93,7 +93,6 @@ ${FOOD_COACHING_RULES}`;
           toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
           maxOutputTokens: 500,
           temperature: 0.7,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
     );
@@ -142,7 +141,7 @@ ${FOOD_COACHING_RULES}`;
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
         const followUp = await withGeminiRetry(() =>
           getGemini().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: [
               ...contents,
               { role: 'model', parts: modelParts },
@@ -151,7 +150,7 @@ ${FOOD_COACHING_RULES}`;
                 parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
               },
             ],
-            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
+            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7 },
           })
         );
 

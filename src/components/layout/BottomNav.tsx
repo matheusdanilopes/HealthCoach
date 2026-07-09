@@ -85,7 +85,13 @@ export default function BottomNav() {
   const isSaudeActive = SAUDE_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
   const isBodyActive  = BODY_PATHS.includes(pathname);
 
-  useEffect(() => { setSaudeOpen(false); setBodyOpen(false); }, [pathname]);
+  // Close both submenus whenever the route changes
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setSaudeOpen(false);
+    setBodyOpen(false);
+  }
 
   useEffect(() => {
     if (!saudeOpen && !bodyOpen) return;
