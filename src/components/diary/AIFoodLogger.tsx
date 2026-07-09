@@ -39,6 +39,10 @@ interface AIFoodLoggerProps {
   onAdded: (log: FoodLog) => void;
 }
 
+const MAX_IMAGE_MB = 15;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const ANALYZE_TIMEOUT_MS = 45_000;
+
 const inputCls =
   'w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400';
 
@@ -205,10 +209,23 @@ export default function AIFoodLogger({
   }
 
   function handleImageSelect(file: File) {
-    setImageFile(file);
     setResult(null);
     setError(null);
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Formato não suportado. Envie uma imagem JPG, PNG ou WEBP.');
+      return;
+    }
+    if (file.size === 0) {
+      setError('Arquivo de imagem vazio. Escolha outra foto.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setError(`Imagem muito grande (máx. ${MAX_IMAGE_MB}MB). Tente uma foto com menor resolução.`);
+      return;
+    }
+    setImageFile(file);
     const reader = new FileReader();
+    reader.onerror = () => setError('Não foi possível ler a imagem. Tente outra foto.');
     reader.onload = (e) => setImagePreview(e.target?.result as string);
     reader.readAsDataURL(file);
   }
@@ -223,7 +240,7 @@ export default function AIFoodLogger({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) handleImageSelect(file);
+    if (file) handleImageSelect(file);
   }
 
   function removeImage() {
@@ -283,16 +300,31 @@ export default function AIFoodLogger({
         const { base64, mimeType } = await compressImage(imagePreview);
         body = { type: 'image', imageBase64: base64, mimeType };
       }
-      const res = await fetch('/api/food/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? 'Erro desconhecido');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch('/api/food/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? `Erro ao analisar (HTTP ${res.status}).`);
+      if (!json) throw new Error('Resposta inválida do servidor. Tente novamente.');
       setResult(json as AnalysisResult);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError('A análise demorou demais e foi cancelada. Tente uma foto menor ou verifique sua conexão.');
+      } else if (e instanceof TypeError) {
+        setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      }
     } finally {
       setAnalyzing(false);
     }
