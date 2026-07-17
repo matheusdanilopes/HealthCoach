@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { withGeminiRetry } from '@/lib/gemini-retry';
+import { callGroq } from '@/lib/groq';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -174,21 +175,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
 
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: [{ role: 'user', parts }],
-        config: {
-          systemInstruction: SYSTEM,
-          maxOutputTokens: 2048,
-          temperature: 0.2,
-        },
-      })
-    );
-
-    const raw = response.text ?? '';
-    if (!raw) {
-      return NextResponse.json({ error: 'Empty response from AI' }, { status: 500 });
+    let raw: string;
+    try {
+      const response = await withGeminiRetry(() =>
+        getGemini().models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: [{ role: 'user', parts }],
+          config: {
+            systemInstruction: SYSTEM,
+            maxOutputTokens: 2048,
+            temperature: 0.2,
+          },
+        })
+      );
+      raw = response.text ?? '';
+      if (!raw) throw new Error('Empty response from AI');
+    } catch (geminiErr) {
+      const geminiMsg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
+      console.error('Analyze: Gemini failed, falling back to Groq:', geminiMsg);
+      try {
+        raw = await callGroq(SYSTEM, parts);
+      } catch (groqErr) {
+        console.error('Analyze: Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
+        throw geminiErr;
+      }
     }
 
     let data: Record<string, unknown>;
