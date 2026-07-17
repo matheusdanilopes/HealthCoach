@@ -85,7 +85,7 @@ ${FOOD_COACHING_RULES}`;
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         contents,
         config: {
           systemInstruction,
@@ -141,7 +141,7 @@ ${FOOD_COACHING_RULES}`;
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
         const followUp = await withGeminiRetry(() =>
           getGemini().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.5-flash',
             contents: [
               ...contents,
               { role: 'model', parts: modelParts },
