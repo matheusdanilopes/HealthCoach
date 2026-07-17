@@ -467,7 +467,7 @@ Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "tempero
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
           systemInstruction: 'Nutricionista de meal prep. Retorne SOMENTE JSON válido, sem texto fora, sem markdown.',

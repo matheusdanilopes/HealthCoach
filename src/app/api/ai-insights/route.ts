@@ -474,7 +474,7 @@ OBRIGATÓRIO: message deve conter números reais dos dados acima. nextSteps deve
     console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: contextPrompt }] }],
         config: {
           systemInstruction: `Você é um health coach nutricional empático, inteligente e motivador.

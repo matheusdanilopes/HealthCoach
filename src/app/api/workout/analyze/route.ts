@@ -136,7 +136,7 @@ export async function POST(req: Request) {
 
     const response = await withGeminiRetry(() =>
       getGemini().models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: lines.join('\n') }] }],
         config: {
           systemInstruction: SYSTEM,
