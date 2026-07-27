@@ -1,5 +1,8 @@
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
+// meta-llama/llama-4-scout-17b-16e-instruct was deprecated by Groq on 2026-06-17
+// and stopped accepting requests; qwen/qwen3.6-27b is the current vision-capable
+// replacement (same image_url/base64 data-URI request shape).
+const GROQ_MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.6-27b';
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
 export type GroqPart = { text: string } | { inlineData: { mimeType: string; data: string } };
@@ -26,6 +29,11 @@ export async function callGroq(
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY not configured');
 
+  // Qwen 3.6 defaults to an extended "thinking" pass before answering, which
+  // would eat into max_tokens and can leave the JSON response truncated.
+  // reasoning_effort is only recognized by Qwen models on Groq.
+  const isQwenReasoningModel = /qwen3/i.test(GROQ_MODEL);
+
   let delay = 500;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await fetch(GROQ_API_URL, {
@@ -41,7 +49,8 @@ export async function callGroq(
           { role: 'user', content: toGroqContent(parts) },
         ],
         temperature: 0.2,
-        max_tokens: maxOutputTokens,
+        max_completion_tokens: maxOutputTokens,
+        ...(isQwenReasoningModel ? { reasoning_effort: 'none' } : {}),
       }),
     });
 

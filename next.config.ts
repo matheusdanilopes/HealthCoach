@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   compress: true,
+  experimental: {
+    // proxy.ts matches /api/* too, and Next.js buffers the request body to
+    // let both proxy and the route handler read it. The default 10MB cap is
+    // silently truncated (no error) once base64 + JSON overhead pushes a
+    // meal photo past it, which corrupted /api/food/analyze uploads for
+    // larger images. Raise it comfortably above the 8MB decoded image limit
+    // enforced in that route (~11MB once base64-encoded).
+    proxyClientMaxBodySize: '16mb',
+  },
   async headers() {
     return [
       {

@@ -89,8 +89,10 @@ function AIFoodLoggerModal({
   const [editBuffer, setEditBuffer] = useState<FoodItem | null>(null);
   const [bufferAnalyzing, setBufferAnalyzing] = useState(false);
   const [bufferNeedsReanalysis, setBufferNeedsReanalysis] = useState(false);
+  const [bufferError, setBufferError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedIndices, setSavedIndices] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -107,8 +109,10 @@ function AIFoodLoggerModal({
       })));
       setEditingIndex(null);
       setEditBuffer(null);
+      setSavedIndices(new Set());
     } else {
       setEditedFoods([]);
+      setSavedIndices(new Set());
     }
   }
 
@@ -142,6 +146,7 @@ function AIFoodLoggerModal({
     setEditBuffer({ ...editedFoods[i] });
     setEditingIndex(i);
     setBufferNeedsReanalysis(false);
+    setBufferError(null);
   }
 
   function commitEdit() {
@@ -149,20 +154,30 @@ function AIFoodLoggerModal({
       setEditedFoods((prev) =>
         prev.map((f, i) => (i === editingIndex ? { ...editBuffer } : f))
       );
+      // Values changed since the last save — this item needs to be re-submitted.
+      setSavedIndices((prev) => {
+        if (!prev.has(editingIndex)) return prev;
+        const next = new Set(prev);
+        next.delete(editingIndex);
+        return next;
+      });
     }
     setEditingIndex(null);
     setEditBuffer(null);
+    setBufferError(null);
   }
 
   function cancelEdit() {
     setEditingIndex(null);
     setEditBuffer(null);
     setBufferNeedsReanalysis(false);
+    setBufferError(null);
   }
 
   async function reanalyzeBuffer() {
     if (!editBuffer) return;
     setBufferAnalyzing(true);
+    setBufferError(null);
     try {
       const description = editBuffer.quantity.trim()
         ? `${editBuffer.name} ${editBuffer.quantity}`
@@ -189,8 +204,8 @@ function AIFoodLoggerModal({
           : null
       );
       setBufferNeedsReanalysis(false);
-    } catch {
-      // error shown inline via the buffer state staying unchanged
+    } catch (e) {
+      setBufferError(e instanceof Error ? e.message : 'Não foi possível reanalisar. Tente novamente.');
     } finally {
       setBufferAnalyzing(false);
     }
@@ -326,6 +341,29 @@ function AIFoodLoggerModal({
     }
   }
 
+  async function saveFood(food: FoodItem): Promise<FoodLog> {
+    const res = await fetch('/api/food', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
+        meal_type: mealType!,
+        calories: Math.round(Number(food.calories) || 0),
+        protein: Number(food.protein) || null,
+        carbs: Number(food.carbs) || null,
+        fat: Number(food.fat) || null,
+        log_date: date,
+        hydration_ml: food.hydration_ml ?? 0,
+        hydration_source: (food.hydration_ml ?? 0) > 0 ? 'meal' : null,
+        hydration_confidence: food.hydration_confidence ?? null,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+    if (!data) throw new Error('Resposta inválida do servidor ao salvar.');
+    return data as FoodLog;
+  }
+
   async function handleConfirm() {
     if (!result || editedFoods.length === 0) return;
     if (!mealType) {
@@ -334,33 +372,41 @@ function AIFoodLoggerModal({
     }
     setSaving(true);
     setError(null);
-    try {
-      const promises = editedFoods.map((food) =>
-        fetch('/api/food', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
-            meal_type: mealType!,
-            calories: Math.round(Number(food.calories) || 0),
-            protein: Number(food.protein) || null,
-            carbs: Number(food.carbs) || null,
-            fat: Number(food.fat) || null,
-            log_date: date,
-            hydration_ml: food.hydration_ml ?? 0,
-            hydration_source: (food.hydration_ml ?? 0) > 0 ? 'meal' : null,
-            hydration_confidence: food.hydration_confidence ?? null,
-          }),
-        }).then((r) => r.json() as Promise<FoodLog>)
-      );
-      const logs = await Promise.all(promises);
-      logs.forEach((log) => onAdded(log));
-      onClose();
-    } catch {
-      setError('Erro ao salvar. Tente novamente.');
-    } finally {
-      setSaving(false);
+
+    // Only (re-)submit items not already persisted, so a retry after a partial
+    // failure can't insert duplicate rows for foods that already saved.
+    const pendingIndices = editedFoods.reduce<number[]>((acc, _, i) => {
+      if (!savedIndices.has(i)) acc.push(i);
+      return acc;
+    }, []);
+
+    const outcomes = await Promise.allSettled(
+      pendingIndices.map((i) => saveFood(editedFoods[i]).then((log) => ({ index: i, log })))
+    );
+
+    const newSaved = new Set(savedIndices);
+    let failCount = 0;
+    for (const outcome of outcomes) {
+      if (outcome.status === 'fulfilled') {
+        newSaved.add(outcome.value.index);
+        onAdded(outcome.value.log);
+      } else {
+        failCount++;
+      }
     }
+    setSavedIndices(newSaved);
+
+    if (failCount === 0) {
+      onClose();
+    } else {
+      const savedNow = outcomes.length - failCount;
+      setError(
+        savedNow > 0
+          ? `${savedNow} de ${outcomes.length} alimentos salvos. ${failCount} ${failCount === 1 ? 'falhou' : 'falharam'} — tente novamente.`
+          : 'Não foi possível salvar. Verifique sua conexão e tente novamente.'
+      );
+    }
+    setSaving(false);
   }
 
   const canAnalyze = tab === 'text' ? textInput.trim().length > 0 : !!imagePreview;
@@ -377,9 +423,11 @@ function AIFoodLoggerModal({
               Sair sem salvar?
             </p>
             <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              {editedFoods.length > 0
-                ? `${editedFoods.length} alimento${editedFoods.length !== 1 ? 's' : ''} analisado${editedFoods.length !== 1 ? 's' : ''} será${editedFoods.length !== 1 ? 'ão' : ''} descartado${editedFoods.length !== 1 ? 's' : ''}.`
-                : 'As alterações em edição serão descartadas.'}
+              {(() => {
+                const unsaved = editedFoods.length - savedIndices.size;
+                if (unsaved <= 0) return 'As alterações em edição serão descartadas.';
+                return `${unsaved} alimento${unsaved !== 1 ? 's' : ''} analisado${unsaved !== 1 ? 's' : ''} ainda não salvo${unsaved !== 1 ? 's' : ''} será${unsaved !== 1 ? 'ão' : ''} descartado${unsaved !== 1 ? 's' : ''}.`;
+              })()}
             </p>
           </div>
           <div className="flex gap-2 w-full">
@@ -581,7 +629,10 @@ function AIFoodLoggerModal({
                 {editedFoods.map((food, i) => (
                   <div
                     key={i}
-                    className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40"
+                    className={cn(
+                      'bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40',
+                      savedIndices.has(i) && 'opacity-60'
+                    )}
                   >
                     {editingIndex === i && editBuffer ? (
                       <div className="flex flex-col gap-2.5">
@@ -685,6 +736,11 @@ function AIFoodLoggerModal({
                             Re-analise com IA antes de confirmar
                           </p>
                         )}
+                        {bufferError && (
+                          <p className="text-[11px] text-red-500 dark:text-red-400 text-center -mb-1">
+                            {bufferError}
+                          </p>
+                        )}
                         <div className="flex gap-2 pt-0.5">
                           <button
                             type="button"
@@ -729,14 +785,20 @@ function AIFoodLoggerModal({
                             <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                               {food.calories} kcal
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => enterEditMode(i)}
-                              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-                              title="Editar"
-                            >
-                              <Pencil size={11} />
-                            </button>
+                            {savedIndices.has(i) ? (
+                              <span title="Já salvo" className="flex items-center text-emerald-500">
+                                <CheckCircle2 size={13} />
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => enterEditMode(i)}
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil size={11} />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-3">
@@ -806,7 +868,9 @@ function AIFoodLoggerModal({
               )}
 
               <Button onClick={handleConfirm} loading={saving} className="w-full">
-                Confirmar e salvar
+                {savedIndices.size > 0 && savedIndices.size < editedFoods.length
+                  ? `Salvar restantes (${editedFoods.length - savedIndices.size})`
+                  : 'Confirmar e salvar'}
               </Button>
             </div>
           )}
