@@ -63,7 +63,7 @@ Campos obrigatórios:
 - trainingLoad: "leve" | "moderada" | "alta" | "muito alta"
 - confidence: "baixa" | "média" | "alta"
 - metValue: decimal com 1 casa (ex: 5.5)
-- summary: frase curta descritiva (máx 80 chars)`;
+- summary: frase curta descritiva (máx 80 chars). NUNCA use aspas duplas (") dentro do texto do summary — isso quebra o JSON. Não use nenhum tipo de aspas para dar ênfase a palavras.`;
 
 function extractJSON(raw: string): Record<string, unknown> {
   const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
@@ -86,6 +86,38 @@ function extractJSON(raw: string): Record<string, unknown> {
     }
     throw new Error('No valid JSON object found in response');
   }
+}
+
+// Last-resort recovery for when the model's JSON is well-formed enough to be
+// obviously the right shape but fails strict JSON.parse — most commonly an
+// unescaped double quote inside the free-text "summary" field. Since the
+// schema is fixed and flat, each field can be pulled out with a targeted
+// regex instead of giving up and surfacing a parse error to the user.
+function recoverWorkoutFields(raw: string): Record<string, unknown> | null {
+  const numberField = (key: string): number | undefined => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`));
+    return m ? Number(m[1]) : undefined;
+  };
+  const enumField = (key: string): string | undefined => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`));
+    return m ? m[1] : undefined;
+  };
+
+  const estimatedCalories = numberField('estimatedCalories');
+  if (estimatedCalories === undefined) return null;
+
+  // Grab everything between the opening quote and the last quote before the
+  // object closes, rather than stopping at the first (possibly inner) quote.
+  const summaryMatch = raw.match(/"summary"\s*:\s*"([\s\S]*)"\s*\}/);
+
+  return {
+    estimatedCalories,
+    intensity: enumField('intensity') ?? 'moderada',
+    trainingLoad: enumField('trainingLoad') ?? 'moderada',
+    confidence: enumField('confidence') ?? 'média',
+    metValue: numberField('metValue') ?? 0,
+    summary: summaryMatch ? summaryMatch[1].trim() : '',
+  };
 }
 
 export async function POST(req: Request) {
@@ -186,7 +218,11 @@ export async function POST(req: Request) {
       data = extractJSON(raw);
     } catch (parseErr) {
       console.error('Workout analyze: JSON parse error', parseErr, 'raw:', raw.slice(0, 300));
-      return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      const recovered = recoverWorkoutFields(raw);
+      if (!recovered) {
+        return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      }
+      data = recovered;
     }
 
     if (!data.estimatedCalories) {
