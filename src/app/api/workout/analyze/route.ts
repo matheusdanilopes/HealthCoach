@@ -159,7 +159,11 @@ export async function POST(req: Request) {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           config: {
             systemInstruction: SYSTEM,
-            maxOutputTokens: 300,
+            // The JSON payload itself is small (~150 tokens), but newer Gemini/Groq
+            // models can spend part of the output budget on hidden reasoning before
+            // writing it — a tight budget here truncates the JSON mid-object and
+            // extractJSON below fails with "Failed to parse AI response".
+            maxOutputTokens: 800,
             temperature: 0.15,
           },
         })
@@ -170,7 +174,7 @@ export async function POST(req: Request) {
       const geminiMsg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
       console.error('Workout analyze: Gemini failed, falling back to Groq:', geminiMsg);
       try {
-        raw = await callGroq(SYSTEM, [{ text: prompt }], 300);
+        raw = await callGroq(SYSTEM, [{ text: prompt }], 800);
       } catch (groqErr) {
         console.error('Workout analyze: Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
         throw geminiErr;
@@ -180,7 +184,8 @@ export async function POST(req: Request) {
     let data: Record<string, unknown>;
     try {
       data = extractJSON(raw);
-    } catch {
+    } catch (parseErr) {
+      console.error('Workout analyze: JSON parse error', parseErr, 'raw:', raw.slice(0, 300));
       return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
     }
 
