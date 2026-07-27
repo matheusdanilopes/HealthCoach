@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
+import { callGroq } from '@/lib/groq';
 
 let gemini: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
@@ -62,7 +63,7 @@ Campos obrigatórios:
 - trainingLoad: "leve" | "moderada" | "alta" | "muito alta"
 - confidence: "baixa" | "média" | "alta"
 - metValue: decimal com 1 casa (ex: 5.5)
-- summary: frase curta descritiva (máx 80 chars)`;
+- summary: frase curta descritiva (máx 80 chars). NUNCA use aspas duplas (") dentro do texto do summary — isso quebra o JSON. Não use nenhum tipo de aspas para dar ênfase a palavras.`;
 
 function extractJSON(raw: string): Record<string, unknown> {
   const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
@@ -87,12 +88,58 @@ function extractJSON(raw: string): Record<string, unknown> {
   }
 }
 
+// Last-resort recovery for when the model's JSON is well-formed enough to be
+// obviously the right shape but fails strict JSON.parse — most commonly an
+// unescaped double quote inside the free-text "summary" field. Since the
+// schema is fixed and flat, each field can be pulled out with a targeted
+// regex instead of giving up and surfacing a parse error to the user.
+function recoverWorkoutFields(raw: string): Record<string, unknown> | null {
+  const numberField = (key: string): number | undefined => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`));
+    return m ? Number(m[1]) : undefined;
+  };
+  const enumField = (key: string): string | undefined => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`));
+    return m ? m[1] : undefined;
+  };
+
+  const estimatedCalories = numberField('estimatedCalories');
+  if (estimatedCalories === undefined) return null;
+
+  // Grab everything between the opening quote and the last quote before the
+  // object closes, rather than stopping at the first (possibly inner) quote.
+  const summaryMatch = raw.match(/"summary"\s*:\s*"([\s\S]*)"\s*\}/);
+
+  return {
+    estimatedCalories,
+    intensity: enumField('intensity') ?? 'moderada',
+    trainingLoad: enumField('trainingLoad') ?? 'moderada',
+    confidence: enumField('confidence') ?? 'média',
+    metValue: numberField('metValue') ?? 0,
+    summary: summaryMatch ? summaryMatch[1].trim() : '',
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await req.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Não foi possível ler a requisição. Tente novamente.' },
+        { status: 400 }
+      );
+    }
+
+    const durationMinutes = Number(body.durationMinutes);
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      return NextResponse.json({ error: 'Duração do treino inválida.' }, { status: 400 });
+    }
 
     const [{ data: profile }, { data: bodyMetrics }] = await Promise.all([
       supabase
@@ -115,7 +162,7 @@ export async function POST(req: Request) {
     if (body.description?.trim())   lines.push(`- Descrição livre: ${body.description.trim()}`);
     if (body.workoutType)           lines.push(`- Tipo: ${body.workoutType}`);
     if (body.intensity)             lines.push(`- Intensidade declarada: ${body.intensity}`);
-    if (body.durationMinutes)       lines.push(`- Duração: ${body.durationMinutes} minutos`);
+    lines.push(`- Duração: ${durationMinutes} minutos`);
     if (body.heartRate)             lines.push(`- FC média: ${body.heartRate} bpm`);
     if (body.distanceKm)            lines.push(`- Distância: ${body.distanceKm} km`);
     if (body.loadKg)                lines.push(`- Carga total movimentada: ${body.loadKg} kg`);
@@ -134,26 +181,48 @@ export async function POST(req: Request) {
     if (bodyMetrics?.body_fat)      lines.push(`- Gordura corporal: ${bodyMetrics.body_fat}%`);
     if (bodyMetrics?.muscle_mass)   lines.push(`- Massa muscular: ${bodyMetrics.muscle_mass} kg`);
 
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: [{ role: 'user', parts: [{ text: lines.join('\n') }] }],
-        config: {
-          systemInstruction: SYSTEM,
-          maxOutputTokens: 300,
-          temperature: 0.15,
-        },
-      })
-    );
+    const prompt = lines.join('\n');
 
-    const raw = response.text ?? '';
-    if (!raw) return NextResponse.json({ error: 'Empty response from AI' }, { status: 500 });
+    let raw: string;
+    try {
+      const response = await withGeminiRetry(() =>
+        getGemini().models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            systemInstruction: SYSTEM,
+            // The JSON payload itself is small (~150 tokens), but newer Gemini/Groq
+            // models can spend part of the output budget on hidden reasoning before
+            // writing it — a tight budget here truncates the JSON mid-object and
+            // extractJSON below fails with "Failed to parse AI response".
+            maxOutputTokens: 800,
+            temperature: 0.15,
+          },
+        })
+      );
+      raw = response.text ?? '';
+      if (!raw) throw new Error('Empty response from AI');
+    } catch (geminiErr) {
+      const geminiMsg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
+      console.error('Workout analyze: Gemini failed, falling back to Groq:', geminiMsg);
+      try {
+        raw = await callGroq(SYSTEM, [{ text: prompt }], 800);
+      } catch (groqErr) {
+        console.error('Workout analyze: Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
+        throw geminiErr;
+      }
+    }
 
     let data: Record<string, unknown>;
     try {
       data = extractJSON(raw);
-    } catch {
-      return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+    } catch (parseErr) {
+      console.error('Workout analyze: JSON parse error', parseErr, 'raw:', raw.slice(0, 300));
+      const recovered = recoverWorkoutFields(raw);
+      if (!recovered) {
+        return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      }
+      data = recovered;
     }
 
     if (!data.estimatedCalories) {

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   Sparkles, RotateCcw, Flame,
   ChevronRight, ChevronLeft,
-  Plus, Minus,
+  Plus, Minus, AlertTriangle,
 } from 'lucide-react';
 import type { FoodLog } from '@/types';
 
@@ -38,6 +38,7 @@ const INTENSITIES = [
 type Intensity = typeof INTENSITIES[number]['value'];
 
 const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
+const ANALYZE_TIMEOUT_MS = 45_000;
 
 interface WorkoutAnalysis {
   estimatedCalories: number;
@@ -105,6 +106,15 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
   const [result, setResult] = useState<WorkoutAnalysis | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  function handleClose() {
+    if (result && !saving) {
+      setConfirmClose(true);
+    } else {
+      onClose();
+    }
+  }
 
   function adjustDuration(delta: number) {
     setDuration((prev) => {
@@ -118,6 +128,8 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
     setAnalyzing(true);
     setError(null);
     setStep(3);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
     try {
       const res = await fetch('/api/workout/analyze', {
         method: 'POST',
@@ -133,14 +145,23 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
           rpe:             rpe             ? parseInt(rpe)             : undefined,
           smartwatchKcal:  smartwatchKcal  ? parseInt(smartwatchKcal)  : undefined,
         }),
+        signal: controller.signal,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? 'Erro desconhecido');
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? `Erro ao analisar (HTTP ${res.status}).`);
+      if (!json) throw new Error('Resposta inválida do servidor. Tente novamente.');
       setResult(json as WorkoutAnalysis);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError('A análise demorou demais e foi cancelada. Verifique sua conexão e tente novamente.');
+      } else if (e instanceof TypeError) {
+        setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      }
       setStep(2);
     } finally {
+      clearTimeout(timeoutId);
       setAnalyzing(false);
     }
   }
@@ -148,6 +169,7 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
   async function handleConfirm() {
     if (!result) return;
     setSaving(true);
+    setError(null);
     try {
       const found      = WORKOUT_TYPES.find((t) => t.value === workoutType);
       const emoji      = found?.emoji ?? '🏃';
@@ -165,11 +187,14 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
           log_date:  date,
         }),
       });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+      if (!data) throw new Error('Resposta inválida do servidor ao salvar.');
 
-      if (!res.ok) return;
-      const log = await res.json() as FoodLog;
-      onAdded(log);
+      onAdded(data as FoodLog);
       onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível salvar o treino. Tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -178,7 +203,38 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
   const selectedType = WORKOUT_TYPES.find((t) => t.value === workoutType);
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={handleClose} title="Registrar treino">
+      {confirmClose ? (
+        <div className="flex flex-col items-center gap-5 py-3">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="h-10 w-10 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+              <AlertTriangle size={18} className="text-amber-500" />
+            </div>
+            <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-200">
+              Sair sem salvar?
+            </p>
+            <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              O treino analisado ainda não foi salvo e será descartado.
+            </p>
+          </div>
+          <div className="flex gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => setConfirmClose(false)}
+              className="flex-1 h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all"
+            >
+              Continuar
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-10 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 text-[13px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all"
+            >
+              Sair mesmo assim
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-col">
 
         {/* Progress bar (steps 0-2) */}
@@ -598,12 +654,17 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
                     Confirmar treino
                   </Button>
                 </div>
+
+                {error && (
+                  <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
+                )}
               </>
             ) : null}
           </div>
         )}
 
       </div>
+      )}
     </Modal>
   );
 }
