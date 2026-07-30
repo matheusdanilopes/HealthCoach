@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { cn, suggestMealType } from '@/lib/utils';
-import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets } from 'lucide-react';
+import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets, Mic, Square } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
 import type { FoodLog, MealType } from '@/types';
@@ -43,8 +43,40 @@ const MAX_IMAGE_MB = 15;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ANALYZE_TIMEOUT_MS = 45_000;
 
+const TAB_LABELS: Record<'text' | 'image' | 'manual' | 'voice', string> = {
+  text: 'Texto',
+  image: 'Imagem',
+  manual: 'Manual',
+  voice: 'Voz',
+};
+
 const inputCls =
   'w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400';
+
+interface SpeechRecognitionResultLike {
+  0: { transcript: string };
+}
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 function resolveItemHydration(item: FoodItem): number {
   // Use AI-returned value if present and positive
@@ -74,10 +106,20 @@ function AIFoodLoggerModal({
   date,
   onAdded,
 }: AIFoodLoggerProps) {
-  const [tab, setTab] = useState<'text' | 'image'>('text');
+  const [tab, setTab] = useState<'text' | 'image' | 'manual' | 'voice'>('text');
   const [mealType, setMealType] = useState<MealType | null>(defaultMeal ?? null);
   const [mealError, setMealError] = useState(false);
   const [textInput, setTextInput] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualQuantity, setManualQuantity] = useState('');
+  const [manualCalories, setManualCalories] = useState('');
+  const [manualProtein, setManualProtein] = useState('');
+  const [manualCarbs, setManualCarbs] = useState('');
+  const [manualFat, setManualFat] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [voiceSupported] = useState(
+    () => typeof window !== 'undefined' && !!getSpeechRecognitionCtor()
+  );
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -98,6 +140,7 @@ function AIFoodLoggerModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   // Merge AI hydration with local fallback detection whenever a new result comes in.
   if (result !== prevResult) {
@@ -122,6 +165,8 @@ function AIFoodLoggerModal({
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [textInput]);
+
+  useEffect(() => () => recognitionRef.current?.stop(), []);
 
   const computedTotal = useMemo(
     () =>
@@ -260,10 +305,56 @@ function AIFoodLoggerModal({
     setResult(null);
   }
 
-  function switchTab(t: 'text' | 'image') {
+  function switchTab(t: 'text' | 'image' | 'manual' | 'voice') {
+    if (recording) recognitionRef.current?.stop();
     setTab(t);
     setResult(null);
     setError(null);
+  }
+
+  function toggleRecording() {
+    if (recording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return;
+    const recognition = new Ctor();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) transcript += event.results[i][0].transcript;
+      setTextInput(transcript);
+    };
+    recognition.onerror = () => setRecording(false);
+    recognition.onend = () => setRecording(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setRecording(true);
+    setError(null);
+  }
+
+  function addManualFood() {
+    if (!manualName.trim() || !manualCalories) return;
+    const food: FoodItem = {
+      name: manualName.trim(),
+      quantity: manualQuantity.trim(),
+      calories: Math.round(Number(manualCalories) || 0),
+      protein: Number(manualProtein) || 0,
+      carbs: Number(manualCarbs) || 0,
+      fat: Number(manualFat) || 0,
+      hydration_ml: 0,
+    };
+    setError(null);
+    setResult({
+      foods: [food],
+      totalCalories: food.calories,
+      totalProtein: food.protein,
+      totalCarbs: food.carbs,
+      totalFat: food.fat,
+    });
   }
 
   async function compressImage(dataUrl: string): Promise<{ base64: string; mimeType: string }> {
@@ -303,7 +394,7 @@ function AIFoodLoggerModal({
     setError(null);
     try {
       let body: Record<string, unknown>;
-      if (tab === 'text') {
+      if (tab === 'text' || tab === 'voice') {
         if (!textInput.trim()) return;
         body = { type: 'text', description: textInput.trim() };
       } else {
@@ -409,7 +500,12 @@ function AIFoodLoggerModal({
     setSaving(false);
   }
 
-  const canAnalyze = tab === 'text' ? textInput.trim().length > 0 : !!imagePreview;
+  const canAnalyze =
+    tab === 'text' || tab === 'voice'
+      ? textInput.trim().length > 0
+      : tab === 'image'
+      ? !!imagePreview
+      : false;
 
   return (
     <Modal open={open} onClose={handleClose} title="Registrar refeição com IA">
@@ -460,27 +556,51 @@ function AIFoodLoggerModal({
           {/* Mode tabs */}
           {!result && (
             <div className="flex bg-zinc-100 dark:bg-zinc-800/60 rounded-xl p-1 gap-1">
-              {(['text', 'image'] as const).map((t) => (
+              {(['text', 'image', 'manual', 'voice'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => switchTab(t)}
                   className={cn(
-                    'flex-1 py-2 rounded-lg text-[13px] font-medium transition-all',
+                    'flex-1 py-2 rounded-lg text-[12px] font-medium transition-all whitespace-nowrap',
                     tab === t
                       ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
                   )}
                 >
-                  {t === 'text' ? 'Texto' : 'Imagem'}
+                  {TAB_LABELS[t]}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Text input */}
-          {!result && tab === 'text' && (
+          {/* Text / Voice input */}
+          {!result && (tab === 'text' || tab === 'voice') && (
             <div className="flex flex-col gap-3">
+              {tab === 'voice' && (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    disabled={!voiceSupported}
+                    className={cn(
+                      'h-16 w-16 rounded-full flex items-center justify-center transition-all disabled:opacity-40 disabled:pointer-events-none',
+                      recording
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
+                        : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                    )}
+                  >
+                    {recording ? <Square size={20} /> : <Mic size={22} />}
+                  </button>
+                  <p className="text-[12px] text-zinc-500 dark:text-zinc-400 text-center">
+                    {!voiceSupported
+                      ? 'Reconhecimento de voz não suportado neste navegador.'
+                      : recording
+                      ? 'Ouvindo... toque para parar'
+                      : 'Toque para falar o que você comeu'}
+                  </p>
+                </div>
+              )}
               <textarea
                 ref={textareaRef}
                 value={textInput}
@@ -499,6 +619,84 @@ function AIFoodLoggerModal({
               <Button onClick={analyze} loading={analyzing} disabled={!canAnalyze} className="w-full gap-2">
                 <Sparkles size={14} />
                 Analisar com IA
+              </Button>
+            </div>
+          )}
+
+          {/* Manual input */}
+          {!result && tab === 'manual' && (
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Alimento</span>
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="Ex: 2 ovos mexidos"
+                  className={inputCls}
+                />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Quantidade (opcional)</span>
+                <input
+                  type="text"
+                  value={manualQuantity}
+                  onChange={(e) => setManualQuantity(e.target.value)}
+                  placeholder="Ex: 1 unidade"
+                  className={inputCls}
+                />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Calorias (kcal)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={manualCalories}
+                  onChange={(e) => setManualCalories(e.target.value)}
+                  placeholder="0"
+                  className={inputCls}
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Proteína (g)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={manualProtein}
+                    onChange={(e) => setManualProtein(e.target.value)}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Carbs (g)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={manualCarbs}
+                    onChange={(e) => setManualCarbs(e.target.value)}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Gordura (g)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={manualFat}
+                    onChange={(e) => setManualFat(e.target.value)}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </label>
+              </div>
+              <Button onClick={addManualFood} disabled={!manualName.trim() || !manualCalories} className="w-full">
+                Adicionar
               </Button>
             </div>
           )}
