@@ -10,16 +10,17 @@ import {
   answerCallbackQuery,
   escapeHtml,
   openAppButton,
-  sendMessage,
   waterButtons,
+  type InlineKeyboard,
 } from '@/lib/telegram';
+import { cleanupExpiredMessages, deleteNow, sendTracked } from '@/lib/telegram-messages';
 
 type TgUser = { id: number; username?: string; first_name?: string };
 type TgChat = { id: number; type: string };
 type TgUpdate = {
   update_id: number;
   message?: { message_id: number; chat: TgChat; from?: TgUser; text?: string };
-  callback_query?: { id: string; from: TgUser; message?: { chat: TgChat }; data?: string };
+  callback_query?: { id: string; from: TgUser; message?: { message_id: number; chat: TgChat }; data?: string };
 };
 
 const HELP = [
@@ -30,6 +31,11 @@ const HELP = [
   '',
   'Preferências e horário silencioso: app → Notificações.',
 ].join('\n');
+
+// Bot answers to commands are short-lived (10 min by default) to keep the chat clean.
+async function reply(chatId: number, html: string, keyboard?: InlineKeyboard, ttlMin?: number) {
+  await sendTracked(chatId, html, 'reply', keyboard, ttlMin);
+}
 
 function validSecret(req: Request): boolean {
   const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -54,7 +60,7 @@ async function waterProgressText(userId: string): Promise<string> {
 async function handleStart(chat: TgChat, from: TgUser | undefined, token: string | undefined) {
   if (!token) {
     const linked = await userIdForChat(chat.id);
-    await sendMessage(chat.id, linked
+    await reply(chat.id, linked
       ? `✅ Este chat já está conectado ao HealthCoach.\n\n${HELP}`
       : '👋 Olá! Para receber suas notificações aqui, abra o app em <b>Notificações → Conectar Telegram</b>.');
     return;
@@ -68,7 +74,7 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
   const link = data as { user_id: string; link_token_expires_at: string | null } | null;
 
   if (!link || !link.link_token_expires_at || new Date(link.link_token_expires_at) < new Date()) {
-    await sendMessage(chat.id, '⚠️ Este link expirou ou já foi usado. Gere um novo no app em <b>Notificações → Conectar Telegram</b>.');
+    await reply(chat.id, '⚠️ Este link expirou ou já foi usado. Gere um novo no app em <b>Notificações → Conectar Telegram</b>.');
     return;
   }
 
@@ -88,12 +94,12 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
 
   if (error) {
     console.error('[telegram] link failed:', error.message);
-    await sendMessage(chat.id, '❌ Não consegui conectar agora. Tente gerar um novo link no app.');
+    await reply(chat.id, '❌ Não consegui conectar agora. Tente gerar um novo link no app.');
     return;
   }
 
   const targets = await getUserTargets(link.user_id);
-  await sendMessage(
+  await reply(
     chat.id,
     [
       `✅ <b>Pronto, ${escapeHtml(targets.firstName)}!</b> Seu HealthCoach está conectado.`,
@@ -103,6 +109,7 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
       HELP,
     ].join('\n'),
     [waterButtons(), openAppButton('⚙️ Preferências', '/notifications')].filter((r) => r.length > 0),
+    60,
   );
 }
 
@@ -114,41 +121,41 @@ async function handleCommand(chat: TgChat, from: TgUser | undefined, text: strin
 
   const userId = await userIdForChat(chat.id);
   if (!userId) {
-    await sendMessage(chat.id, 'Este chat não está conectado. Abra o app em <b>Notificações → Conectar Telegram</b>.');
+    await reply(chat.id, 'Este chat não está conectado. Abra o app em <b>Notificações → Conectar Telegram</b>.');
     return;
   }
 
   switch (cmd) {
     case '/resumo': {
       const [targets, day] = await Promise.all([getUserTargets(userId), getDayStatus(userId, brazilToday())]);
-      await sendMessage(chat.id, buildStatusMessage(targets, day), [waterButtons(), openAppButton('📊 Abrir o app', '/dashboard')].filter((r) => r.length > 0));
+      await reply(chat.id, buildStatusMessage(targets, day), [waterButtons(), openAppButton('📊 Abrir o app', '/dashboard')].filter((r) => r.length > 0));
       return;
     }
     case '/agua':
     case '/água': {
       const ml = args[0] ? parseInt(args[0].replace(/\D/g, ''), 10) : NaN;
       if (Number.isNaN(ml)) {
-        await sendMessage(chat.id, '💧 Quanto você bebeu?', [waterButtons(undefined, [200, 300]), waterButtons(undefined, [500, 750])]);
+        await reply(chat.id, '💧 Quanto você bebeu?', [waterButtons(undefined, [200, 300]), waterButtons(undefined, [500, 750])]);
         return;
       }
       if (!(await addWaterLog(userId, ml))) {
-        await sendMessage(chat.id, `⚠️ Informe um valor entre 1 e ${MAX_WATER_ML}ml. Ex.: /agua 300`);
+        await reply(chat.id, `⚠️ Informe um valor entre 1 e ${MAX_WATER_ML}ml. Ex.: /agua 300`);
         return;
       }
-      await sendMessage(chat.id, `✅ +${ml}ml registrados · ${await waterProgressText(userId)}`);
+      await reply(chat.id, `✅ +${ml}ml registrados · ${await waterProgressText(userId)}`);
       return;
     }
     case '/desconectar': {
       await supabase.from('telegram_links').update({ chat_id: null, updated_at: new Date().toISOString() }).eq('user_id', userId);
-      await sendMessage(chat.id, '🔕 Desconectado. Você não vai mais receber notificações aqui. Para voltar, conecte de novo pelo app.');
+      await reply(chat.id, '🔕 Desconectado. Você não vai mais receber notificações aqui. Para voltar, conecte de novo pelo app.');
       return;
     }
     case '/ajuda':
     case '/help':
-      await sendMessage(chat.id, HELP);
+      await reply(chat.id, HELP);
       return;
     default:
-      await sendMessage(chat.id, `Não entendi 🤔\n\n${HELP}`);
+      await reply(chat.id, `Não entendi 🤔\n\n${HELP}`);
   }
 }
 
@@ -169,6 +176,8 @@ async function handleCallback(cb: NonNullable<TgUpdate['callback_query']>) {
     }
     if (logId) await markNotificationActed(logId, userId);
     await answerCallbackQuery(cb.id, `✅ +${ml}ml · ${await waterProgressText(userId)}`);
+    // The message did its job — remove it so the chat doesn't pile up.
+    if (cb.message) await deleteNow(chatId, cb.message.message_id);
     return;
   }
   await answerCallbackQuery(cb.id);
@@ -190,7 +199,11 @@ export async function POST(req: Request) {
     if (update.callback_query) {
       await handleCallback(update.callback_query);
     } else if (update.message?.text && update.message.chat.type === 'private') {
-      await handleCommand(update.message.chat, update.message.from, update.message.text);
+      const { chat, from, text, message_id } = update.message;
+      await handleCommand(chat, from, text);
+      // The user's own command is no longer useful once processed.
+      await deleteNow(chat.id, message_id);
+      await cleanupExpiredMessages(chat.id);
     }
   } catch (err) {
     console.error('[telegram] webhook error:', err);
