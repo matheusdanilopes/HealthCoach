@@ -83,6 +83,10 @@ async function callGemini(opts: GenerateOptions): Promise<string> {
     })
   );
   const text = response.text ?? '';
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (text && finishReason === 'MAX_TOKENS') {
+    console.warn(`[${opts.label}] Gemini hit maxOutputTokens (${opts.maxOutputTokens}); response may be truncated`);
+  }
   if (!text) {
     const reason = response.candidates?.[0]?.finishReason ?? 'unknown';
     throw new Error(`Empty response from Gemini (finishReason=${reason})`);
