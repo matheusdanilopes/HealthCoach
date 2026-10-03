@@ -20,11 +20,18 @@ function toGroqContent(parts: GroqPart[]) {
 
 // Fallback provider for when Gemini is unavailable. Groq exposes an OpenAI-compatible
 // chat completions API, so requests are translated from Gemini's `parts` shape here.
+export interface GroqOptions {
+  maxOutputTokens?: number;
+  temperature?: number;
+  maxAttempts?: number;
+  /** Per-attempt ceiling so a hung request doesn't hold the function open. */
+  timeoutMs?: number;
+}
+
 export async function callGroq(
   system: string,
   parts: GroqPart[],
-  maxOutputTokens = 2048,
-  maxAttempts = 2
+  { maxOutputTokens = 2048, temperature = 0.2, maxAttempts = 2, timeoutMs = 30_000 }: GroqOptions = {}
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY not configured');
@@ -36,23 +43,33 @@ export async function callGroq(
 
   let delay = 500;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: toGroqContent(parts) },
-        ],
-        temperature: 0.2,
-        max_completion_tokens: maxOutputTokens,
-        ...(isQwenReasoningModel ? { reasoning_effort: 'none' } : {}),
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: toGroqContent(parts) },
+          ],
+          temperature,
+          max_completion_tokens: maxOutputTokens,
+          ...(isQwenReasoningModel ? { reasoning_effort: 'none' } : {}),
+        }),
+      });
+    } catch (err) {
+      // Network failure or timeout — retry like a 5xx.
+      if (attempt === maxAttempts) throw err;
+      await new Promise((r) => setTimeout(r, delay));
+      delay *= 2;
+      continue;
+    }
 
     if (res.ok) {
       const json = await res.json();

@@ -1,33 +1,8 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
+import { generateJSON } from '@/lib/ai';
 import { brazilToday, brazilDayOfWeek, brazilNDaysAgo, brazilHour } from '@/lib/timezone';
-
-let gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  return (gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractJSON(raw: string): any {
-  const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-  try { return JSON.parse(stripped); } catch { /**/ }
-  const start = stripped.indexOf('{');
-  if (start === -1) throw new Error('No JSON');
-  let depth = 0, inString = false, escape = false;
-  for (let i = start; i < stripped.length; i++) {
-    const ch = stripped[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') depth++;
-    else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
-  }
-  throw new Error('No valid JSON');
-}
 
 const VALID_TYPES      = ['nutrition', 'hydration', 'workout', 'body', 'behavior', 'motivation'];
 const VALID_PRIORITIES = ['informativo', 'atencao', 'positivo', 'recomendacao'];
@@ -471,13 +446,8 @@ Retorne APENAS JSON válido (sem markdown):
 {"type":"nutrition|hydration|workout|body|behavior|motivation","priority":"informativo|atencao|positivo|recomendacao","title":"máx 8 palavras com dado real","message":"2-3 frases com MÍNIMO 2 valores numéricos reais (ex: 187g proteína, 1.800ml, 2.100kcal), causa e recomendação clara","expanded":"2-3 frases que aprofundam com dados ou correlações (ou null)","cta":"texto curto para abrir chat ou null","nextSteps":["emoji + ação com quantidade específica (ex: Beber 500ml agora)","emoji + ação com quantidade específica","emoji + ação com quantidade específica"],"mealIdea":{"title":"título","items":["item 1 com quantidade","item 2","item 3"],"protein":35}}
 OBRIGATÓRIO: message deve conter números reais dos dados acima. nextSteps devem ter quantidade ou especificidade (não "beba mais água" — sim "💧 Beber 400ml agora"). mealIdea = inclua SOMENTE quando proteína ou calorias estiverem abaixo da meta e uma sugestão de refeição for pertinente.`;
 
-    console.log(`[insights] Calling Gemini | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: [{ role: 'user', parts: [{ text: contextPrompt }] }],
-        config: {
-          systemInstruction: `Você é um health coach nutricional empático, inteligente e motivador.
+    console.log(`[insights] Calling AI | dow=${DOW_NAME[dow]} | focus=${urgentNote ? 'urgent' : 'scheduled'} | recentTypes=${recentTypes} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
+    const insightSystem = `Você é um health coach nutricional empático, inteligente e motivador.
 REGRAS:
 1. Tom padrão: positivo, encorajador, sem julgamentos.
    → BRONCA FORTE / PUXÃO DE ORELHA: treinador pessoal — direto, firme, sem suavizar. Diga "você passou da conta". Foco no comportamento, não na pessoa. Termine com ação concreta. Proibido: floreios, "está tudo bem", "acontece com todos".
@@ -491,15 +461,9 @@ REGRAS:
 8. mealIdea: inclua APENAS quando proteína ou calorias estiverem abaixo da meta E uma sugestão for pertinente. Omita nos demais casos.
 9. message = 2-3 frases com dados reais. expanded = 2-3 frases que aprofundam ou correlacionam (pode ser null).
 10. cta: rótulo curto para abrir o chat. Use null se não couber.
-11. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`,
-          maxOutputTokens: 800,
-          temperature: 0.7,
-        },
-      })
-    );
+11. Retorne SOMENTE JSON válido, sem texto fora do JSON, sem markdown.`;
 
-    const raw = response.text ?? '';
-    let parsed: {
+    type InsightPayload = {
       type: string;
       priority: string;
       title: string;
@@ -509,13 +473,29 @@ REGRAS:
       nextSteps?: unknown[];
       mealIdea?: unknown;
     };
+    let parsed: InsightPayload;
+    // A generic fallback isn't persisted, so the next load retries the AI
+    // instead of serving it from the 2-hour cache.
+    let isFallback = false;
     try {
-      parsed = extractJSON(raw);
-    } catch {
+      parsed = await generateJSON<InsightPayload>({
+        label: 'insights',
+        system: insightSystem,
+        parts: [{ text: contextPrompt }],
+        // Room for hidden reasoning on newer models plus the full payload
+        // (nextSteps + mealIdea); 800 truncated the JSON.
+        maxOutputTokens: 2048,
+        temperature: 0.7,
+        validate: (d) =>
+          typeof d.title === 'string' && d.title.trim() !== '' &&
+          typeof d.message === 'string' && d.message.trim() !== '',
+      });
+    } catch (aiErr) {
+      console.error('[insights] AI failed, using fallback:', aiErr instanceof Error ? aiErr.message : aiErr);
       // Rotate fallback based on recent types to avoid showing the same one repeatedly
       const recentTypeSet = new Set(recentTypeList);
-      const fallback = FALLBACK_INSIGHTS.find((f) => !recentTypeSet.has(f.type)) ?? FALLBACK_INSIGHTS[0];
-      parsed = fallback;
+      parsed = FALLBACK_INSIGHTS.find((f) => !recentTypeSet.has(f.type)) ?? FALLBACK_INSIGHTS[0];
+      isFallback = true;
     }
 
     // Safely extract and validate nextSteps
@@ -554,19 +534,21 @@ REGRAS:
       },
     };
 
-    try {
-      const { data: saved, error } = await supabase
-        .from('ai_insights')
-        .insert(insightData)
-        .select()
-        .single();
-      if (!error && saved) {
-        console.log(`[insights] Saved | type=${insightData.type} | priority=${insightData.priority} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
-        return NextResponse.json(saved);
+    if (!isFallback) {
+      try {
+        const { data: saved, error } = await supabase
+          .from('ai_insights')
+          .insert(insightData)
+          .select()
+          .single();
+        if (!error && saved) {
+          console.log(`[insights] Saved | type=${insightData.type} | priority=${insightData.priority} | scores=${nutritionScore}/${hydrationScore}/${consistencyScore}`);
+          return NextResponse.json(saved);
+        }
+        if (error) console.error('[insights] Save error:', error.message);
+      } catch (saveErr) {
+        console.error('[insights] Save failed:', saveErr);
       }
-      if (error) console.error('[insights] Save error:', error.message);
-    } catch (saveErr) {
-      console.error('[insights] Save failed:', saveErr);
     }
 
     // Return unsaved insight so the UI is never empty

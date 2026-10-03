@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI, FunctionCallingConfigMode, Type } from '@google/genai';
+import { FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
+import { callGroq } from '@/lib/groq';
+import { DEFAULT_AI_TIMEOUT_MS, GEMINI_MODEL, aiErrorResponse, getGemini } from '@/lib/ai';
+import { brazilToday } from '@/lib/timezone';
 import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
 
-let gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  return (gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }));
-}
+const MEAL_TYPES = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'];
+const MAX_HISTORY = 20;
+const MAX_MESSAGE_CHARS = 4000;
+// Newer models can spend part of the output budget on hidden reasoning; a
+// tight budget left replies empty or cut mid-sentence.
+const MAX_REPLY_TOKENS = 1024;
+const EMPTY_REPLY = 'Desculpe, não consegui formular uma resposta agora. Pode repetir?';
 
 const LOG_FOOD_DECLARATION = {
   name: 'log_food',
@@ -23,7 +29,7 @@ const LOG_FOOD_DECLARATION = {
       fat: { type: Type.NUMBER, description: 'Gordura em gramas' },
       meal_type: {
         type: Type.STRING,
-        enum: ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'],
+        enum: MEAL_TYPES,
         description: 'Tipo de refeição',
       },
     },
@@ -52,6 +58,42 @@ const FOOD_COACHING_RULES = `INSTRUÇÕES:
 5. Seja conciso — respostas curtas e diretas, com emojis quando apropriado.
 6. Dê feedback sobre o progresso baseado nos dados do contexto.`;
 
+// Keeps only well-formed messages, caps their size and makes the history start
+// with a user turn (the client seeds the chat with an assistant greeting).
+function sanitizeMessages(input: unknown): IncomingMessage[] {
+  if (!Array.isArray(input)) return [];
+  const messages = input
+    .filter((m): m is IncomingMessage =>
+      typeof m === 'object' && m !== null &&
+      (m.role === 'user' || m.role === 'assistant') &&
+      typeof m.content === 'string' && m.content.trim() !== '')
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }))
+    .slice(-MAX_HISTORY);
+  while (messages.length && messages[0].role !== 'user') messages.shift();
+  return messages;
+}
+
+function optionalNumber(value: unknown): number | null {
+  const n = Number(value);
+  return value != null && Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null;
+}
+
+// Text-only fallback when Gemini is down: Groq gets the conversation as a
+// transcript and is told it cannot log food, so it never claims it did.
+async function groqReply(systemInstruction: string, messages: IncomingMessage[]): Promise<string> {
+  const transcript = messages
+    .map((m) => `${m.role === 'user' ? 'Usuário' : 'Coach'}: ${m.content}`)
+    .join('\n\n');
+  return callGroq(
+    `${systemInstruction}
+
+AVISO: o registro automático de alimentos está indisponível agora. NÃO diga que registrou nada; se o usuário relatar uma refeição, dê a estimativa e peça para registrá-la pelo diário.
+Responda somente à última mensagem do usuário, como Coach, sem prefixo.`,
+    [{ text: transcript }],
+    { maxOutputTokens: MAX_REPLY_TOKENS, temperature: 0.7 }
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -60,7 +102,11 @@ export async function POST(req: Request) {
     }
     const user = session.user;
 
-    const { messages }: { messages: IncomingMessage[] } = await req.json();
+    const body = await req.json().catch(() => null);
+    const messages = sanitizeMessages(body?.messages);
+    if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+      return NextResponse.json({ error: 'Mensagem inválida.' }, { status: 400 });
+    }
 
     // Detect intent from the latest user message
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
@@ -83,65 +129,79 @@ ${FOOD_COACHING_RULES}`;
       parts: [{ text: m.content }],
     }));
 
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents,
-        config: {
-          systemInstruction,
-          tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
-          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-          maxOutputTokens: 500,
-          temperature: 0.7,
-        },
-      })
-    );
+    let response;
+    try {
+      response = await withGeminiRetry(() =>
+        getGemini().models.generateContent({
+          model: GEMINI_MODEL,
+          contents,
+          config: {
+            systemInstruction,
+            tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
+            toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+            maxOutputTokens: MAX_REPLY_TOKENS,
+            temperature: 0.7,
+            httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS },
+          },
+        })
+      );
+    } catch (geminiErr) {
+      console.error('[chat] Gemini failed, falling back to Groq:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
+      try {
+        const message = await groqReply(systemInstruction, messages);
+        return NextResponse.json({ message: message.trim() || EMPTY_REPLY, foodLogged: false, foodLog: null });
+      } catch (groqErr) {
+        console.error('[chat] Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
+        throw geminiErr;
+      }
+    }
 
     let foodLogged = false;
     let assistantMessage = '';
     let insertedRow: Record<string, unknown> | null = null;
 
-    const functionCalls = response.functionCalls;
-    if (functionCalls?.length) {
-      const call = functionCalls[0];
-      if (call.name === 'log_food') {
-        const args = call.args as {
-          food_name: string;
-          calories: number;
-          meal_type: string;
-          protein?: number;
-          carbs?: number;
-          fat?: number;
-        };
+    const call = response.functionCalls?.find((c) => c.name === 'log_food');
+    if (call) {
+      const args = (call.args ?? {}) as Record<string, unknown>;
+      const foodName = typeof args.food_name === 'string' ? args.food_name.trim().slice(0, 200) : '';
+      const calories = optionalNumber(args.calories);
+      const mealType = MEAL_TYPES.includes(args.meal_type as string) ? (args.meal_type as string) : 'other';
 
-        const today = new Date().toISOString().split('T')[0];
-        let insertError: unknown = null;
+      let functionResult: string;
+      if (!foodName || calories === null) {
+        // Don't insert a row with a blank name or missing calories.
+        functionResult = 'Erro: nome do alimento ou calorias ausentes. Peça mais detalhes ao usuário.';
+      } else {
         try {
           const { data, error } = await supabase.from('food_logs').insert({
             user_id: user.id,
-            food_name: args.food_name,
-            meal_type: args.meal_type,
-            calories: args.calories,
-            protein: args.protein ?? null,
-            carbs: args.carbs ?? null,
-            fat: args.fat ?? null,
-            log_date: today,
+            food_name: foodName,
+            meal_type: mealType,
+            calories: Math.round(calories),
+            protein: optionalNumber(args.protein),
+            carbs: optionalNumber(args.carbs),
+            fat: optionalNumber(args.fat),
+            // Diary days follow the Brazil calendar, not UTC.
+            log_date: brazilToday(),
           }).select().single();
-          if (error) insertError = error;
+          if (error) console.error('[chat] food_logs insert error:', error.message);
           else insertedRow = data as Record<string, unknown>;
         } catch (e) {
-          insertError = e;
+          console.error('[chat] food_logs insert failed:', e);
         }
+        foodLogged = insertedRow !== null;
+        functionResult = foodLogged
+          ? `Registrado: ${foodName}, ${Math.round(calories)} kcal`
+          : 'Erro ao registrar';
+      }
 
-        foodLogged = !insertError;
-        const functionResult = insertError
-          ? 'Erro ao registrar'
-          : `Registrado: ${args.food_name}, ${args.calories} kcal`;
-
+      // The row may already be saved, so a failed follow-up must not turn into
+      // an error response — the user would resend and log the food twice.
+      try {
         const modelParts = response.candidates?.[0]?.content?.parts ?? [];
         const followUp = await withGeminiRetry(() =>
           getGemini().models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: GEMINI_MODEL,
             contents: [
               ...contents,
               { role: 'model', parts: modelParts },
@@ -150,37 +210,32 @@ ${FOOD_COACHING_RULES}`;
                 parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
               },
             ],
-            config: { systemInstruction, maxOutputTokens: 400, temperature: 0.7 },
+            config: {
+              systemInstruction,
+              maxOutputTokens: MAX_REPLY_TOKENS,
+              temperature: 0.7,
+              httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS },
+            },
           })
         );
-
         assistantMessage = followUp.text ?? '';
+      } catch (followErr) {
+        console.error('[chat] follow-up failed:', followErr instanceof Error ? followErr.message : followErr);
+      }
+
+      if (!assistantMessage.trim()) {
+        assistantMessage = foodLogged
+          ? `✅ Registrei ${foodName} (${Math.round(calories ?? 0)} kcal) no seu diário.`
+          : 'Não consegui registrar esse alimento. Pode me dizer o nome e a quantidade?';
       }
     } else {
       assistantMessage = response.text ?? '';
     }
 
+    if (!assistantMessage.trim()) assistantMessage = EMPTY_REPLY;
+
     return NextResponse.json({ message: assistantMessage, foodLogged, foodLog: insertedRow ?? null });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('Chat API error:', msg);
-    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
-    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
-    if (is503) {
-      return NextResponse.json(
-        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
-        { status: 503 }
-      );
-    }
-    if (is429) {
-      return NextResponse.json(
-        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
-        { status: 429 }
-      );
-    }
-    return NextResponse.json(
-      { error: 'Erro interno. Verifique se a chave GEMINI_API_KEY está configurada.' },
-      { status: 500 }
-    );
+    return aiErrorResponse(error, 'chat', 'Desculpe, tive um problema. Tente novamente.');
   }
 }

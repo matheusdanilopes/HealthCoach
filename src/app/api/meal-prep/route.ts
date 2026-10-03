@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
+import { generateJSON } from '@/lib/ai';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
 
 type GoalType   = 'emagrecimento' | 'manutencao' | 'massa';
@@ -49,30 +48,6 @@ export interface GeneratedPlan {
   porcoes?:            number;
   tempo_preparo_min?:  number;
   tempo_cozimento_min?: number;
-}
-
-let gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  return (gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractJSON(raw: string): any {
-  const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-  try { return JSON.parse(stripped); } catch { /**/ }
-  const start = stripped.indexOf('{');
-  if (start === -1) throw new Error('No JSON');
-  let depth = 0, inString = false, escape = false;
-  for (let i = start; i < stripped.length; i++) {
-    const ch = stripped[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') depth++;
-    else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
-  }
-  throw new Error('No valid JSON');
 }
 
 // Cycles through 6 distinct protein categories so repeated generations stay diverse
@@ -463,36 +438,56 @@ ATENÇÃO: o array "meals" deve ter EXATAMENTE 1 objeto — uma única receita:
 }
 Categorias de shopping_list: "proteinas", "carboidratos", "hortifruti", "temperos", "outros"`;
 
-    console.log(`[meal-prep] Gemini | goal=${config.goal} | budget=${config.budget} | meals=${config.mealCount} | idx=${planIndex}`);
+    console.log(`[meal-prep] AI | goal=${config.goal} | budget=${config.budget} | meals=${config.mealCount} | idx=${planIndex}`);
 
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          systemInstruction: 'Nutricionista de meal prep. Retorne SOMENTE JSON válido, sem texto fora, sem markdown.',
-          maxOutputTokens: 3000,
-          temperature: 0.85,
-        },
-      })
-    );
+    const num = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
 
-    const raw = response.text ?? '';
     let plan: GeneratedPlan;
     try {
-      const parsed = extractJSON(raw);
-      if (!parsed?.meals || !Array.isArray(parsed.meals) || parsed.meals.length === 0) throw new Error('invalid meals');
-      if (!parsed?.shopping_list || !Array.isArray(parsed.shopping_list)) throw new Error('invalid shopping');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parsed = await generateJSON<any>({
+        label: 'meal-prep',
+        system: 'Nutricionista de meal prep. Retorne SOMENTE JSON válido, sem texto fora, sem markdown.',
+        parts: [{ text: prompt }],
+        // Full plan (meals, steps, ingredients, shopping list) is long; 3000
+        // tokens truncated it and silently forced the static fallback.
+        maxOutputTokens: 8192,
+        temperature: 0.85,
+        timeoutMs: 90_000,
+        validate: (d) =>
+          Array.isArray(d?.meals) && d.meals.length > 0 &&
+          d.meals.every((m: unknown) => typeof m === 'object' && m !== null) &&
+          Array.isArray(d?.shopping_list),
+      });
+      const meals: MealItem[] = parsed.meals.map((m: Record<string, unknown>) => ({
+        ...m,
+        name:      String(m.name ?? ''),
+        protein_g: num(m.protein_g),
+        carbs_g:   num(m.carbs_g),
+        fat_g:     num(m.fat_g),
+      }));
+      const avg = (key: 'protein_g' | 'carbs_g' | 'fat_g') =>
+        Math.round(meals.reduce((acc, m) => acc + m[key], 0) / meals.length);
       plan = {
         ...parsed,
+        meals,
+        // Fall back to the per-meal average when the model omits the summary.
+        avg_protein:         num(parsed.avg_protein) || avg('protein_g'),
+        avg_carbs:           num(parsed.avg_carbs)   || avg('carbs_g'),
+        avg_fat:             num(parsed.avg_fat)     || avg('fat_g'),
+        estimated_cost:      num(parsed.estimated_cost),
+        cost_per_meal:       num(parsed.cost_per_meal),
         ingredients:         Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
         steps:               Array.isArray(parsed.steps)       ? parsed.steps       : [],
         porcoes:             parsed.porcoes            ?? config.mealCount,
         tempo_preparo_min:   parsed.tempo_preparo_min  ?? undefined,
         tempo_cozimento_min: parsed.tempo_cozimento_min ?? undefined,
       } as GeneratedPlan;
-    } catch {
-      console.warn('[meal-prep] Gemini parse failed, using fallback');
+    } catch (aiErr) {
+      console.warn('[meal-prep] AI failed, using fallback:', aiErr instanceof Error ? aiErr.message : aiErr);
       plan = getFallback(config.goal, config.mealCount, planIndex, marmitaWeight);
     }
 

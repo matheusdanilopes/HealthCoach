@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
-import { callGroq } from '@/lib/groq';
-
-let gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  return (gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }));
-}
+import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 
 const SYSTEM = `Você é um especialista em ciências do esporte e metabolismo energético. Estime o gasto calórico com máxima precisão e rigor científico.
 
@@ -64,29 +57,6 @@ Campos obrigatórios:
 - confidence: "baixa" | "média" | "alta"
 - metValue: decimal com 1 casa (ex: 5.5)
 - summary: frase curta descritiva (máx 80 chars). NUNCA use aspas duplas (") dentro do texto do summary — isso quebra o JSON. Não use nenhum tipo de aspas para dar ênfase a palavras.`;
-
-function extractJSON(raw: string): Record<string, unknown> {
-  const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-  try {
-    return JSON.parse(stripped);
-  } catch {
-    const start = stripped.indexOf('{');
-    if (start === -1) throw new Error('No JSON found in response');
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = start; i < stripped.length; i++) {
-      const ch = stripped[i];
-      if (escape) { escape = false; continue; }
-      if (ch === '\\' && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{') depth++;
-      else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
-    }
-    throw new Error('No valid JSON object found in response');
-  }
-}
 
 // Last-resort recovery for when the model's JSON is well-formed enough to be
 // obviously the right shape but fails strict JSON.parse — most commonly an
@@ -183,51 +153,45 @@ export async function POST(req: Request) {
 
     const prompt = lines.join('\n');
 
-    let raw: string;
-    try {
-      const response = await withGeminiRetry(() =>
-        getGemini().models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          config: {
-            systemInstruction: SYSTEM,
-            // The JSON payload itself is small (~150 tokens), but newer Gemini/Groq
-            // models can spend part of the output budget on hidden reasoning before
-            // writing it — a tight budget here truncates the JSON mid-object and
-            // extractJSON below fails with "Failed to parse AI response".
-            maxOutputTokens: 800,
-            temperature: 0.15,
-          },
-        })
-      );
-      raw = response.text ?? '';
-      if (!raw) throw new Error('Empty response from AI');
-    } catch (geminiErr) {
-      const geminiMsg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
-      console.error('Workout analyze: Gemini failed, falling back to Groq:', geminiMsg);
-      try {
-        raw = await callGroq(SYSTEM, [{ text: prompt }], 800);
-      } catch (groqErr) {
-        console.error('Workout analyze: Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
-        throw geminiErr;
-      }
-    }
+    const toPositive = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
 
     let data: Record<string, unknown>;
     try {
-      data = extractJSON(raw);
-    } catch (parseErr) {
-      console.error('Workout analyze: JSON parse error', parseErr, 'raw:', raw.slice(0, 300));
-      const recovered = recoverWorkoutFields(raw);
+      data = await generateJSON({
+        label: 'workout-analyze',
+        system: SYSTEM,
+        parts: [{ text: prompt }],
+        // The JSON payload itself is small (~150 tokens), but newer models can
+        // spend part of the output budget on hidden reasoning before writing
+        // it — a tight budget truncates the JSON mid-object.
+        maxOutputTokens: 800,
+        temperature: 0.15,
+        validate: (d) => toPositive(d.estimatedCalories) > 0,
+      });
+    } catch (err) {
+      if (!(err instanceof AIParseError)) throw err;
+      const recovered = err.raws.map(recoverWorkoutFields).find((r) => r !== null);
       if (!recovered) {
-        return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+        return NextResponse.json(
+          { error: 'Não foi possível interpretar a resposta da IA. Tente novamente.' },
+          { status: 500 }
+        );
       }
       data = recovered;
     }
 
-    if (!data.estimatedCalories) {
-      return NextResponse.json({ error: 'Invalid AI response format' }, { status: 500 });
+    if (!toPositive(data.estimatedCalories)) {
+      return NextResponse.json(
+        { error: 'A IA não conseguiu estimar o gasto deste treino. Tente novamente.' },
+        { status: 500 }
+      );
     }
+    data.estimatedCalories = Math.round(toPositive(data.estimatedCalories));
+    data.metValue = Math.round(toPositive(data.metValue) * 10) / 10;
+    data.summary = typeof data.summary === 'string' ? data.summary.slice(0, 120) : '';
 
     // Ensure confidence field has a valid value
     const validConfidence = ['alta', 'média', 'baixa'];
@@ -237,22 +201,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Workout analyze error:', msg);
-    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
-    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
-    if (is503) {
-      return NextResponse.json(
-        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
-        { status: 503 }
-      );
-    }
-    if (is429) {
-      return NextResponse.json(
-        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
-        { status: 429 }
-      );
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return aiErrorResponse(err, 'workout-analyze', 'Erro ao analisar o treino. Tente novamente.');
   }
 }
