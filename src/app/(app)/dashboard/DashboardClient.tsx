@@ -13,7 +13,6 @@ import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
-import { useHydrationReminder } from '@/lib/useHydrationReminder';
 import { cn, todayISO } from '@/lib/utils';
 import type { FoodLog, Profile, WaterLogEntry } from '@/types';
 
@@ -61,8 +60,6 @@ export default function DashboardClient({
     () => foodLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0),
     [foodLogs]
   );
-
-  useHydrationReminder(waterLogs, profile?.target_water_ml ?? 2500, mealHydrationMl);
 
   useEffect(() => {
     const today = todayISO();

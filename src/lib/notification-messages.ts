@@ -1,11 +1,13 @@
-// Humanized notification message system with daily anti-repetition rotation.
+// Telegram message builders (HTML parse mode).
 //
-// pick() is deterministic: same userId + date + seed → same variant.
-// This guarantees the same user never receives the same message two days in a row
-// while keeping behavior reproducible and debuggable.
+// Every message carries the user's real numbers and one concrete next step —
+// generic "remember to log" nudges were the main reason reminders got ignored.
+//
+// pick() is deterministic: same userId + date + seed → same variant, so headlines
+// rotate day to day without randomness that is hard to debug.
 
-const t = (s: string): string => (s.length <= 60  ? s : s.slice(0, 59)  + '…');
-const b = (s: string): string => (s.length <= 180 ? s : s.slice(0, 179) + '…');
+import { escapeHtml } from '@/lib/telegram';
+import type { DayStatus, UserTargets } from '@/lib/day-status';
 
 function pick<T>(variants: T[], userId: string, seed: string, date: string): T {
   const str = userId + seed + date;
@@ -16,260 +18,207 @@ function pick<T>(variants: T[], userId: string, seed: string, date: string): T {
   return variants[Math.abs(h) % variants.length];
 }
 
-// ─── Hydration ────────────────────────────────────────────────────────────────
+const int = (n: number) => Math.round(n).toLocaleString('pt-BR');
+const liters = (ml: number) => `${(ml / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}L`;
+const pct = (v: number, target: number) => (target > 0 ? Math.round((v / target) * 100) : 0);
+const roundTo = (n: number, step: number) => Math.ceil(n / step) * step;
+
+// ─── Daily metrics block (shared by summaries and /resumo) ───────────────────
+
+type Metric = { key: 'water' | 'calories' | 'protein' | 'workout'; line: string; ok: boolean };
+
+function dayMetrics(t: UserTargets, s: DayStatus): Metric[] {
+  const metrics: Metric[] = [];
+
+  const waterPct = pct(s.waterMl, t.waterMl);
+  metrics.push({
+    key:  'water',
+    ok:   waterPct >= 100,
+    line: `💧 Água: <b>${liters(s.waterMl)}</b> / ${liters(t.waterMl)} (${waterPct}%)`,
+  });
+
+  if (t.calories) {
+    const net = s.consumedKcal - s.burnedKcal;
+    const ratio = net / t.calories;
+    const verdict = ratio > 1.1 ? ' — acima da meta' : ratio < 0.8 ? ' — abaixo da meta' : '';
+    metrics.push({
+      key:  'calories',
+      ok:   ratio >= 0.8 && ratio <= 1.1,
+      line: `🔥 Calorias: <b>${int(net)}</b> / ${int(t.calories)} kcal${verdict}`,
+    });
+  }
+
+  if (t.protein) {
+    metrics.push({
+      key:  'protein',
+      ok:   s.protein >= t.protein * 0.9,
+      line: `🥩 Proteína: <b>${int(s.protein)}g</b> / ${int(t.protein)}g`,
+    });
+  }
+
+  metrics.push({
+    key:  'workout',
+    ok:   s.hasWorkout,
+    line: s.hasWorkout ? `💪 Treino: <b>${int(s.burnedKcal)} kcal</b> gastas` : '💪 Treino: nenhum registrado',
+  });
+
+  return metrics;
+}
+
+function metricsBlock(metrics: Metric[]): string {
+  return metrics.map((m) => `${m.ok ? '✅' : '▫️'} ${m.line}`).join('\n');
+}
+
+const FOCUS_TIP: Record<Metric['key'], string> = {
+  water:    'deixe uma garrafa por perto e beba um copo a cada refeição',
+  calories: 'registre as refeições logo após comer para acompanhar o saldo',
+  protein:  'inclua uma fonte de proteína em cada refeição (ovos, carne, iogurte, leguminosas)',
+  workout:  'reserve 30 minutos para se mexer — até uma caminhada conta',
+};
+
+// ─── Morning (goals for today + yesterday recap) ──────────────────────────────
+
+export function buildMorningMessage(t: UserTargets, yesterday: DayStatus, userId: string, date: string): string {
+  const greeting = pick(['☀️ Bom dia', '🌅 Bom dia', '☀️ Começando o dia'], userId, 'morning', date);
+  const lines = [`${greeting}, <b>${escapeHtml(t.firstName)}</b>!`, ''];
+
+  const hadData = yesterday.consumedKcal > 0 || yesterday.waterMl > 0 || yesterday.hasWorkout;
+  if (hadData) {
+    const metrics = dayMetrics(t, yesterday);
+    lines.push('<b>Ontem</b>', metricsBlock(metrics), '');
+    const missed = metrics.find((m) => !m.ok);
+    if (missed) lines.push(`🎯 Foco de hoje: ${FOCUS_TIP[missed.key]}.`, '');
+  }
+
+  const goals = [`💧 ${liters(t.waterMl)} de água`];
+  if (t.calories) goals.push(`🔥 ${int(t.calories)} kcal`);
+  if (t.protein) goals.push(`🥩 ${int(t.protein)}g de proteína`);
+  lines.push(`<b>Metas de hoje:</b> ${goals.join(' · ')}`);
+  lines.push('Comece com um copo de água agora 👇');
+
+  return lines.join('\n');
+}
+
+// ─── Hydration (pace-based) ───────────────────────────────────────────────────
 
 export type HydrationCtx = {
-  name: string;
   totalMl: number;
   targetMl: number;
-  minSince: number;
+  expectedMl: number;       // where the user "should" be at this hour
+  minSinceLast: number | null;
   hour: number;
 };
 
-export function buildHydrationMessage(
-  ctx: HydrationCtx,
-  userId: string,
-  date: string,
-): { title: string; body: string; urgency: 'high' | 'normal' } {
-  const { name: n, totalMl, targetMl, minSince, hour } = ctx;
+export function buildHydrationMessage(t: UserTargets, ctx: HydrationCtx, userId: string, date: string): string {
+  const { totalMl, targetMl, expectedMl, minSinceLast, hour } = ctx;
+  const behind    = Math.max(0, expectedMl - totalMl);
   const remaining = Math.max(0, targetMl - totalMl);
-  const pct       = targetMl > 0 ? Math.round((totalMl / targetMl) * 100) : 0;
+  const suggest   = Math.min(roundTo(behind, 250), 750);
+  const n = escapeHtml(t.firstName);
 
-  // 4 h+ — critical inactivity
-  if (minSince >= 240) {
-    const { title, body } = pick([
-      {
-        title: t(`💧 ${n}, sua meta está em risco`),
-        body:  b(`Mais de 4h sem se hidratar. Faltam ${remaining}ml para a meta. Beba um copo agora!`),
-      },
-      {
-        title: t(`💧 Ei, ${n}! Hora de beber água`),
-        body:  b(`Longa pausa na hidratação hoje. Faltam ${remaining}ml. Cada gole conta agora.`),
-      },
-      {
-        title: t(`💧 ${n}, retome a hidratação`),
-        body:  b(`4h sem água. Ainda dá tempo de recuperar — faltam ${remaining}ml para ${targetMl}ml.`),
-      },
-    ], userId, 'h4', date);
-    return { title, body, urgency: 'high' };
+  const title = hour >= 18
+    ? pick([`🌙 <b>${n}, reta final da hidratação</b>`, `🌙 <b>Ainda dá tempo, ${n}</b>`], userId, 'h-ev', date + hour)
+    : pick([`💧 <b>Hora da água, ${n}</b>`, `💧 <b>Pausa para hidratar, ${n}</b>`, `💧 <b>${n}, bora de água?</b>`], userId, 'h', date + hour);
+
+  const lines = [
+    title,
+    `Você está em <b>${liters(totalMl)}</b> de ${liters(targetMl)} (${pct(totalMl, targetMl)}%).`,
+  ];
+  if (minSinceLast !== null && minSinceLast >= 120) {
+    lines.push(`Último registro há ${Math.floor(minSinceLast / 60)}h.`);
   }
-
-  // 3 h — elevated inactivity
-  if (minSince >= 180) {
-    const { title, body } = pick([
-      {
-        title: t(`💧 ${n}, 3h sem hidratação`),
-        body:  b(`Sua hidratação está atrasada. Beba um copo agora — faltam ${remaining}ml para a meta.`),
-      },
-      {
-        title: t(`💧 Lembrete, ${n}`),
-        body:  b(`Faz 3h desde a última água. Pequenas pausas para beber ajudam a manter ${targetMl}ml.`),
-      },
-      {
-        title: t(`💧 ${n}, hora de retomar`),
-        body:  b(`3 horas sem se hidratar. Ainda dá para recuperar — faltam ${remaining}ml hoje.`),
-      },
-    ], userId, 'h3', date);
-    return { title, body, urgency: 'high' };
-  }
-
-  // Evening (18h – 22h)
-  if (hour >= 18) {
-    if (pct < 50) {
-      const { title, body } = pick([
-        {
-          title: t(`🌙 ${n}, meta de hoje em aberto`),
-          body:  b(`Noite chegando com ${pct}% da meta. Faltam ${remaining}ml — você consegue fechar o dia!`),
-        },
-        {
-          title: t(`🌙 Atenção, ${n} — hidratação baixa`),
-          body:  b(`Você tomou ${pct}% da meta hoje. Faltam ${remaining}ml. Ainda dá tempo!`),
-        },
-        {
-          title: t(`🌙 ${n}, beba água agora`),
-          body:  b(`${pct}% da meta concluída. Faltam ${remaining}ml para ${targetMl}ml. Bora fechar bem!`),
-        },
-      ], userId, 'ev-low', date);
-      return { title, body, urgency: 'high' };
-    }
-    const { title, body } = pick([
-      {
-        title: t(`🌙 ${n}, quase lá!`),
-        body:  b(`Você chegou a ${pct}% da meta de hidratação. Faltam só ${remaining}ml. Encerre o dia completo!`),
-      },
-      {
-        title: t(`🌙 Reta final do dia, ${n}`),
-        body:  b(`${pct}% da meta concluída. Mais ${remaining}ml e você fecha o dia no azul. Bora!`),
-      },
-      {
-        title: t(`🌙 ${n}, finalize bem sua meta`),
-        body:  b(`Faltam apenas ${remaining}ml para completar ${targetMl}ml hoje. Você está quase lá!`),
-      },
-    ], userId, 'ev-ok', date);
-    return { title, body, urgency: 'normal' };
-  }
-
-  // Morning (5h – 11h)
-  if (hour >= 5 && hour < 12) {
-    const { title, body } = pick([
-      {
-        title: t(`☀️ Bom dia, ${n}!`),
-        body:  b(`Começar hidratado faz diferença no seu dia. Faltam ${remaining}ml para a meta de ${targetMl}ml.`),
-      },
-      {
-        title: t(`☀️ ${n}, hora da água matinal`),
-        body:  b(`Sua primeira água ativa o metabolismo. Meta: ${targetMl}ml. Você está em ${pct}% — vamos lá!`),
-      },
-      {
-        title: t(`☀️ ${n}, o dia começa agora`),
-        body:  b(`Não esqueça da hidratação. Faltam ${remaining}ml para a meta de hoje. Beba um copo!`),
-      },
-    ], userId, 'morning', date);
-    return { title, body, urgency: 'normal' };
-  }
-
-  // Afternoon (12h – 17h) — generic 2 h reminder
-  const { title, body } = pick([
-    {
-      title: t(`💧 ${n}, hora de beber água`),
-      body:  b(`Faz mais de 2h desde a última hidratação. Faltam ${remaining}ml para a meta de hoje.`),
-    },
-    {
-      title: t(`💧 Pausa para se hidratar, ${n}`),
-      body:  b(`${pct}% da meta concluída. Um copo agora mantém o ritmo — faltam ${remaining}ml.`),
-    },
-    {
-      title: t(`💧 Lembrete de hidratação, ${n}`),
-      body:  b(`Seu corpo precisa de água! Faltam ${remaining}ml para completar ${targetMl}ml hoje.`),
-    },
-  ], userId, 'afternoon', date);
-  return { title, body, urgency: 'normal' };
+  lines.push(
+    hour >= 18
+      ? `Faltam ${int(remaining)}ml para fechar o dia — um copo de ${suggest}ml agora já ajuda.`
+      : `Pelo ritmo do dia, o ideal seria ~${liters(expectedMl)}. Beba ${suggest}ml agora para voltar ao ritmo.`,
+  );
+  return lines.join('\n');
 }
 
 // ─── Meals ────────────────────────────────────────────────────────────────────
 
-export type MealCtx = {
-  name: string;
-  mealLabel: string;
-  totalCals: number;
+export type MealKey = 'breakfast' | 'lunch' | 'dinner';
+
+const MEAL_LABEL: Record<MealKey, string> = {
+  breakfast: 'café da manhã',
+  lunch:     'almoço',
+  dinner:    'jantar',
 };
 
-export function buildMealMessage(
-  ctx: MealCtx,
-  userId: string,
-  mealKey: string,
-  date: string,
-): { title: string; body: string } {
-  const { name: n, mealLabel, totalCals } = ctx;
-  const calsLine = totalCals > 0
-    ? `Você já registrou ${totalCals} kcal hoje.`
-    : 'Mantenha o acompanhamento nutricional.';
-
-  const { title, body } = pick([
-    {
-      title: t(`🍽️ ${n}, registrou o ${mealLabel}?`),
-      body:  b(`${calsLine} Registrar refeições mantém suas análises precisas.`),
-    },
-    {
-      title: t(`🥗 ${n}, não esqueça do ${mealLabel}`),
-      body:  b(`Registre suas refeições para insights melhores. ${calsLine}`),
-    },
-    {
-      title: t(`🍽️ Hora do ${mealLabel}, ${n}`),
-      body:  b(`Complete o registro do dia para acompanhar sua nutrição. ${calsLine}`),
-    },
-  ], userId, 'meal-' + mealKey, date);
-
-  return { title, body };
+export function mealLabel(key: MealKey): string {
+  return MEAL_LABEL[key];
 }
 
-// ─── Workout ─────────────────────────────────────────────────────────────────
+export function buildMealMessage(t: UserTargets, s: DayStatus, meal: MealKey, userId: string, date: string): string {
+  const n = escapeHtml(t.firstName);
+  const label = MEAL_LABEL[meal];
+  const title = pick([
+    `🍽️ <b>${n}, já registrou o ${label}?</b>`,
+    `🍽️ <b>Como foi o ${label}, ${n}?</b>`,
+  ], userId, 'meal-' + meal, date);
 
-export type WorkoutCtx = {
-  name: string;
-  daysWithout: number;
-};
-
-export function buildWorkoutMessage(
-  ctx: WorkoutCtx,
-  userId: string,
-  period: 'am' | 'pm',
-  date: string,
-): { title: string; body: string } {
-  const { name: n, daysWithout } = ctx;
-
-  if (period === 'am') {
-    const { title, body } = pick([
-      {
-        title: t(`💪 Bom dia, ${n}!`),
-        body:  b(`Começar o dia se movendo aumenta energia e disposição. Registre seu treino hoje.`),
-      },
-      {
-        title: t(`🏃 ${n}, bora se mover hoje?`),
-        body:  b(`Um treino matinal melhora o humor e a produtividade. Qual atividade você vai fazer?`),
-      },
-      {
-        title: t(`☀️ ${n}, manhã de treino!`),
-        body:  b(`A consistência é o segredo dos resultados. Registre sua atividade de hoje no app.`),
-      },
-    ], userId, 'workout-am', date);
-    return { title, body };
+  const lines = [title];
+  if (s.consumedKcal > 0 && t.calories) {
+    const left = t.calories - (s.consumedKcal - s.burnedKcal);
+    lines.push(`Até agora: <b>${int(s.consumedKcal)}</b> de ${int(t.calories)} kcal${left > 0 ? ` (restam ${int(left)})` : ''}.`);
+  } else if (s.consumedKcal === 0) {
+    lines.push('Nenhuma refeição registrada hoje ainda.');
   }
 
-  const daysText = daysWithout >= 2
-    ? `Você está há ${daysWithout} dias sem registrar atividades.`
-    : 'Você ainda não registrou atividade hoje.';
-
-  const { title, body } = pick([
-    {
-      title: t(`🏃 ${n}, que tal um treino hoje?`),
-      body:  b(`${daysText} Retomar agora ajuda a manter sua evolução em dia.`),
-    },
-    {
-      title: t(`💪 ${n}, hora de se mover`),
-      body:  b(`${daysText} Qualquer atividade conta — caminhada, academia ou em casa.`),
-    },
-    {
-      title: t(`🏃 Lembrete de treino, ${n}`),
-      body:  b(`${daysText} Registre sua atividade para acompanhar a evolução.`),
-    },
-  ], userId, 'workout-pm', date);
-  return { title, body };
+  if (meal === 'dinner' && t.protein && s.protein < t.protein * 0.9) {
+    lines.push(`Faltam <b>${int(t.protein - s.protein)}g de proteína</b> — priorize uma boa fonte no jantar.`);
+  } else {
+    lines.push('Registrar logo após comer deixa o saldo do dia e os insights precisos.');
+  }
+  return lines.join('\n');
 }
 
-// ─── Insights ─────────────────────────────────────────────────────────────────
+// ─── Workout ──────────────────────────────────────────────────────────────────
 
-export type InsightCtx = {
-  name: string;
-  insightTitle: string;
-  priority: string;
+export function buildWorkoutMessage(t: UserTargets, daysWithout: number, userId: string, date: string): string {
+  const n = escapeHtml(t.firstName);
+  const days = daysWithout >= 14 ? 'mais de 2 semanas' : `${daysWithout} dias`;
+  const title = pick([
+    `💪 <b>${n}, ${days} sem treino</b>`,
+    `🏃 <b>Bora se mexer hoje, ${n}?</b>`,
+  ], userId, 'workout', date);
+  return [
+    title,
+    daysWithout >= 14 ? 'Nenhum treino registrado nas últimas 2 semanas.' : `Seu último treino registrado foi há ${days}.`,
+    '30 minutos hoje já quebram a sequência — caminhada, academia ou treino em casa. Depois registre no app para contar as calorias.',
+  ].join('\n');
+}
+
+// ─── AI insight ───────────────────────────────────────────────────────────────
+
+const PRIORITY_EMOJI: Record<string, string> = {
+  positivo: '🌟', atencao: '⚠️', recomendacao: '💡', informativo: 'ℹ️',
 };
 
-export function buildInsightMessage(
-  ctx: InsightCtx,
-  userId: string,
-  date: string,
-): { title: string; body: string } {
-  const { name: n, insightTitle, priority } = ctx;
-  const emoji: Record<string, string> = {
-    positivo: '🌟', atencao: '⚠️', recomendacao: '💡', informativo: 'ℹ️',
-  };
-  const em = emoji[priority] ?? '💡';
-  const shortTitle = insightTitle.length <= 140 ? insightTitle : insightTitle.slice(0, 137) + '…';
+export function buildInsightMessage(insight: { title: string; message: string; priority: string; cta: string | null }): string {
+  const em = PRIORITY_EMOJI[insight.priority] ?? '💡';
+  const lines = [`${em} <b>${escapeHtml(insight.title)}</b>`, escapeHtml(insight.message)];
+  if (insight.cta) lines.push('', `👉 ${escapeHtml(insight.cta)}`);
+  return lines.join('\n');
+}
 
-  const { title, body } = pick([
-    {
-      title: t(`${em} ${n}, novo insight disponível`),
-      body:  b(shortTitle),
-    },
-    {
-      title: t(`${em} ${n}, sua evolução em análise`),
-      body:  b(`Identifiquei algo relevante nos seus dados. Confira o novo insight no app.`),
-    },
-    {
-      title: t(`${em} Análise pronta para você, ${n}`),
-      body:  b(shortTitle !== insightTitle ? `Novo insight disponível. Abra o app para conferir.` : shortTitle),
-    },
-  ], userId, 'insight-' + priority, date);
-  return { title, body };
+// ─── Evening wrap-up and on-demand status ─────────────────────────────────────
+
+export function buildEveningMessage(t: UserTargets, s: DayStatus): string {
+  const metrics = dayMetrics(t, s);
+  const missed = metrics.filter((m) => !m.ok);
+  const lines = [`🌙 <b>Fechamento do dia, ${escapeHtml(t.firstName)}</b>`, '', metricsBlock(metrics), ''];
+
+  if (missed.length === 0) {
+    lines.push('Dia redondo — todas as metas batidas! 🎉');
+  } else if (missed.length === metrics.length) {
+    lines.push(`Amanhã é um novo dia. Comece por um ponto: ${FOCUS_TIP[missed[0].key]}.`);
+  } else {
+    lines.push(`${metrics.length - missed.length} de ${metrics.length} metas batidas. Para amanhã: ${FOCUS_TIP[missed[0].key]}.`);
+  }
+  return lines.join('\n');
+}
+
+export function buildStatusMessage(t: UserTargets, s: DayStatus): string {
+  return [`📊 <b>Seu dia até agora, ${escapeHtml(t.firstName)}</b>`, '', metricsBlock(dayMetrics(t, s))].join('\n');
 }

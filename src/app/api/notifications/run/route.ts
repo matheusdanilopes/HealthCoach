@@ -1,333 +1,269 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db';
-import { brazilToday } from '@/lib/timezone';
+import { brazilToday, brazilHour, brazilNDaysAgo } from '@/lib/timezone';
 import { verifyCronSecret } from '@/lib/cron-auth';
+import { isTelegramConfigured, openAppButton, waterButtons } from '@/lib/telegram';
 import {
-  sendNotificationToUser,
-  getUsersWithSubscriptions,
-  isBrazilQuietHour,
-  brazilHour,
+  DEFAULT_PREFERENCES,
+  isCategoryEnabled,
+  isQuietHour,
+  sendTelegramNotification,
+  type NotificationPreferences,
+  type OutgoingNotification,
 } from '@/lib/notification-sender';
 import {
+  getDayStatus,
+  daysSinceLastWorkout,
+  toTargets,
+  PROFILE_COLUMNS,
+  type DayStatus,
+  type UserTargets,
+} from '@/lib/day-status';
+import {
+  buildMorningMessage,
+  buildEveningMessage,
   buildHydrationMessage,
   buildMealMessage,
   buildWorkoutMessage,
   buildInsightMessage,
+  mealLabel,
+  type MealKey,
 } from '@/lib/notification-messages';
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+// Hourly scheduler (Supabase pg_cron → GET /api/notifications/run).
+//
+// Each user gets, at most:
+//   • morning brief at the end of their quiet hours (yesterday recap + today's goals)
+//   • up to 3 pace-based hydration nudges (only when behind the expected curve)
+//   • a reminder per main meal not yet logged (10h, 14h, 20h)
+//   • a workout nudge at 18h after 2+ days without training
+//   • each new AI insight, once
+//   • an evening wrap-up the hour before quiet hours start
+// and never more than MAX_PER_RUN messages in the same hour.
 
-const HYDRATION_DEDUP_MINUTES = 90;
-const HYDRATION_DAILY_CAP     = 4;
+const MAX_PER_RUN          = 2;
+const HYDRATION_DAILY_CAP  = 3;
+const HYDRATION_GAP_MIN    = 150;  // minimum minutes between hydration nudges
+const HYDRATION_IDLE_MIN   = 90;   // don't nudge if the user drank recently
+const WORKOUT_HOUR         = 18;
+const WORKOUT_MIN_GAP_DAYS = 2;
+const MEAL_HOURS: Array<{ hour: number; meal: MealKey }> = [
+  { hour: 10, meal: 'breakfast' },
+  { hour: 14, meal: 'lunch' },
+  { hour: 20, meal: 'dinner' },
+];
 
-async function getTotalHydration(userId: string, date: string) {
-  const [{ data: water }, { data: food }] = await Promise.all([
-    supabase.from('water_logs').select('amount_ml, created_at').eq('user_id', userId).eq('log_date', date).limit(50),
-    supabase.from('food_logs').select('hydration_ml, created_at').eq('user_id', userId).eq('log_date', date).gt('hydration_ml', 0),
-  ]);
-  const waterMl = (water ?? []).reduce((s: number, r: { amount_ml: number }) => s + r.amount_ml, 0);
-  const mealMl  = (food  ?? []).reduce((s: number, r: { hydration_ml: number }) => s + r.hydration_ml, 0);
-  const all = [
-    ...(water ?? []).map((r: { created_at: string }) => r.created_at),
-    ...(food  ?? []).map((r: { created_at: string }) => r.created_at),
-  ].sort().reverse();
-  return { totalMl: waterMl + mealMl, lastLogAt: all[0] ?? null };
+type TodayLog = { user_id: string; category: string; ref: string | null; sent_at: string };
+
+type UserCtx = {
+  userId: string;
+  chatId: number;
+  targets: UserTargets;
+  prefs: NotificationPreferences;
+  todayLogs: TodayLog[];
+};
+
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+
+// Morning brief fires at the user's wake hour; the wrap-up one hour before bed.
+function dayWindow(prefs: NotificationPreferences) {
+  return {
+    morningHour: clamp(prefs.quiet_end, 5, 11),
+    eveningHour: clamp(prefs.quiet_start - 1, 18, 23),
+  };
 }
 
-async function minutesSinceLastHydrationNotif(userId: string): Promise<{ minutesAgo: number; dailyCount: number }> {
-  const todayStart = brazilToday() + 'T00:00:00.000-03:00';
-  const { data } = await supabase
-    .from('notification_logs')
-    .select('sent_at')
-    .eq('user_id', userId)
-    .eq('category', 'hydration')
-    .eq('status', 'sent')
-    .gte('sent_at', todayStart)
-    .order('sent_at', { ascending: false })
-    .limit(HYDRATION_DAILY_CAP + 1);
-
-  const rows = (data ?? []) as Array<{ sent_at: string }>;
-  const minutesAgo = rows.length > 0
-    ? Math.floor((Date.now() - new Date(rows[0].sent_at).getTime()) / 60_000)
-    : 9999;
-  return { minutesAgo, dailyCount: rows.length };
+function alreadySent(ctx: UserCtx, ref: string): boolean {
+  return ctx.todayLogs.some((l) => l.ref === ref);
 }
 
-// ─── Hydration ────────────────────────────────────────────────────────────────
+function hydrationNudge(ctx: UserCtx, day: DayStatus, hour: number, today: string): OutgoingNotification | null {
+  const { morningHour, eveningHour } = dayWindow(ctx.prefs);
+  if (hour < morningHour + 2 || hour >= eveningHour) return null;
 
-async function runHydrationCheck(
-  userId: string,
-  firstName: string,
-  targetWaterMl: number,
-): Promise<string> {
-  const bHour = brazilHour();
-  const today = brazilToday();
-  const { totalMl, lastLogAt } = await getTotalHydration(userId, today);
+  const target = ctx.targets.waterMl;
+  if (day.waterMl >= target) return null;
 
-  if (totalMl >= targetWaterMl) return 'ok';
+  const progress   = (hour - morningHour) / (eveningHour - morningHour);
+  const expectedMl = Math.round(target * clamp(progress, 0, 1));
+  if (expectedMl - day.waterMl < Math.max(250, target * 0.1)) return null;
 
-  const minSince = lastLogAt ? Math.floor((Date.now() - new Date(lastLogAt).getTime()) / 60_000) : 9999;
-  if (minSince < 120) return 'ok';
+  const minSinceLast = day.lastHydrationAt
+    ? Math.floor((Date.now() - new Date(day.lastHydrationAt).getTime()) / 60_000)
+    : null;
+  if (minSinceLast !== null && minSinceLast < HYDRATION_IDLE_MIN) return null;
 
-  const { minutesAgo, dailyCount } = await minutesSinceLastHydrationNotif(userId);
-  if (dailyCount >= HYDRATION_DAILY_CAP) return 'ok';
-  if (minutesAgo < HYDRATION_DEDUP_MINUTES) return 'ok';
+  const sent = ctx.todayLogs.filter((l) => l.category === 'hydration').map((l) => l.sent_at).sort();
+  if (sent.length >= HYDRATION_DAILY_CAP) return null;
+  const last = sent.at(-1);
+  if (last && Date.now() - new Date(last).getTime() < HYDRATION_GAP_MIN * 60_000) return null;
 
-  const { title, body, urgency } = buildHydrationMessage(
-    { name: firstName, totalMl, targetMl: targetWaterMl, minSince, hour: bHour },
-    userId,
-    today,
-  );
+  return {
+    category: 'hydration',
+    ref:      `hydration:${hour}`,
+    html:     buildHydrationMessage(
+      ctx.targets,
+      { totalMl: day.waterMl, targetMl: target, expectedMl, minSinceLast, hour },
+      ctx.userId,
+      today,
+    ),
+    keyboard: (logId) => [waterButtons(logId)],
+  };
+}
 
-  const result = await sendNotificationToUser(
-    userId,
-    { title, body, tag: 'hc-hydration', url: '/dashboard', category: 'hydration' },
-    { urgency, topic: 'hc-hydration', ttl: bHour >= 18 ? 4 * 3600 : 8 * 3600 },
-  );
+async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<OutgoingNotification[]> {
+  const { prefs, userId, targets } = ctx;
+  const { morningHour, eveningHour } = dayWindow(prefs);
+  const out: OutgoingNotification[] = [];
+  const day = await getDayStatus(userId, today);
 
-  if (result === 'notified') {
-    console.info(`[cron-run:hydration] userId=${userId} minSince=${minSince} bHour=${bHour}`);
+  // 1. Morning brief
+  if (hour === morningHour && !alreadySent(ctx, 'morning')) {
+    const yesterday = await getDayStatus(userId, brazilNDaysAgo(1, today));
+    out.push({
+      category: 'goal',
+      ref:      'morning',
+      html:     buildMorningMessage(targets, yesterday, userId, today),
+      keyboard: (logId) => [waterButtons(logId)],
+    });
   }
-  return result;
-}
 
-// ─── Meal reminders ───────────────────────────────────────────────────────────
+  // 2. Evening wrap-up
+  if (hour === eveningHour && !alreadySent(ctx, 'evening')) {
+    out.push({
+      category: 'goal',
+      ref:      'evening',
+      html:     buildEveningMessage(targets, day),
+      keyboard: () => [openAppButton('📊 Abrir o app', '/dashboard')],
+    });
+  }
 
-async function runMealReminders(userId: string, firstName: string): Promise<string> {
-  const bHour = brazilHour();
-  const windows = [
-    { key: 'breakfast', label: 'café da manhã', tag: 'hc-meal-breakfast', minH: 8,  maxH: 10 },
-    { key: 'lunch',     label: 'almoço',        tag: 'hc-meal-lunch',     minH: 11, maxH: 14 },
-    { key: 'snack',     label: 'lanche',         tag: 'hc-meal-snack',     minH: 15, maxH: 17 },
-    { key: 'dinner',    label: 'jantar',         tag: 'hc-meal-dinner',    minH: 18, maxH: 21 },
-  ];
-  const win = windows.find((w) => bHour >= w.minH && bHour <= w.maxH);
-  if (!win) return 'skipped';
+  // 3. Meal not logged (breakfast only when nothing was logged at all — some people skip it)
+  const mealSlot = MEAL_HOURS.find((m) => m.hour === hour && m.hour < eveningHour);
+  if (mealSlot && !alreadySent(ctx, `meal:${mealSlot.meal}`)) {
+    const missing = mealSlot.meal === 'breakfast' ? day.consumedKcal === 0 : !day.meals.has(mealSlot.meal);
+    if (missing) {
+      out.push({
+        category: 'meal',
+        ref:      `meal:${mealSlot.meal}`,
+        html:     buildMealMessage(targets, day, mealSlot.meal, userId, today),
+        keyboard: () => [openAppButton(`📝 Registrar ${mealLabel(mealSlot.meal)}`, '/diary')],
+      });
+    }
+  }
 
-  const today = brazilToday();
-  const { data } = await supabase
-    .from('food_logs')
-    .select('meal_type, calories')
-    .eq('user_id', userId)
-    .eq('log_date', today);
+  // 4. Workout nudge
+  if (hour === WORKOUT_HOUR && !day.hasWorkout && !alreadySent(ctx, 'workout')) {
+    const days = await daysSinceLastWorkout(userId, today);
+    if (days >= WORKOUT_MIN_GAP_DAYS) {
+      out.push({
+        category: 'workout',
+        ref:      'workout',
+        html:     buildWorkoutMessage(targets, days, userId, today),
+        keyboard: () => [openAppButton('💪 Registrar treino', '/dashboard')],
+      });
+    }
+  }
 
-  const meals = (data ?? []) as Array<{ meal_type: string; calories: number }>;
-  if (meals.some((m) => m.meal_type === win.key)) return 'ok';
-  const totalCals = meals.reduce((s, m) => s + m.calories, 0);
+  // 5. Hydration
+  const hyd = hydrationNudge(ctx, day, hour, today);
+  if (hyd) out.push(hyd);
 
-  const { title, body } = buildMealMessage(
-    { name: firstName, mealLabel: win.label, totalCals },
-    userId,
-    win.key,
-    today,
-  );
-
-  return await sendNotificationToUser(
-    userId,
-    { title, body, tag: win.tag, url: '/diary', category: 'meal' },
-    { urgency: 'normal', ttl: 3600 },
-  );
-}
-
-// ─── Workout reminders ────────────────────────────────────────────────────────
-
-async function getDaysWithoutWorkout(userId: string, today: string): Promise<number> {
-  const { data } = await supabase
-    .from('food_logs')
-    .select('log_date')
-    .eq('user_id', userId)
-    .lt('calories', 0)
-    .order('log_date', { ascending: false })
-    .limit(1);
-
-  if (!data || data.length === 0) return 7;
-  const last = new Date((data[0] as { log_date: string }).log_date + 'T12:00:00');
-  const todayMs = new Date(today + 'T12:00:00').getTime();
-  return Math.max(0, Math.floor((todayMs - last.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-async function runWorkoutReminders(userId: string, firstName: string): Promise<string> {
-  const bHour = brazilHour();
-  const inAM = bHour >= 7  && bHour <= 9;
-  const inPM = bHour >= 17 && bHour <= 19;
-  if (!inAM && !inPM) return 'skipped';
-
-  const today = brazilToday();
-  const { data } = await supabase
-    .from('food_logs')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('log_date', today)
-    .lt('calories', 0)
-    .limit(1);
-
-  if ((data ?? []).length > 0) return 'ok';
-
-  const daysWithout = inPM ? await getDaysWithoutWorkout(userId, today) : 0;
-  const period = inAM ? 'am' : 'pm';
-
-  const { title, body } = buildWorkoutMessage(
-    { name: firstName, daysWithout },
-    userId,
-    period,
-    today,
-  );
-
-  return await sendNotificationToUser(
-    userId,
-    { title, body, tag: 'hc-workout', url: '/dashboard', category: 'workout' },
-    { urgency: 'normal', ttl: 3 * 3600, topic: 'hc-workout' },
-  );
-}
-
-// ─── Insights push ────────────────────────────────────────────────────────────
-
-async function runInsightsPush(userId: string, firstName: string): Promise<string> {
-  const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-  const { data } = await supabase
+  // 6. New AI insight (one per run, never repeated)
+  const { data: insights } = await supabase
     .from('ai_insights')
-    .select('id, priority, title')
+    .select('id, title, message, priority, cta')
     .eq('user_id', userId)
     .is('read_at', null)
-    .gte('generated_at', since)
+    .gte('generated_at', new Date(Date.now() - 24 * 3600_000).toISOString())
     .order('generated_at', { ascending: false })
-    .limit(1);
-
-  const rows = (data ?? []) as Array<{ id: string; priority: string; title: string }>;
-  if (rows.length === 0) return 'ok';
-
-  const insight = rows[0];
-  const today = brazilToday();
-  const { title, body } = buildInsightMessage(
-    { name: firstName, insightTitle: insight.title, priority: insight.priority },
-    userId,
-    today,
-  );
-
-  return await sendNotificationToUser(
-    userId,
-    { title, body, tag: `hc-insight-${insight.id}`, url: '/dashboard', category: 'insight' },
-    { urgency: 'normal', ttl: 6 * 3600, topic: 'hc-insight' },
-  );
-}
-
-// ─── Retry queue ──────────────────────────────────────────────────────────────
-
-async function runRetryQueue(): Promise<{ success: number; failed: number; exhausted: number }> {
-  const counts = { success: 0, failed: 0, exhausted: 0 };
-  const { data } = await supabase
-    .from('notification_retry_queue')
-    .select('id, user_id, category, payload, attempts, max_attempts')
-    .lte('next_retry_at', new Date().toISOString())
-    .order('next_retry_at', { ascending: true })
-    .limit(50);
-
-  type RetryRow = {
-    id: string; user_id: string; category: string;
-    payload: { notif: Parameters<typeof sendNotificationToUser>[1]; opts: Parameters<typeof sendNotificationToUser>[2] };
-    attempts: number; max_attempts: number;
-  };
-  const queue = (data ?? []) as RetryRow[];
-
-  for (const item of queue) {
-    const newAttempts = item.attempts + 1;
-    if (newAttempts > item.max_attempts) {
-      await supabase.from('notification_retry_queue').delete().eq('id', item.id);
-      counts.exhausted++;
-      continue;
-    }
-    const result = await sendNotificationToUser(item.user_id, item.payload.notif, item.payload.opts, false);
-    if (result === 'notified') {
-      await supabase.from('notification_retry_queue').delete().eq('id', item.id);
-      counts.success++;
-    } else {
-      const delay = Math.pow(2, newAttempts) * 60;
-      await supabase.from('notification_retry_queue')
-        .update({ attempts: newAttempts, next_retry_at: new Date(Date.now() + delay * 1000).toISOString(), last_error: result })
-        .eq('id', item.id);
-      counts.failed++;
+    .limit(5);
+  type InsightRow = { id: string; title: string; message: string; priority: string; cta: string | null };
+  const fresh = (insights ?? []) as InsightRow[];
+  if (fresh.length > 0) {
+    // Insights live up to 24h, so check the full log rather than only today's entries.
+    const { data: notified } = await supabase
+      .from('notification_logs')
+      .select('ref')
+      .eq('user_id', userId)
+      .in('ref', fresh.map((i) => `insight:${i.id}`));
+    const seen = new Set(((notified ?? []) as Array<{ ref: string }>).map((r) => r.ref));
+    const insight = fresh.find((i) => !seen.has(`insight:${i.id}`));
+    if (insight) {
+      out.push({
+        category: 'insight',
+        ref:      `insight:${insight.id}`,
+        html:     buildInsightMessage(insight),
+        keyboard: () => [openAppButton('Ver no app', '/dashboard')],
+      });
     }
   }
-  return counts;
+
+  return out.filter((n) => isCategoryEnabled(prefs, n.category)).slice(0, MAX_PER_RUN);
 }
-
-// ─── Cleanup (weekly — runs only on Sundays) ──────────────────────────────────
-
-async function runCleanup(): Promise<{ stale: number; oldLogs: number }> {
-  const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getDay();
-  if (day !== 0) return { stale: 0, oldLogs: 0 };
-
-  const sixtyDaysAgo  = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-
-  const [{ data: stale }, { data: logs }] = await Promise.all([
-    supabase.from('push_subscriptions').delete().lt('last_used_at', sixtyDaysAgo).select('id'),
-    supabase.from('notification_logs').delete().lt('sent_at', ninetyDaysAgo).select('id'),
-  ]);
-  return { stale: (stale ?? []).length, oldLogs: (logs ?? []).length };
-}
-
-// ─── Unified cron handler ─────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
   const authErr = verifyCronSecret(req);
   if (authErr) return authErr;
 
-  if (isBrazilQuietHour()) {
-    return NextResponse.json({ skipped: true, reason: 'quiet_hours' });
+  if (!isTelegramConfigured()) {
+    return NextResponse.json({ skipped: true, reason: 'telegram_not_configured' });
   }
 
-  const users = await getUsersWithSubscriptions();
+  const hour  = brazilHour();
+  const today = brazilToday();
 
-  // Batch-fetch all user profiles in one query to avoid N individual queries
-  const { data: profileRows } = await supabase
-    .from('users')
-    .select('id, full_name, target_water_ml')
-    .in('id', users);
+  const { data: links } = await supabase
+    .from('telegram_links')
+    .select('user_id, chat_id')
+    .not('chat_id', 'is', null);
+  const linked = (links ?? []) as Array<{ user_id: string; chat_id: number }>;
+  if (linked.length === 0) return NextResponse.json({ hour, users: 0 });
 
-  type ProfileRow = { id: string; full_name: string | null; target_water_ml: number | null };
-  const profileMap = new Map<string, { firstName: string; targetWaterMl: number }>();
-  for (const p of (profileRows ?? []) as ProfileRow[]) {
-    const firstName = (p.full_name ?? '').trim().split(' ')[0] || 'você';
-    profileMap.set(p.id, { firstName, targetWaterMl: p.target_water_ml ?? 2500 });
-  }
+  const userIds = linked.map((l) => l.user_id);
+  const [{ data: profiles }, { data: prefRows }, { data: logRows }] = await Promise.all([
+    supabase.from('users').select(PROFILE_COLUMNS).in('id', userIds),
+    supabase.from('notification_preferences').select('*').in('user_id', userIds),
+    supabase
+      .from('notification_logs')
+      .select('user_id, category, ref, sent_at')
+      .in('user_id', userIds)
+      .eq('status', 'sent')
+      .gte('sent_at', `${today}T00:00:00.000-03:00`),
+  ]);
 
-  const counts = {
-    hydration: { notified: 0, ok: 0, skipped: 0, error: 0 },
-    meal:      { notified: 0, ok: 0, skipped: 0, error: 0 },
-    workout:   { notified: 0, ok: 0, skipped: 0, error: 0 },
-    insight:   { notified: 0, ok: 0, skipped: 0, error: 0 },
-  };
+  type ProfileRow = Parameters<typeof toTargets>[0] & { id: string };
+  const profileMap = new Map(((profiles ?? []) as ProfileRow[]).map((p) => [p.id, p]));
+  const prefMap    = new Map(((prefRows ?? []) as Array<NotificationPreferences & { user_id: string }>).map((p) => [p.user_id, p]));
+  const logs       = (logRows ?? []) as TodayLog[];
 
-  const chunkSize = 50;
-  for (let ci = 0; ci < users.length; ci += chunkSize) {
-    const chunk = users.slice(ci, ci + chunkSize);
-    await Promise.allSettled(chunk.map(async (uid) => {
-      const { firstName, targetWaterMl } = profileMap.get(uid) ?? { firstName: 'você', targetWaterMl: 2500 };
+  const counts = { users: linked.length, quiet: 0, sent: 0, failed: 0, gone: 0, errors: 0 };
 
-      const [h, m, w, i] = await Promise.allSettled([
-        runHydrationCheck(uid, firstName, targetWaterMl),
-        runMealReminders(uid, firstName),
-        runWorkoutReminders(uid, firstName),
-        runInsightsPush(uid, firstName),
-      ]);
-
-      for (const [key, res] of [['hydration', h], ['meal', m], ['workout', w], ['insight', i]] as const) {
-        const val = res.status === 'fulfilled' ? res.value : 'error';
-        const bucket = counts[key];
-        if (val === 'notified')                                              bucket.notified++;
-        else if (val === 'ok')                                               bucket.ok++;
-        else if (val === 'skipped' || val === 'opt_out' || val === 'no_sub') bucket.skipped++;
-        else                                                                  bucket.error++;
+  await Promise.allSettled(linked.map(async ({ user_id: userId, chat_id: chatId }) => {
+    try {
+      const prefs = { ...DEFAULT_PREFERENCES, ...prefMap.get(userId) };
+      if (isQuietHour(hour, prefs.quiet_start, prefs.quiet_end)) {
+        counts.quiet++;
+        return;
       }
-    }));
-  }
+      const ctx: UserCtx = {
+        userId,
+        chatId,
+        targets:   toTargets(profileMap.get(userId) ?? null),
+        prefs,
+        todayLogs: logs.filter((l) => l.user_id === userId),
+      };
+      for (const notif of await planForUser(ctx, hour, today)) {
+        const result = await sendTelegramNotification(userId, chatId, notif);
+        counts[result]++;
+        if (result === 'gone') break;
+      }
+    } catch (err) {
+      counts.errors++;
+      console.error(`[cron-run] userId=${userId}`, err);
+    }
+  }));
 
-  const retry   = await runRetryQueue();
-  const cleanup = await runCleanup();
-
-  const bHour = brazilHour();
-  console.info(`[cron-run] brazilHour=${bHour} users=${users.length}`, counts, { retry, cleanup });
-
-  return NextResponse.json({ brazilHour: bHour, users: users.length, counts, retry, cleanup });
+  console.info(`[cron-run] brazilHour=${hour}`, counts);
+  return NextResponse.json({ hour, ...counts });
 }

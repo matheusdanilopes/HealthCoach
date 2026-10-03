@@ -1,144 +1,103 @@
+import { randomUUID } from 'crypto';
 import { supabase } from '@/lib/db';
-import { sendPushToSubscriptions, type PushSendOptions } from '@/lib/webpush';
-import { logNotification, enqueueRetry, type NotificationCategory } from '@/lib/notification-logger';
+import { isChatGone, sendMessage, type InlineKeyboard } from '@/lib/telegram';
+import { logNotification, type NotificationCategory } from '@/lib/notification-logger';
 
-export type NotificationPayload = {
-  title: string;
-  body: string;
-  tag: string;
-  url?: string;
+export type OutgoingNotification = {
   category: NotificationCategory;
+  ref?: string;
+  html: string;
+  // Receives the log id so buttons can report back which notification was acted on.
+  keyboard?: (logId: string) => InlineKeyboard;
 };
 
-export type SendToUserResult = 'notified' | 'no_sub' | 'skipped' | 'error' | 'opt_out';
+export type SendResult = 'sent' | 'failed' | 'gone';
 
-// Check if user has opted out of a notification category.
-async function isOptedOut(userId: string, category: NotificationCategory): Promise<boolean> {
-  const { data } = await supabase
-    .from('notification_preferences')
-    .select('hydration, meals, workouts, insights, goals')
-    .eq('user_id', userId)
-    .single();
-  // If no row exists, default is opted-in
-  if (!data) return false;
-  const prefs = data as Record<string, boolean>;
-  return prefs[category] === false;
+export type NotificationPreferences = {
+  hydration: boolean;
+  meals: boolean;
+  workouts: boolean;
+  insights: boolean;
+  goals: boolean;
+  quiet_start: number;
+  quiet_end: number;
+};
+
+export const DEFAULT_PREFERENCES: NotificationPreferences = {
+  hydration:   true,
+  meals:       true,
+  workouts:    true,
+  insights:    true,
+  goals:       true,
+  quiet_start: 22,
+  quiet_end:   7,
+};
+
+// Log categories are singular, preference columns are plural.
+const PREF_KEY: Partial<Record<NotificationCategory, keyof NotificationPreferences>> = {
+  hydration: 'hydration',
+  meal:      'meals',
+  workout:   'workouts',
+  insight:   'insights',
+  goal:      'goals',
+};
+
+export function isCategoryEnabled(prefs: NotificationPreferences, category: NotificationCategory): boolean {
+  const key = PREF_KEY[category];
+  return key ? prefs[key] !== false : true;
 }
 
-// Send a notification to all devices of a user.
-// Handles: subscription lookup, opt-out check, push, logging, retry enqueue.
-export async function sendNotificationToUser(
+// Quiet window may wrap midnight (22 → 7) or not (13 → 15). start === end disables it.
+export function isQuietHour(hour: number, start: number, end: number): boolean {
+  if (start === end) return false;
+  return start > end ? hour >= start || hour < end : hour >= start && hour < end;
+}
+
+// Plain-text version of the HTML message, for the log table.
+function splitForLog(html: string): { title: string; body: string } {
+  const text = html.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  const [title, ...rest] = text.split('\n');
+  return { title: title.slice(0, 200), body: rest.join('\n').trim().slice(0, 2000) };
+}
+
+export async function sendTelegramNotification(
   userId: string,
-  notif: NotificationPayload,
-  opts: PushSendOptions = {},
-  withRetry = true,
-): Promise<SendToUserResult> {
-  const { data: subs } = await supabase
-    .from('push_subscriptions')
-    .select('endpoint, p256dh, auth')
-    .eq('user_id', userId);
+  chatId: number,
+  notif: OutgoingNotification,
+): Promise<SendResult> {
+  const logId = randomUUID();
+  const result = await sendMessage(chatId, notif.html, notif.keyboard?.(logId));
+  const { title, body } = splitForLog(notif.html);
 
-  if (!subs || subs.length === 0) return 'no_sub';
-
-  const optedOut = await isOptedOut(userId, notif.category);
-  if (optedOut) return 'opt_out';
-
-  const subRows = subs as Array<{ endpoint: string; p256dh: string; auth: string }>;
-  const subData = subRows.map((s) => ({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }));
-
-  try {
-    const { sent, expired, failed, errors } = await sendPushToSubscriptions(
-      subData,
-      { title: notif.title, body: notif.body, tag: notif.tag, url: notif.url ?? '/dashboard' },
-      opts,
-    );
-
-    // Clean up expired subscriptions
-    if (expired.length > 0) {
-      await supabase
-        .from('push_subscriptions')
-        .delete()
-        .in('endpoint', expired)
-        .eq('user_id', userId);
-    }
-
-    // Log successful sends
-    if (sent > 0) {
-      await logNotification({
-        user_id:  userId,
-        category: notif.category,
-        title:    notif.title,
-        body:     notif.body,
-        status:   'sent',
-      });
-
-      // Update last_used_at on subscriptions
-      const activeEndpoints: string[] = subData
-        .map((s) => s.endpoint)
-        .filter((ep) => !expired.includes(ep));
-      if (activeEndpoints.length > 0) {
-        await supabase
-          .from('push_subscriptions')
-          .update({ last_used_at: new Date().toISOString() })
-          .in('endpoint', activeEndpoints)
-          .eq('user_id', userId);
-      }
-
-      return 'notified';
-    }
-
-    // All sends failed — log and optionally enqueue retry
-    if (failed > 0) {
-      const errMsg = errors.map((e) => `${e.code}:${e.message}`).join('; ');
-      await logNotification({
-        user_id:   userId,
-        category:  notif.category,
-        title:     notif.title,
-        body:      notif.body,
-        status:    withRetry ? 'retrying' : 'failed',
-        error_msg: errMsg,
-      });
-
-      if (withRetry) {
-        await enqueueRetry(userId, notif.category, { notif, opts }, 300);
-      }
-
-      return 'error';
-    }
-
-    return 'no_sub';
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[notification-sender] push error userId=${userId}:`, msg);
-    await logNotification({
-      user_id:   userId,
-      category:  notif.category,
-      title:     notif.title,
-      body:      notif.body,
-      status:    'failed',
-      error_msg: msg,
-    });
-    return 'error';
+  if (result.ok) {
+    await logNotification({ id: logId, user_id: userId, category: notif.category, ref: notif.ref, title, body, status: 'sent' });
+    return 'sent';
   }
+
+  const gone = isChatGone(result);
+  if (gone) {
+    // User blocked the bot or deleted the chat — stop trying until they reconnect.
+    await supabase
+      .from('telegram_links')
+      .update({ chat_id: null, updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+    console.info(`[telegram] chat gone userId=${userId} code=${result.code} — link removed`);
+  } else {
+    console.error(`[telegram] send failed userId=${userId} code=${result.code} msg=${result.description}`);
+  }
+
+  await logNotification({
+    id: logId, user_id: userId, category: notif.category, ref: notif.ref, title, body,
+    status: 'failed', error_msg: `${result.code}: ${result.description}`,
+  });
+  return gone ? 'gone' : 'failed';
 }
 
-// Get all user IDs that have at least one push subscription.
-export async function getUsersWithSubscriptions(): Promise<string[]> {
+export async function getChatId(userId: string): Promise<number | null> {
   const { data } = await supabase
-    .from('push_subscriptions')
-    .select('user_id')
-    .limit(500);
-  const rows = (data ?? []) as Array<{ user_id: string }>;
-  return [...new Set(rows.map((r) => r.user_id))];
-}
-
-// Brazil quiet hours check (server-side, São Paulo timezone).
-export function isBrazilQuietHour(quietStart = 22, quietEnd = 7): boolean {
-  const bDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const h = bDate.getHours();
-  return h >= quietStart || h < quietEnd;
-}
-
-export function brazilHour(): number {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getHours();
+    .from('telegram_links')
+    .select('chat_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as { chat_id: number | null } | null)?.chat_id ?? null;
 }
