@@ -91,7 +91,8 @@ REGRAS FINAIS:
 2. Preparações mistas: discrimine cada componente separadamente
 3. calories = inteiro; macros com uma casa decimal
 4. total* = soma exata dos itens listados
-5. Em caso de dúvida → SUBESTIME`;
+5. Em caso de dúvida → SUBESTIME
+6. NUNCA use aspas duplas (") dentro dos textos de "name" ou "quantity" — isso quebra o JSON. Escreva polegadas, apelidos ou ênfases sem aspas`;
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // decoded size
@@ -125,6 +126,58 @@ function extractJSON(raw: string): any {
     }
     throw new Error('No valid JSON object found in response');
   }
+}
+
+// Last-resort recovery for when the model's JSON is the right shape but fails
+// strict JSON.parse — typically an unescaped double quote inside a food name,
+// or the response being cut off mid-array on long meals. Each food item is a
+// flat object, so complete items can be pulled out individually and the
+// totals recomputed from them instead of surfacing a parse error to the user.
+function recoverFoodFields(raw: string): Record<string, unknown> | null {
+  const numberField = (src: string, key: string): number | undefined => {
+    const m = src.match(new RegExp(`"${key}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`));
+    return m ? Number(m[1]) : undefined;
+  };
+  // Lazy match up to the closing quote that is followed by a comma or the end
+  // of the object, so a stray inner quote doesn't cut the value short.
+  const stringField = (src: string, key: string): string | undefined => {
+    const m = src.match(new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"\\s*(?:,\\s*"|\\})`));
+    return m ? m[1].trim() : undefined;
+  };
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const foods: Record<string, unknown>[] = [];
+  // Only fully closed item objects match, so a truncated trailing item is dropped.
+  for (const [chunk] of raw.matchAll(/\{[^{}]*"name"[^{}]*\}/g)) {
+    const name = stringField(chunk, 'name');
+    const calories = numberField(chunk, 'calories');
+    if (!name || calories === undefined) continue;
+    const item: Record<string, unknown> = {
+      name,
+      quantity: stringField(chunk, 'quantity') ?? '',
+      calories: Math.round(calories),
+      protein: round1(numberField(chunk, 'protein') ?? 0),
+      carbs: round1(numberField(chunk, 'carbs') ?? 0),
+      fat: round1(numberField(chunk, 'fat') ?? 0),
+    };
+    const hydration = numberField(chunk, 'hydration_ml');
+    if (hydration !== undefined) item.hydration_ml = Math.round(hydration);
+    foods.push(item);
+  }
+  if (foods.length === 0) return null;
+
+  const sum = (key: string) => foods.reduce((acc, f) => acc + (f[key] as number), 0);
+  const portion = raw.match(/"portionAssumption"\s*:\s*"(small|medium|large)"/);
+  return {
+    foods,
+    totalCalories: Math.round(sum('calories')),
+    totalProtein: round1(sum('protein')),
+    totalCarbs: round1(sum('carbs')),
+    totalFat: round1(sum('fat')),
+    // Items may have been dropped or mangled, so never claim high confidence.
+    confidence: 'low',
+    portionAssumption: portion ? portion[1] : 'medium',
+  };
 }
 
 export async function POST(req: Request) {
@@ -183,7 +236,13 @@ export async function POST(req: Request) {
           contents: [{ role: 'user', parts }],
           config: {
             systemInstruction: SYSTEM,
-            maxOutputTokens: 2048,
+            // JSON mode makes Gemini emit syntactically valid JSON (escaped
+            // quotes, no markdown), which is what extractJSON below relies on.
+            responseMimeType: 'application/json',
+            // Newer Gemini models can spend part of the output budget on hidden
+            // reasoning; meals with many items need room for the full foods
+            // array or the JSON is truncated mid-object.
+            maxOutputTokens: 4096,
             temperature: 0.2,
           },
         })
@@ -194,7 +253,7 @@ export async function POST(req: Request) {
       const geminiMsg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
       console.error('Analyze: Gemini failed, falling back to Groq:', geminiMsg);
       try {
-        raw = await callGroq(SYSTEM, parts);
+        raw = await callGroq(SYSTEM, parts, 4096);
       } catch (groqErr) {
         console.error('Analyze: Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
         throw geminiErr;
@@ -206,7 +265,14 @@ export async function POST(req: Request) {
       data = extractJSON(raw);
     } catch (parseErr) {
       console.error('Analyze: JSON parse error', parseErr, 'raw:', raw.slice(0, 300));
-      return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      const recovered = recoverFoodFields(raw);
+      if (!recovered) {
+        return NextResponse.json(
+          { error: 'Não foi possível interpretar a resposta da IA. Tente novamente ou descreva a refeição com mais detalhes.' },
+          { status: 500 }
+        );
+      }
+      data = recovered;
     }
 
     if (!Array.isArray(data.foods) || data.foods.length === 0) {
