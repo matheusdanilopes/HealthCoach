@@ -1,8 +1,31 @@
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// meta-llama/llama-4-scout-17b-16e-instruct was deprecated by Groq on 2026-06-17
-// and stopped accepting requests; qwen/qwen3.6-27b is the current vision-capable
-// replacement (same image_url/base64 data-URI request shape).
-const GROQ_MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.6-27b';
+// Groq retires models often (llama-4-scout on 2026-06-17, then qwen3.6-27b),
+// and a single hardcoded ID silently broke the whole fallback. Candidates are
+// tried in order until one exists; the first that answers is reused.
+// GROQ_MODEL, when set, is tried first.
+const VISION_MODELS = ['qwen/qwen3.8-27b', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'meta-llama/llama-4-scout-17b-16e-instruct'];
+const TEXT_MODELS   = ['qwen/qwen3.8-27b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b'];
+let workingVisionModel: string | null = null;
+let workingTextModel: string | null   = null;
+
+function candidateModels(hasImage: boolean): string[] {
+  const cached = hasImage ? workingVisionModel : workingTextModel;
+  const list   = [process.env.GROQ_MODEL, cached, ...(hasImage ? VISION_MODELS : TEXT_MODELS)];
+  return [...new Set(list.filter((m): m is string => !!m))];
+}
+
+// Reasoning models spend max_tokens on a hidden "thinking" pass first, which
+// can leave the JSON truncated. Each family takes a different knob.
+function reasoningParams(model: string): Record<string, string> {
+  if (/qwen3/i.test(model))   return { reasoning_effort: 'none' };
+  if (/gpt-oss/i.test(model)) return { reasoning_effort: 'low' };
+  return {};
+}
+
+function isModelUnavailable(status: number, body: string): boolean {
+  return status === 404 || /model_not_found|model_decommissioned|does not exist|decommissioned/i.test(body);
+}
+
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
 export type GroqPart = { text: string } | { inlineData: { mimeType: string; data: string } };
@@ -31,16 +54,37 @@ export interface GroqOptions {
 export async function callGroq(
   system: string,
   parts: GroqPart[],
-  { maxOutputTokens = 2048, temperature = 0.2, maxAttempts = 2, timeoutMs = 30_000 }: GroqOptions = {}
+  opts: GroqOptions = {}
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY not configured');
 
-  // Qwen 3.6 defaults to an extended "thinking" pass before answering, which
-  // would eat into max_tokens and can leave the JSON response truncated.
-  // reasoning_effort is only recognized by Qwen models on Groq.
-  const isQwenReasoningModel = /qwen3/i.test(GROQ_MODEL);
+  const hasImage = parts.some((p) => 'inlineData' in p);
+  let lastErr: unknown = null;
+  for (const model of candidateModels(hasImage)) {
+    try {
+      const content = await callGroqModel(model, apiKey, system, parts, opts);
+      if (hasImage) workingVisionModel = model;
+      else          workingTextModel   = model;
+      return content;
+    } catch (err) {
+      lastErr = err;
+      if (!(err instanceof GroqModelUnavailableError)) throw err;
+      console.warn(`[groq] Model ${model} unavailable, trying next candidate`);
+    }
+  }
+  throw lastErr ?? new Error('No Groq model available');
+}
 
+class GroqModelUnavailableError extends Error {}
+
+async function callGroqModel(
+  model: string,
+  apiKey: string,
+  system: string,
+  parts: GroqPart[],
+  { maxOutputTokens = 2048, temperature = 0.2, maxAttempts = 2, timeoutMs = 30_000 }: GroqOptions
+): Promise<string> {
   let delay = 500;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let res: Response;
@@ -53,14 +97,14 @@ export async function callGroq(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model,
           messages: [
             { role: 'system', content: system },
             { role: 'user', content: toGroqContent(parts) },
           ],
           temperature,
           max_completion_tokens: maxOutputTokens,
-          ...(isQwenReasoningModel ? { reasoning_effort: 'none' } : {}),
+          ...reasoningParams(model),
         }),
       });
     } catch (err) {
@@ -79,7 +123,9 @@ export async function callGroq(
     }
 
     const errBody = await res.text().catch(() => '');
-    const err = new Error(`Groq API error ${res.status}: ${errBody.slice(0, 300)}`);
+    const message = `Groq API error ${res.status} (${model}): ${errBody.slice(0, 300)}`;
+    if (isModelUnavailable(res.status, errBody)) throw new GroqModelUnavailableError(message);
+    const err = new Error(message);
     if (attempt === maxAttempts || !RETRYABLE_STATUS.has(res.status)) throw err;
     await new Promise((r) => setTimeout(r, delay));
     delay *= 2;

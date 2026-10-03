@@ -224,9 +224,9 @@ Responda com JSON:
         label: 'insights',
         system: INSIGHT_SYSTEM,
         parts: [{ text: contextPrompt }],
-        // Room for hidden reasoning on newer models plus the full payload
-        // (nextSteps + mealIdea); 800 truncated the JSON.
-        maxOutputTokens: 2048,
+        // Gemini 3.5 spends output tokens on hidden reasoning before the
+        // JSON; 2048 cut the payload mid-object in production.
+        maxOutputTokens: 8192,
         temperature: 0.5,
         validate: (d) => {
           if (typeof d.title !== 'string' || !d.title.trim()) return false;
