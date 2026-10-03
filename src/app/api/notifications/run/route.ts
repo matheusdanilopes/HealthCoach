@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db';
 import { brazilToday, brazilHour, brazilNDaysAgo } from '@/lib/timezone';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { isTelegramConfigured, openAppButton, waterButtons } from '@/lib/telegram';
+import { cleanupExpiredMessages } from '@/lib/telegram-messages';
 import {
   DEFAULT_PREFERENCES,
   isCategoryEnabled,
@@ -264,6 +265,9 @@ export async function GET(req: Request) {
     }
   }));
 
-  console.info(`[cron-run] brazilHour=${hour}`, counts);
-  return NextResponse.json({ hour, ...counts });
+  // Removes summaries replaced in this run and anything else past its expiry.
+  const cleanup = await cleanupExpiredMessages();
+
+  console.info(`[cron-run] brazilHour=${hour}`, counts, { cleanup });
+  return NextResponse.json({ hour, ...counts, cleanup });
 }

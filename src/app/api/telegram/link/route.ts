@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
-import { botUsername, isTelegramConfigured, sendMessage } from '@/lib/telegram';
+import { botUsername, isTelegramConfigured } from '@/lib/telegram';
+import { sendTracked } from '@/lib/telegram-messages';
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -73,7 +74,7 @@ export async function DELETE() {
     .eq('user_id', session.user.id);
 
   if (chatId) {
-    await sendMessage(chatId, '🔕 Notificações desconectadas pelo app. Para voltar, conecte de novo em <b>Notificações</b>.');
+    await sendTracked(chatId, '🔕 Notificações desconectadas pelo app. Para voltar, conecte de novo em <b>Notificações</b>.', 'reply');
   }
   return NextResponse.json({ ok: true });
 }

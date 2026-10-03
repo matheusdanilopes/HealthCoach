@@ -52,6 +52,8 @@ As notificações são enviadas por um bot do Telegram, com agendamento de hora 
 
 Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
 
+**Chat limpo:** os comandos do usuário são apagados assim que processados. As mensagens do bot somem ao tocar num botão ou ao expirar: lembretes em 2h, respostas de comandos em 10 min, e resumos e insights quando chega o próximo resumo. A limpeza roda a cada 10 min (`/api/telegram/cleanup`, migration 015).
+
 **Configuração**
 
 1. Crie o bot com o [@BotFather](https://t.me/BotFather) e anote o token e o username.
@@ -61,7 +63,7 @@ Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
    - `TELEGRAM_WEBHOOK_SECRET` — string aleatória (`A-Z a-z 0-9 _ -`, até 256 caracteres)
    - `APP_URL` — URL pública do app, ex.: `https://healthcoach.vercel.app`
    - `CRON_SECRET` — já existente
-3. Aplique a migration `supabase/migrations/014_telegram_notifications.sql` e cadastre os segredos do agendador:
+3. Aplique as migrations `014_telegram_notifications.sql` e `015_telegram_message_cleanup.sql` e cadastre os segredos do agendador:
    ```sql
    SELECT vault.create_secret('https://SEU-APP.vercel.app', 'app_url');
    SELECT vault.create_secret('<CRON_SECRET>', 'cron_secret');

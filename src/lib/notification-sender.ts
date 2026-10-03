@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { supabase } from '@/lib/db';
 import { isChatGone, sendMessage, type InlineKeyboard } from '@/lib/telegram';
+import { expireSummaries, trackMessage, type MessageKind } from '@/lib/telegram-messages';
 import { logNotification, type NotificationCategory } from '@/lib/notification-logger';
 
 export type OutgoingNotification = {
@@ -53,6 +54,17 @@ export function isQuietHour(hour: number, start: number, end: number): boolean {
   return start > end ? hour >= start || hour < end : hour >= start && hour < end;
 }
 
+// How long each category stays in the chat before being deleted.
+const MESSAGE_KIND: Record<NotificationCategory, MessageKind> = {
+  hydration: 'reminder',
+  meal:      'reminder',
+  workout:   'reminder',
+  insight:   'summary',
+  goal:      'summary',
+  system:    'reply',
+  test:      'reply',
+};
+
 // Plain-text version of the HTML message, for the log table.
 function splitForLog(html: string): { title: string; body: string } {
   const text = html.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -70,6 +82,10 @@ export async function sendTelegramNotification(
   const { title, body } = splitForLog(notif.html);
 
   if (result.ok) {
+    const kind = MESSAGE_KIND[notif.category];
+    // A new daily summary replaces the previous summaries and insights.
+    if (notif.category === 'goal') await expireSummaries(chatId);
+    await trackMessage(chatId, result.result.message_id, kind);
     await logNotification({ id: logId, user_id: userId, category: notif.category, ref: notif.ref, title, body, status: 'sent' });
     return 'sent';
   }
