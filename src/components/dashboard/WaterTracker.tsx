@@ -1,9 +1,8 @@
 'use client';
 
 import { memo, useState, useCallback, useEffect } from 'react';
-import { Droplets, Bell, BellOff, Clock, Utensils } from 'lucide-react';
+import { Droplets, Clock, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { requestAndSubscribePush } from '@/components/ServiceWorkerRegistration';
 import type { WaterLogEntry } from '@/types';
 
 interface WaterTrackerProps {
@@ -46,8 +45,6 @@ function smartStatus(pct: number, lastLog: WaterLogEntry | undefined, mealMl: nu
 
 export default memo(function WaterTracker({ logs, target, date, onAdded, mealHydrationMl = 0 }: WaterTrackerProps) {
   const [loading, setLoading]           = useState<number | null>(null);
-  const [notifSupported, setNotifSupp]  = useState(false);
-  const [notifGranted, setNotifGranted] = useState(false);
   const [tick, setTick]                 = useState(0);
 
   const directMl  = logs.reduce((s, l) => s + l.amount_ml, 0);
@@ -61,19 +58,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotifSupp(true);
-      setNotifGranted(Notification.permission === 'granted');
-    }
-  }, []);
-
-  async function handleBell() {
-    if (!notifSupported || notifGranted) return;
-    const granted = await requestAndSubscribePush();
-    setNotifGranted(granted);
-  }
 
   const addWater = useCallback(async (ml: number) => {
     setLoading(ml);
@@ -100,18 +84,6 @@ export default memo(function WaterTracker({ logs, target, date, onAdded, mealHyd
           <Droplets size={13} className={cn(ringColor)} />
           <p className="label-xs">Hidratação</p>
         </div>
-        {notifSupported && (
-          <button
-            onClick={handleBell}
-            title={notifGranted ? 'Lembretes ativos' : 'Ativar lembretes de água'}
-            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          >
-            {notifGranted
-              ? <Bell size={13} className={cn(ringColor)} />
-              : <BellOff size={13} className="text-zinc-300 dark:text-zinc-600" />
-            }
-          </button>
-        )}
       </div>
 
       {/* Circular progress */}

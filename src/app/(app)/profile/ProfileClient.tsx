@@ -19,13 +19,9 @@ import {
   Pencil,
   Calculator,
   RotateCcw,
-  Bell,
-  BellOff,
-  Loader2,
-  Activity,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { requestAndSubscribePush, unsubscribeFromPush, forceResubscribePush } from '@/components/ServiceWorkerRegistration';
 import {
   calculateTMB,
   calculateTDEE,
@@ -123,11 +119,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     userChoice: Promise<{ outcome: string }>;
   } | null>(null);
   const [swStatus, setSwStatus] = useState<string>('');
-  const [notifTest, setNotifTest] = useState<'idle' | 'sending' | 'sent' | 'no-device' | 'no-vapid' | 'error'>('idle');
-  const [notifPerm, setNotifPerm] = useState<NotificationPermission | 'unsupported'>('unsupported');
-  const [notifDevices, setNotifDevices] = useState<number | null>(null);
-  const [notifToggling, setNotifToggling] = useState(false);
-  const [notifForcing, setNotifForcing] = useState(false);
+  const [telegram, setTelegram] = useState<{ connected: boolean; username: string | null } | null>(null);
 
   useEffect(() => {
     const checkSW = () => {
@@ -146,15 +138,9 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   }, []);
 
   useEffect(() => {
-    // Notification API only exists client-side; read it after mount to avoid
-    // a hydration mismatch against the SSR-safe 'unsupported' initial state.
-    if ('Notification' in window) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setNotifPerm(Notification.permission);
-    }
-    fetch('/api/notifications/status')
+    fetch('/api/telegram/link')
       .then((r) => r.ok ? r.json() : null)
-      .then((d: { devices?: number } | null) => { if (d) setNotifDevices(d.devices ?? 0); })
+      .then((d: { connected: boolean; username: string | null } | null) => { if (d) setTelegram(d); })
       .catch(() => {});
   }, []);
 
@@ -214,82 +200,6 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
     router.refresh();
-  }
-
-  async function handleNotifEnable() {
-    setNotifToggling(true);
-    const granted = await requestAndSubscribePush();
-    if (granted) {
-      setNotifPerm('granted');
-      setNotifDevices((d) => (d === null ? 1 : d + 1));
-    }
-    setNotifToggling(false);
-  }
-
-  async function handleNotifDisable() {
-    setNotifToggling(true);
-    const ok = await unsubscribeFromPush();
-    if (ok) setNotifDevices(0);
-    setNotifToggling(false);
-  }
-
-  async function handleForceResubscribe() {
-    setNotifForcing(true);
-    const ok = await forceResubscribePush();
-    if (ok) {
-      const d = await fetch('/api/notifications/status').then(r => r.ok ? r.json() : null).catch(() => null);
-      if (d) setNotifDevices(d.devices ?? 0);
-    }
-    setNotifForcing(false);
-  }
-
-  async function handleNotifTest() {
-    setNotifTest('sending');
-    try {
-      await requestAndSubscribePush().catch(() => {});
-
-      // Delay after subscription registration — iOS APNs endpoint takes a few seconds
-      // to propagate. Without this, an immediate send to a freshly registered endpoint
-      // arrives before APNs is ready and fails silently.
-      await new Promise(r => setTimeout(r, 2000));
-
-      const payload = JSON.stringify({
-        title:   'Teste de notificação 🔔',
-        body:    'Tudo certo! As notificações push estão funcionando.',
-        tag:     'hc-test',
-        url:     '/dashboard',
-        urgency: 'high',   // apns-priority 10 = immediate delivery with sound on iOS
-      });
-
-      const sendOnce = () => fetch('/api/notifications/send', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
-      }).then(r => r.json());
-
-      let data = await sendOnce();
-
-      // If subscription was just saved but not yet reflected (race), retry once after 3s
-      if (data.sent === 0 && data.reason === 'no_subscriptions') {
-        await new Promise(r => setTimeout(r, 3000));
-        data = await sendOnce();
-      }
-
-      if (data.sent > 0) {
-        setNotifTest('sent');
-      } else if (data.reason === 'vapid_not_configured' || data.reason === 'send_failed') {
-        setNotifTest('no-vapid');
-      } else {
-        setNotifTest('no-device');
-      }
-
-      // Refresh device count — subscription state may have changed during the test flow
-      fetch('/api/notifications/status')
-        .then(r => r.ok ? r.json() : null)
-        .then((d: { devices?: number } | null) => { if (d) setNotifDevices(d.devices ?? 0); })
-        .catch(() => {});
-    } catch {
-      setNotifTest('error');
-    }
-    setTimeout(() => setNotifTest('idle'), 8000);
   }
 
   async function handleSignOut() {
@@ -583,162 +493,37 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             Notificações
           </p>
-          {notifPerm !== 'unsupported' && (
+          {telegram && (
             <span className={cn(
               'text-[10px] font-medium px-2 py-0.5 rounded-full',
-              notifPerm === 'granted'
+              telegram.connected
                 ? 'bg-teal-50 text-teal-600 dark:bg-teal-950/30 dark:text-teal-400'
-                : notifPerm === 'denied'
-                  ? 'bg-red-50 text-red-500 dark:bg-red-950/30 dark:text-red-400'
-                  : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
             )}>
-              {notifPerm === 'granted' ? 'Permitido' : notifPerm === 'denied' ? 'Bloqueado' : 'Não ativado'}
+              {telegram.connected ? 'Telegram conectado' : 'Desconectado'}
             </span>
           )}
         </div>
-        <div className="p-3 flex flex-col gap-1">
-          {/* Device count + toggle */}
-          {notifPerm !== 'unsupported' && (
-            <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/30">
-              <div className="h-8 w-8 rounded-lg bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center flex-shrink-0">
-                {notifPerm === 'granted'
-                  ? <Bell size={14} className="text-teal-500" />
-                  : <BellOff size={14} className="text-zinc-400 dark:text-zinc-500" />
-                }
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
-                  {notifPerm === 'granted' ? 'Notificações ativas' : 'Notificações desativadas'}
-                </p>
-                {notifDevices !== null && (
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                    {notifDevices === 0
-                      ? 'Nenhum dispositivo registrado'
-                      : `${notifDevices} dispositivo${notifDevices > 1 ? 's' : ''} registrado${notifDevices > 1 ? 's' : ''}`
-                    }
-                  </p>
-                )}
-              </div>
-              {notifPerm !== 'denied' && (
-                <button
-                  type="button"
-                  disabled={notifToggling}
-                  onClick={notifPerm === 'granted' ? handleNotifDisable : handleNotifEnable}
-                  className={cn(
-                    'text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50',
-                    notifPerm === 'granted'
-                      ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600'
-                      : 'bg-teal-500 text-white hover:bg-teal-600'
-                  )}
-                >
-                  {notifToggling
-                    ? <Loader2 size={11} className="animate-spin" />
-                    : notifPerm === 'granted' ? 'Desativar' : 'Ativar'
-                  }
-                </button>
-              )}
-              {notifPerm === 'denied' && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 text-right">
-                  Bloqueado nas<br />configurações
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Test push */}
-          <button
-            type="button"
-            onClick={handleNotifTest}
-            disabled={notifTest === 'sending' || notifPerm !== 'granted'}
-            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors group disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <div className="h-8 w-8 rounded-lg bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center flex-shrink-0">
-              {notifTest === 'sending'
-                ? <Loader2 size={14} className="text-teal-500 animate-spin" />
-                : <Bell size={14} className="text-teal-500" />
-              }
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
-                Testar notificação push
-              </p>
-              {notifTest !== 'idle' && (
-                <p className={cn(
-                  'text-[11px] mt-0.5',
-                  notifTest === 'sent'     ? 'text-teal-600 dark:text-teal-400' :
-                  notifTest === 'no-device' ? 'text-amber-600 dark:text-amber-400' :
-                  notifTest === 'error'    ? 'text-red-500' :
-                  'text-zinc-400'
-                )}>
-                  {notifTest === 'sending'   && 'Registrando dispositivo e enviando…'}
-                  {notifTest === 'sent'      && '✓ Notificação enviada com sucesso!'}
-                  {notifTest === 'no-device' && 'Dispositivo não encontrado. Toque em "Forçar re-registro" e tente novamente.'}
-                  {notifTest === 'no-vapid'  && 'Falha no envio — verifique as chaves VAPID no servidor.'}
-                  {notifTest === 'error'     && 'Erro de conexão — tente novamente.'}
-                </p>
-              )}
-            </div>
-            <ChevronRight
-              size={13}
-              className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0"
-            />
-          </button>
-
-          {/* Force re-register — fixes stale/invalid subscriptions */}
-          {notifPerm === 'granted' && (
-            <button
-              type="button"
-              onClick={handleForceResubscribe}
-              disabled={notifForcing}
-              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                {notifForcing
-                  ? <Loader2 size={14} className="text-zinc-400 animate-spin" />
-                  : <RefreshCw size={14} className="text-zinc-400 dark:text-zinc-500" />
-                }
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
-                  {notifForcing ? 'Registrando…' : 'Forçar re-registro'}
-                </p>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                  Use se as notificações não chegam com o app fechado
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Diagnostics link */}
+        <div className="p-3">
           <Link
             href="/notifications"
             className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group"
           >
-            <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-              <Activity size={14} className="text-zinc-400 dark:text-zinc-500" />
+            <div className="h-8 w-8 rounded-lg bg-sky-50 dark:bg-sky-950/30 flex items-center justify-center flex-shrink-0">
+              <Send size={14} className="text-sky-500" />
             </div>
             <div className="flex-1 text-left">
               <p className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
-                Diagnóstico de notificações
+                {telegram?.connected ? 'Notificações no Telegram' : 'Conectar Telegram'}
               </p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                Status, dispositivos, logs e preferências
+                {telegram?.connected && telegram.username
+                  ? `@${telegram.username} · preferências e histórico`
+                  : 'Lembretes, resumos diários e registro de água pelo bot'}
               </p>
             </div>
             <ChevronRight size={13} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0" />
           </Link>
-
-          {/* iOS sound hint */}
-          {notifPerm === 'granted' && (
-            <div className="mx-1 mb-1 px-4 py-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
-              <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                <span className="font-semibold">Notificações silenciosas no iPhone?</span>{' '}
-                Vá em <span className="font-medium">Ajustes → Notificações → HealthCoach</span> e ative
-                {' '}<span className="font-medium">Sons</span> e <span className="font-medium">Alertas</span>.
-                O app precisa estar instalado na tela de início.
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
