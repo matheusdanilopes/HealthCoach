@@ -168,7 +168,7 @@ export function buildMealMessage(t: UserTargets, s: DayStatus, meal: MealKey, us
   if (meal === 'dinner' && t.protein && s.protein < t.protein * 0.9) {
     lines.push(`Faltam <b>${int(t.protein - s.protein)}g de proteína</b> — priorize uma boa fonte no jantar.`);
   } else {
-    lines.push('Registrar logo após comer deixa o saldo do dia e os insights precisos.');
+    lines.push('Registrar logo após comer deixa o saldo do dia preciso.');
   }
   return lines.join('\n');
 }
@@ -187,19 +187,6 @@ export function buildWorkoutMessage(t: UserTargets, daysWithout: number, userId:
     daysWithout >= 14 ? 'Nenhum treino registrado nas últimas 2 semanas.' : `Seu último treino registrado foi há ${days}.`,
     '30 minutos hoje já quebram a sequência — caminhada, academia ou treino em casa. Depois registre no app para contar as calorias.',
   ].join('\n');
-}
-
-// ─── AI insight ───────────────────────────────────────────────────────────────
-
-const PRIORITY_EMOJI: Record<string, string> = {
-  positivo: '🌟', atencao: '⚠️', recomendacao: '💡', informativo: 'ℹ️',
-};
-
-export function buildInsightMessage(insight: { title: string; message: string; priority: string; cta: string | null }): string {
-  const em = PRIORITY_EMOJI[insight.priority] ?? '💡';
-  const lines = [`${em} <b>${escapeHtml(insight.title)}</b>`, escapeHtml(insight.message)];
-  if (insight.cta) lines.push('', `👉 ${escapeHtml(insight.cta)}`);
-  return lines.join('\n');
 }
 
 // ─── Evening wrap-up and on-demand status ─────────────────────────────────────

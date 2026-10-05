@@ -47,12 +47,11 @@ As notificações são enviadas por um bot do Telegram, com agendamento de hora 
 | 9h–20h, só se abaixo do ritmo | Hidratação (máx. 3/dia, intervalo ≥ 2h30) com botões **+250ml / +500ml** |
 | 10h / 14h / 20h | Café, almoço ou jantar não registrado, com saldo de kcal e proteína |
 | 18h, após 2+ dias sem treino | Lembrete de treino |
-| Quando gerado | Novo insight da IA (uma vez) |
 | 1h antes do silencioso (padrão 21h) | Fechamento do dia com metas batidas |
 
 Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
 
-**Chat limpo:** os comandos do usuário são apagados assim que processados. As mensagens do bot somem ao tocar num botão ou ao expirar: lembretes em 2h, respostas de comandos em 10 min, e resumos e insights quando chega o próximo resumo. A limpeza roda a cada 10 min (`/api/telegram/cleanup`, migration 015).
+**Chat limpo:** os comandos do usuário são apagados assim que processados. As mensagens do bot somem ao tocar num botão ou ao expirar: lembretes em 2h, respostas de comandos em 10 min, e resumos quando chega o próximo resumo. A limpeza roda a cada 10 min (`/api/telegram/cleanup`, migration 015).
 
 **Configuração**
 

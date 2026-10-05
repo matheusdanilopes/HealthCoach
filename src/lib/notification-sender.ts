@@ -18,7 +18,6 @@ export type NotificationPreferences = {
   hydration: boolean;
   meals: boolean;
   workouts: boolean;
-  insights: boolean;
   goals: boolean;
   quiet_start: number;
   quiet_end: number;
@@ -28,7 +27,6 @@ export const DEFAULT_PREFERENCES: NotificationPreferences = {
   hydration:   true,
   meals:       true,
   workouts:    true,
-  insights:    true,
   goals:       true,
   quiet_start: 22,
   quiet_end:   7,
@@ -39,7 +37,6 @@ const PREF_KEY: Partial<Record<NotificationCategory, keyof NotificationPreferenc
   hydration: 'hydration',
   meal:      'meals',
   workout:   'workouts',
-  insight:   'insights',
   goal:      'goals',
 };
 
@@ -59,7 +56,6 @@ const MESSAGE_KIND: Record<NotificationCategory, MessageKind> = {
   hydration: 'reminder',
   meal:      'reminder',
   workout:   'reminder',
-  insight:   'summary',
   goal:      'summary',
   system:    'reply',
   test:      'reply',
@@ -83,7 +79,7 @@ export async function sendTelegramNotification(
 
   if (result.ok) {
     const kind = MESSAGE_KIND[notif.category];
-    // A new daily summary replaces the previous summaries and insights.
+    // A new daily summary replaces the previous summaries.
     if (notif.category === 'goal') await expireSummaries(chatId);
     await trackMessage(chatId, result.result.message_id, kind);
     await logNotification({ id: logId, user_id: userId, category: notif.category, ref: notif.ref, title, body, status: 'sent' });

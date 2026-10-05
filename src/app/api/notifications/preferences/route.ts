@@ -3,7 +3,7 @@ import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { DEFAULT_PREFERENCES, type NotificationPreferences } from '@/lib/notification-sender';
 
-const BOOL_KEYS = ['hydration', 'meals', 'workouts', 'insights', 'goals'] as const;
+const BOOL_KEYS = ['hydration', 'meals', 'workouts', 'goals'] as const;
 const HOUR_KEYS = ['quiet_start', 'quiet_end'] as const;
 
 // GET /api/notifications/preferences
@@ -13,7 +13,7 @@ export async function GET() {
 
   const { data } = await supabase
     .from('notification_preferences')
-    .select('hydration, meals, workouts, insights, goals, quiet_start, quiet_end')
+    .select('hydration, meals, workouts, goals, quiet_start, quiet_end')
     .eq('user_id', session.user.id)
     .maybeSingle();
 

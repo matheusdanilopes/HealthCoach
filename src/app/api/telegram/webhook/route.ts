@@ -104,7 +104,7 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
     [
       `✅ <b>Pronto, ${escapeHtml(targets.firstName)}!</b> Seu HealthCoach está conectado.`,
       '',
-      'Você vai receber aqui: resumo da manhã e da noite, lembretes de água no seu ritmo, refeições não registradas, treino e novos insights.',
+      'Você vai receber aqui: resumo da manhã e da noite, lembretes de água no seu ritmo, refeições não registradas e treino.',
       '',
       HELP,
     ].join('\n'),

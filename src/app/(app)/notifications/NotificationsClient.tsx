@@ -16,7 +16,6 @@ type Preferences = {
   hydration: boolean;
   meals: boolean;
   workouts: boolean;
-  insights: boolean;
   goals: boolean;
   quiet_start: number;
   quiet_end: number;
@@ -32,18 +31,17 @@ type HistoryItem = {
   error_msg: string | null;
 };
 
-type PrefKey = 'goals' | 'hydration' | 'meals' | 'workouts' | 'insights';
+type PrefKey = 'goals' | 'hydration' | 'meals' | 'workouts';
 
 const PREF_LABELS: Record<PrefKey, { label: string; emoji: string; hint: string }> = {
   goals:     { label: 'Resumos do dia', emoji: '🎯', hint: 'Bom dia com metas e fechamento à noite' },
   hydration: { label: 'Hidratação',     emoji: '💧', hint: 'Até 3/dia, só quando estiver abaixo do ritmo' },
   meals:     { label: 'Refeições',      emoji: '🍽️', hint: 'Café (10h), almoço (14h) e jantar (20h) não registrados' },
   workouts:  { label: 'Treinos',        emoji: '💪', hint: 'Às 18h, após 2 dias ou mais sem treino' },
-  insights:  { label: 'Insights IA',    emoji: '🧠', hint: 'Quando um novo insight é gerado' },
 };
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  hydration: '💧', meal: '🍽️', workout: '💪', insight: '🧠', goal: '🎯', test: '✅', system: 'ℹ️',
+  hydration: '💧', meal: '🍽️', workout: '💪', goal: '🎯', test: '✅', system: 'ℹ️',
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);

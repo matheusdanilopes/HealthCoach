@@ -90,19 +90,6 @@ export interface BodyMeasurements {
   updated_at: string;
 }
 
-export interface AIInsight {
-  id: string;
-  user_id: string;
-  type: 'nutrition' | 'hydration' | 'workout' | 'body' | 'behavior' | 'motivation';
-  priority: 'informativo' | 'atencao' | 'positivo' | 'recomendacao';
-  title: string;
-  message: string;
-  cta: string | null;
-  metadata: Record<string, unknown> | null;
-  generated_at: string;
-  read_at: string | null;
-}
-
 export type MealType =
   | 'breakfast'
   | 'morning_snack'

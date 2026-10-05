@@ -42,7 +42,7 @@ export async function deleteNow(chatId: number, messageId: number): Promise<void
   await supabase.from('telegram_messages').delete().eq('chat_id', chatId).eq('message_id', messageId);
 }
 
-// A new summary makes the previous summaries and insights obsolete.
+// A new summary makes the previous summaries obsolete.
 export async function expireSummaries(chatId: number): Promise<void> {
   await supabase
     .from('telegram_messages')
