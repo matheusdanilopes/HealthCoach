@@ -4,30 +4,30 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-col gap-5 pt-7 pb-6">
+    <div className="flex flex-col gap-4 pt-6 pb-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-2 flex-1">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-3.5 w-32 rounded-lg" />
           <Skeleton className="h-7 w-48 rounded-xl" />
-          <Skeleton className="h-9 rounded-xl" />
         </div>
-        <Skeleton className="h-9 w-20 rounded-xl mt-[38px]" />
+        <Skeleton className="h-11 w-24 rounded-2xl" />
       </div>
 
-      {/* Calorie card */}
-      <Skeleton className="h-[148px] rounded-2xl" />
+      {/* Week strip */}
+      <Skeleton className="h-[104px] rounded-2xl" />
 
-      {/* Action buttons */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <Skeleton className="h-12 rounded-2xl" />
-        <Skeleton className="h-12 rounded-2xl" />
-      </div>
+      {/* Daily summary */}
+      <Skeleton className="h-[330px] rounded-3xl" />
 
-      {/* Macros + Water */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Skeleton className="flex-1 h-[180px] rounded-2xl" />
-        <Skeleton className="sm:w-56 h-[280px] rounded-2xl" />
-      </div>
+      {/* Primary action */}
+      <Skeleton className="h-14 rounded-2xl" />
+
+      {/* Water */}
+      <Skeleton className="h-[136px] rounded-3xl" />
+
+      {/* Meals */}
+      <Skeleton className="h-[340px] rounded-3xl" />
     </div>
   );
 }
