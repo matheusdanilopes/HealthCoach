@@ -1,13 +1,13 @@
 import { supabase } from '@/lib/db';
 
-export type NotificationCategory = 'hydration' | 'meal' | 'workout' | 'insight' | 'goal' | 'system' | 'test';
+export type NotificationCategory = 'hydration' | 'meal' | 'workout' | 'goal' | 'system' | 'test';
 export type NotificationStatus = 'sent' | 'failed';
 
 export interface LogEntry {
   id?: string;
   user_id: string;
   category: NotificationCategory;
-  ref?: string;           // dedup key, e.g. 'meal:lunch' or 'insight:<uuid>'
+  ref?: string;           // dedup key, e.g. 'meal:lunch'
   title: string;
   body: string;
   status: NotificationStatus;

@@ -41,15 +41,6 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
   const [addWaterTime, setAddWaterTime] = useState('');
   const [addWaterAmount, setAddWaterAmount] = useState('300');
   const [savingWater, setSavingWater] = useState(false);
-  const insightDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const scheduleInsightInvalidation = useCallback(() => {
-    if (insightDebounceRef.current) clearTimeout(insightDebounceRef.current);
-    insightDebounceRef.current = setTimeout(() => {
-      fetch('/api/ai-insights?invalidate=1').catch(() => {});
-    }, 3000);
-  }, []);
-
   const isToday = selectedDate === todayISO();
 
   useEffect(() => {
@@ -118,25 +109,21 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
 
   const handleFoodAdded = useCallback((log: FoodLog) => {
     setLogs((prev) => [...prev, log]);
-    scheduleInsightInvalidation();
-  }, [scheduleInsightInvalidation]);
+  }, []);
 
   const handleDelete = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
-    scheduleInsightInvalidation();
-  }, [scheduleInsightInvalidation]);
+  }, []);
 
   const handleUpdated = useCallback((updated: FoodLog) => {
     setLogs((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
-    scheduleInsightInvalidation();
-  }, [scheduleInsightInvalidation]);
+  }, []);
 
   async function handleDeleteWorkout(id: string) {
     setDeletingWorkoutId(id);
     await fetch(`/api/food?id=${id}`, { method: 'DELETE' });
     setLogs((prev) => prev.filter((l) => l.id !== id));
     setDeletingWorkoutId(null);
-    scheduleInsightInvalidation();
   }
 
   async function handleDeleteWater(id: string) {

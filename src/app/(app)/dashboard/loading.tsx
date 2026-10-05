@@ -17,9 +17,6 @@ export default function DashboardLoading() {
       {/* Calorie card */}
       <Skeleton className="h-[148px] rounded-2xl" />
 
-      {/* AI insight */}
-      <Skeleton className="h-[100px] rounded-2xl" />
-
       {/* Action buttons */}
       <div className="grid grid-cols-2 gap-2.5">
         <Skeleton className="h-12 rounded-2xl" />

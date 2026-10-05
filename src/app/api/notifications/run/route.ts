@@ -26,7 +26,6 @@ import {
   buildHydrationMessage,
   buildMealMessage,
   buildWorkoutMessage,
-  buildInsightMessage,
   mealLabel,
   type MealKey,
 } from '@/lib/notification-messages';
@@ -38,7 +37,6 @@ import {
 //   • up to 3 pace-based hydration nudges (only when behind the expected curve)
 //   • a reminder per main meal not yet logged (10h, 14h, 20h)
 //   • a workout nudge at 18h after 2+ days without training
-//   • each new AI insight, once
 //   • an evening wrap-up the hour before quiet hours start
 // and never more than MAX_PER_RUN messages in the same hour.
 
@@ -169,36 +167,6 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
   // 5. Hydration
   const hyd = hydrationNudge(ctx, day, hour, today);
   if (hyd) out.push(hyd);
-
-  // 6. New AI insight (one per run, never repeated)
-  const { data: insights } = await supabase
-    .from('ai_insights')
-    .select('id, title, message, priority, cta')
-    .eq('user_id', userId)
-    .is('read_at', null)
-    .gte('generated_at', new Date(Date.now() - 24 * 3600_000).toISOString())
-    .order('generated_at', { ascending: false })
-    .limit(5);
-  type InsightRow = { id: string; title: string; message: string; priority: string; cta: string | null };
-  const fresh = (insights ?? []) as InsightRow[];
-  if (fresh.length > 0) {
-    // Insights live up to 24h, so check the full log rather than only today's entries.
-    const { data: notified } = await supabase
-      .from('notification_logs')
-      .select('ref')
-      .eq('user_id', userId)
-      .in('ref', fresh.map((i) => `insight:${i.id}`));
-    const seen = new Set(((notified ?? []) as Array<{ ref: string }>).map((r) => r.ref));
-    const insight = fresh.find((i) => !seen.has(`insight:${i.id}`));
-    if (insight) {
-      out.push({
-        category: 'insight',
-        ref:      `insight:${insight.id}`,
-        html:     buildInsightMessage(insight),
-        keyboard: () => [openAppButton('Ver no app', '/dashboard')],
-      });
-    }
-  }
 
   return out.filter((n) => isCategoryEnabled(prefs, n.category)).slice(0, MAX_PER_RUN);
 }
