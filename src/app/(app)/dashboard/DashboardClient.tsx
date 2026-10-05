@@ -4,16 +4,17 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Scale, Plus, Dumbbell, ChevronLeft, ChevronRight } from 'lucide-react';
-import CalorieCard from '@/components/dashboard/CalorieCard';
-import MacroProgress from '@/components/dashboard/MacroProgress';
+import { Scale, Plus, Sparkles, Dumbbell } from 'lucide-react';
+import DailySummaryCard from '@/components/dashboard/DailySummaryCard';
+import MealsOverview from '@/components/dashboard/MealsOverview';
+import WeekStrip from '@/components/dashboard/WeekStrip';
 import WaterTracker from '@/components/dashboard/WaterTracker';
 import AIFoodLogger from '@/components/diary/AIFoodLogger';
 import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
 import WeightLogModal from './WeightLogModal';
-import { cn, todayISO } from '@/lib/utils';
-import type { FoodLog, Profile, WaterLogEntry } from '@/types';
+import { cn, todayISO, suggestMealType } from '@/lib/utils';
+import type { FoodLog, MealType, Profile, WaterLogEntry } from '@/types';
 
 interface DashboardClientProps {
   profile: Profile | null;
@@ -43,6 +44,7 @@ export default function DashboardClient({
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>(initialFoodLogs);
   const [waterLogs, setWaterLogs] = useState<WaterLogEntry[]>(initialWaterLogs);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
+  const [defaultMeal, setDefaultMeal] = useState<MealType | null>(null);
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(serverDate);
@@ -79,6 +81,7 @@ export default function DashboardClient({
   }, []);
 
   const isToday = selectedDate === todayISO();
+  const targetCalories = profile?.target_calories ?? 2000;
 
   async function navigateTo(date: string) {
     if (date > todayISO()) return;
@@ -92,12 +95,6 @@ export default function DashboardClient({
     } finally {
       setLoadingDate(false);
     }
-  }
-
-  function changeDate(delta: number) {
-    const d = new Date(selectedDate + 'T12:00:00');
-    d.setDate(d.getDate() + delta);
-    navigateTo(d.toISOString().split('T')[0]);
   }
 
   const { workoutBurned, stats } = useMemo(() => {
@@ -124,145 +121,109 @@ export default function DashboardClient({
     setWaterLogs((prev) => [...prev, { amount_ml: ml, created_at: createdAt }]);
   }, []);
 
+  const handleAddMeal = useCallback((meal: MealType | null) => {
+    setDefaultMeal(meal);
+    setAddFoodOpen(true);
+  }, []);
+
   const firstName = profile?.full_name?.split(' ')[0];
   const displayDate = format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR });
+  const suggestedMeal = isToday ? suggestMealType(new Date().getHours()) : null;
 
   return (
-    <div className="flex flex-col gap-5 pt-7 pb-6 animate-fade-in">
+    <div className="flex flex-col gap-4 pt-6 pb-6 animate-fade-in">
 
-      {/* ── Page Header ── */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight mb-3">
+      {/* ── Header ── */}
+      <header className="flex items-center justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium text-zinc-400 dark:text-zinc-500 first-letter:uppercase">
+            {isToday ? displayDate : 'Visualizando histórico'}
+          </p>
+          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-50 leading-tight tracking-tight">
             {isToday
-              ? `${greetingText}${firstName ? `, ${firstName}` : ''} 👋`
-              : `Histórico${firstName ? `, ${firstName}` : ''}`}
+              ? `${greetingText}${firstName ? `, ${firstName}` : ''}`
+              : <span className="inline-block first-letter:uppercase">{displayDate}</span>}
           </h1>
-
-          {/* Date navigation */}
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              'flex items-center flex-1 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/60 rounded-xl h-9 px-1 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none transition-opacity',
-              loadingDate && 'opacity-50'
-            )}>
-              <button
-                onClick={() => changeDate(-1)}
-                disabled={loadingDate}
-                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500 transition-colors disabled:opacity-40 active:scale-95"
-                aria-label="Dia anterior"
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <p className="flex-1 text-center text-[12px] font-semibold text-zinc-600 dark:text-zinc-300 capitalize select-none">
-                {isToday ? 'Hoje' : displayDate}
-              </p>
-              <button
-                onClick={() => changeDate(1)}
-                disabled={isToday || loadingDate}
-                className="w-8 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500 transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-95"
-                aria-label="Próximo dia"
-              >
-                <ChevronRight size={15} />
-              </button>
-            </div>
-            {!isToday && (
-              <button
-                onClick={() => navigateTo(todayISO())}
-                className="h-9 px-3.5 rounded-xl bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-500 transition-colors active:scale-95 whitespace-nowrap shadow-sm shadow-emerald-600/25"
-              >
-                Hoje
-              </button>
-            )}
-          </div>
         </div>
 
-        {/* Weight pill */}
-        {isToday && (
-          <button
-            onClick={() => setWeightModalOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/60 text-zinc-600 dark:text-zinc-300 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-95 mt-[38px]"
-          >
-            <Scale size={12} className="text-zinc-400 dark:text-zinc-500" />
-            <span className="font-bold tabular-nums text-[13px]">{latestWeight}kg</span>
-          </button>
-        )}
-      </div>
+        <button
+          onClick={() => setWeightModalOpen(true)}
+          disabled={!isToday}
+          className="flex-shrink-0 flex items-center gap-2 h-11 pl-2 pr-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800/70 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 active:scale-95 disabled:pointer-events-none"
+          aria-label="Registrar peso"
+        >
+          <span className="h-7 w-7 rounded-xl bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center">
+            <Scale className="w-3.5 h-3.5 text-violet-500" />
+          </span>
+          <span className="text-left leading-none">
+            <span className="block text-[10px] font-medium text-zinc-400 dark:text-zinc-500">Peso</span>
+            <span className="block text-[14px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100 mt-0.5">
+              {latestWeight.toLocaleString('pt-BR')} kg
+            </span>
+          </span>
+        </button>
+      </header>
 
-      {/* ── Main Stats ── */}
-      <div className="flex flex-col gap-3">
-        <CalorieCard
+      <WeekStrip
+        selectedDate={selectedDate}
+        today={todayISO()}
+        disabled={loadingDate}
+        onSelect={navigateTo}
+      />
+
+      <div className={cn('flex flex-col gap-4 transition-opacity duration-200', loadingDate && 'opacity-50')}>
+        <DailySummaryCard
           consumed={stats.calories}
           burned={workoutBurned}
-          target={profile?.target_calories ?? 2000}
+          target={targetCalories}
+          protein={stats.protein}
+          carbs={stats.carbs}
+          fat={stats.fat}
+          tdee={profile?.tdee}
+          isToday={isToday}
         />
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-2.5">
+        {/* Quick actions */}
+        <div className="flex gap-2.5">
           <button
-            onClick={() => setAddFoodOpen(true)}
-            className="flex items-center justify-center gap-2 h-12 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-[13px] font-semibold shadow-sm shadow-emerald-600/25 transition-all active:scale-[0.97]"
+            onClick={() => handleAddMeal(suggestedMeal)}
+            className="group flex-1 min-w-0 flex items-center gap-3 h-14 pl-2 pr-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 transition-all duration-200 active:scale-[0.98]"
           >
-            <Plus size={16} strokeWidth={2.5} />
-            Registrar refeição
+            <span className="h-10 w-10 flex-shrink-0 rounded-xl bg-white/15 flex items-center justify-center">
+              <Sparkles className="w-5 h-5" />
+            </span>
+            <span className="flex-1 min-w-0 text-left leading-tight">
+              <span className="block text-[14px] font-semibold">Registrar refeição</span>
+              <span className="block text-[11px] text-emerald-100/90 truncate">Texto, foto ou voz</span>
+            </span>
+            <Plus className="w-5 h-5 flex-shrink-0 transition-transform duration-200 group-hover:rotate-90" strokeWidth={2.5} />
           </button>
           <button
             onClick={() => setAddWorkoutOpen(true)}
-            className="flex items-center justify-center gap-2 h-12 px-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/60 text-zinc-700 dark:text-zinc-300 text-[13px] font-semibold shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-700 transition-all active:scale-[0.97]"
+            className="flex-shrink-0 flex flex-col items-center justify-center gap-0.5 h-14 w-[72px] rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800/70 text-orange-500 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 active:scale-95"
+            aria-label="Registrar treino"
           >
-            <Dumbbell size={15} />
-            Registrar treino
+            <Dumbbell className="w-5 h-5" />
+            <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">Treino</span>
           </button>
         </div>
 
-        {/* TDEE / Deficit row */}
-        {profile?.tdee && (
-          <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/40 rounded-xl shadow-[0_1px_2px_0_rgb(0,0,0,0.03)] dark:shadow-none">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-md bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
-                <span className="text-[11px]">⚡</span>
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">TDEE</p>
-                <p className="text-[13px] font-bold tabular-nums text-zinc-800 dark:text-zinc-200">
-                  {profile.tdee.toLocaleString('pt-BR')} kcal
-                </p>
-              </div>
-            </div>
-            <div className="h-8 w-px bg-zinc-100 dark:bg-zinc-800" />
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
-                <span className="text-[11px]">📉</span>
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Déficit</p>
-                <p className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                  {(profile.tdee - (profile.target_calories ?? 0)).toLocaleString('pt-BR')} kcal
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        <WaterTracker
+          logs={waterLogs}
+          target={profile?.target_water_ml ?? 2500}
+          date={selectedDate}
+          onAdded={handleWaterAdded}
+          mealHydrationMl={mealHydrationMl}
+        />
 
-        {/* Macros + Water */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <MacroProgress
-              protein={stats.protein}
-              carbs={stats.carbs}
-              fat={stats.fat}
-              targetCalories={profile?.target_calories ?? 2000}
-            />
-          </div>
-          <div className="sm:w-56 flex-shrink-0">
-            <WaterTracker
-              logs={waterLogs}
-              target={profile?.target_water_ml ?? 2500}
-              date={selectedDate}
-              onAdded={handleWaterAdded}
-              mealHydrationMl={mealHydrationMl}
-            />
-          </div>
-        </div>
+        <MealsOverview
+          logs={foodLogs}
+          targetCalories={targetCalories}
+          suggestedMeal={suggestedMeal}
+          onAddMeal={handleAddMeal}
+          onAddWorkout={() => setAddWorkoutOpen(true)}
+        />
+
       </div>
 
       {/* ── Modals ── */}
@@ -270,6 +231,7 @@ export default function DashboardClient({
         open={addFoodOpen}
         onClose={() => setAddFoodOpen(false)}
         userId={userId}
+        defaultMeal={defaultMeal}
         date={selectedDate}
         onAdded={handleFoodAdded}
       />
