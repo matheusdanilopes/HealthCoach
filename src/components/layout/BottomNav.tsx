@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat } from 'lucide-react';
+import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BODY_PATHS = ['/body-metrics', '/body-measurements'];
-const SAUDE_PATHS = ['/diary', '/history', '/marmitas'];
+const SAUDE_PATHS = ['/diary', '/history', '/marmitas', '/coach'];
 
 const BODY_SUB_ITEMS = [
   { href: '/body-metrics',      icon: Scale,  label: 'Pesagem',  desc: 'Peso e composição' },
@@ -18,6 +18,7 @@ const SAUDE_SUB_ITEMS = [
   { href: '/diary',    icon: BookOpen,   label: 'Diário',               desc: 'Refeições e hábitos' },
   { href: '/history',  icon: TrendingUp, label: 'Evolução',             desc: 'Gráficos e progresso' },
   { href: '/marmitas', icon: ChefHat,    label: 'Marmitas IA',          desc: 'Planejamento semanal' },
+  { href: '/coach',    icon: Brain,      label: 'Coach IA',             desc: 'Análise comportamental' },
 ];
 
 function SubMenu({
