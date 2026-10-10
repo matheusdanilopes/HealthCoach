@@ -101,3 +101,23 @@ export type MealType =
   | 'post_workout'
   | 'other';
 export type ActivityLevel = 'sedentary' | 'moderate' | 'active';
+
+export type CoachImpact = 'alto' | 'medio' | 'baixo';
+
+export interface CoachAnalysis {
+  summary: string;
+  score: number | null;
+  scoreLabel: string;
+  strengths: { title: string; detail: string }[];
+  mistakes: { title: string; detail: string; evidence: string }[];
+  improvements: { title: string; action: string; impact: CoachImpact }[];
+  strategy: {
+    headline: string;
+    calories: string;
+    protein: string;
+    training: string;
+    habits: string[];
+  };
+  nextSteps: string[];
+  closing: string;
+}

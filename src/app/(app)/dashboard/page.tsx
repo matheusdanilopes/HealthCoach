@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { supabase } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
+import { getLatestWeight } from '@/lib/weight';
 import DashboardClient from './DashboardClient';
 import type { Profile, FoodLog, WaterLogEntry } from '@/types';
 
@@ -14,16 +15,11 @@ export default async function DashboardPage() {
 
   const [
     { data: profile },
-    { data: weightRows },
+    lastWeight,
     { data: waterData },
   ] = await Promise.all([
     supabase.from('users').select('*').eq('id', userId).single(),
-    supabase
-      .from('weight_logs')
-      .select('weight_kg')
-      .eq('user_id', userId)
-      .order('log_date', { ascending: false })
-      .limit(1),
+    getLatestWeight(userId),
     supabase
       .from('water_logs')
       .select('amount_ml, created_at')
@@ -51,9 +47,7 @@ export default async function DashboardPage() {
     foodData = legacyFood as unknown as typeof foodData;
   }
 
-  const latestWeight = parseFloat(
-    String(weightRows?.[0]?.weight_kg ?? (profile as Profile | null)?.current_weight ?? 0)
-  );
+  const latestWeight = lastWeight ?? (parseFloat(String((profile as Profile | null)?.current_weight ?? 0)) || 0);
 
   const initialWaterLogs = (waterData ?? []) as WaterLogEntry[];
 
