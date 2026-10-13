@@ -3,14 +3,15 @@ import { getMealLabel } from '@/lib/utils';
 import { missedGoals, type GoalKey } from '@/lib/notification-messages';
 import type { DayStatus, UserTargets } from '@/lib/day-status';
 
-// AI-written closing line for the evening wrap-up, used only on days with
-// missed goals. Returns null when every goal was met or the AI fails, so the
-// caller falls back to the fixed tip.
+// AI-written closing line for the evening wrap-up, used only on days when the
+// water or calorie goal was missed. Returns null otherwise or when the AI
+// fails, so the caller falls back to the fixed text.
 
 // The cron sends to every user in parallel; past this the wrap-up goes out
 // with the fixed tip instead of holding the run.
 const DEADLINE_MS = 20_000;
 const MAX_CHARS = 400;
+const AI_TRIGGERS: GoalKey[] = ['water', 'calories'];
 
 const SYSTEM = `Você é um coach de saúde que escreve a mensagem de fechamento do dia enviada pelo Telegram, em português do Brasil.
 
@@ -59,7 +60,7 @@ function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export async function generateEveningClosing(t: UserTargets, s: DayStatus): Promise<string | null> {
   const missed = missedGoals(t, s);
-  if (missed.length === 0) return null;
+  if (!missed.some((k) => AI_TRIGGERS.includes(k))) return null;
 
   try {
     const data = await withDeadline(

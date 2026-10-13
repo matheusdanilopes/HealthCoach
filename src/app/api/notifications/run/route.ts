@@ -39,7 +39,7 @@ import { generateEveningClosing } from '@/lib/evening-closing';
 //   • a reminder per main meal not yet logged (10h, 14h, 20h)
 //   • a workout nudge at 18h after 2+ days without training
 //   • an evening wrap-up the hour before quiet hours start (AI-written closing
-//     when a goal was missed)
+//     when the water or calorie goal was missed)
 // and never more than MAX_PER_RUN messages in the same hour.
 
 export const maxDuration = 60;
@@ -131,7 +131,7 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     });
   }
 
-  // 2. Evening wrap-up (AI-written closing on days with missed goals)
+  // 2. Evening wrap-up (AI-written closing when water or calories were missed)
   if (hour === eveningHour && !alreadySent(ctx, 'evening') && isCategoryEnabled(prefs, 'goal')) {
     out.push({
       category: 'goal',

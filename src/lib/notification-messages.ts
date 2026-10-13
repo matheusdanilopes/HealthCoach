@@ -197,7 +197,7 @@ export function missedGoals(t: UserTargets, s: DayStatus): GoalKey[] {
   return dayMetrics(t, s).filter((m) => !m.ok).map((m) => m.key);
 }
 
-// aiClosing (plain text) replaces the closing line on days with missed goals;
+// aiClosing (plain text) replaces the closing line when a goal was missed;
 // without it the fixed tip below is used.
 export function buildEveningMessage(t: UserTargets, s: DayStatus, aiClosing?: string | null): string {
   const metrics = dayMetrics(t, s);
