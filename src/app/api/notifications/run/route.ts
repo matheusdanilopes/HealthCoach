@@ -29,6 +29,7 @@ import {
   mealLabel,
   type MealKey,
 } from '@/lib/notification-messages';
+import { generateEveningClosing } from '@/lib/evening-closing';
 
 // Hourly scheduler (Supabase pg_cron → GET /api/notifications/run).
 //
@@ -37,8 +38,11 @@ import {
 //   • up to 3 pace-based hydration nudges (only when behind the expected curve)
 //   • a reminder per main meal not yet logged (10h, 14h, 20h)
 //   • a workout nudge at 18h after 2+ days without training
-//   • an evening wrap-up the hour before quiet hours start
+//   • an evening wrap-up the hour before quiet hours start (AI-written closing
+//     when the water or calorie goal was missed)
 // and never more than MAX_PER_RUN messages in the same hour.
+
+export const maxDuration = 60;
 
 const MAX_PER_RUN          = 2;
 const HYDRATION_DAILY_CAP  = 3;
@@ -127,12 +131,12 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     });
   }
 
-  // 2. Evening wrap-up
-  if (hour === eveningHour && !alreadySent(ctx, 'evening')) {
+  // 2. Evening wrap-up (AI-written closing when water or calories were missed)
+  if (hour === eveningHour && !alreadySent(ctx, 'evening') && isCategoryEnabled(prefs, 'goal')) {
     out.push({
       category: 'goal',
       ref:      'evening',
-      html:     buildEveningMessage(targets, day),
+      html:     buildEveningMessage(targets, day, await generateEveningClosing(targets, day)),
       keyboard: () => [openAppButton('📊 Abrir o app', '/dashboard')],
     });
   }

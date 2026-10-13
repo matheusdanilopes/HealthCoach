@@ -191,13 +191,23 @@ export function buildWorkoutMessage(t: UserTargets, daysWithout: number, userId:
 
 // ─── Evening wrap-up and on-demand status ─────────────────────────────────────
 
-export function buildEveningMessage(t: UserTargets, s: DayStatus): string {
+export type GoalKey = Metric['key'];
+
+export function missedGoals(t: UserTargets, s: DayStatus): GoalKey[] {
+  return dayMetrics(t, s).filter((m) => !m.ok).map((m) => m.key);
+}
+
+// aiClosing (plain text) replaces the closing line when a goal was missed;
+// without it the fixed tip below is used.
+export function buildEveningMessage(t: UserTargets, s: DayStatus, aiClosing?: string | null): string {
   const metrics = dayMetrics(t, s);
   const missed = metrics.filter((m) => !m.ok);
   const lines = [`🌙 <b>Fechamento do dia, ${escapeHtml(t.firstName)}</b>`, '', metricsBlock(metrics), ''];
 
   if (missed.length === 0) {
     lines.push('Dia redondo — todas as metas batidas! 🎉');
+  } else if (aiClosing) {
+    lines.push(escapeHtml(aiClosing));
   } else if (missed.length === metrics.length) {
     lines.push(`Amanhã é um novo dia. Comece por um ponto: ${FOCUS_TIP[missed[0].key]}.`);
   } else {
