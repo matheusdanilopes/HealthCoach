@@ -22,6 +22,7 @@ export async function PUT(req: Request) {
     activityLevel,
     customTmb,
     customTargetCalories,
+    targetProtein,
   } = await req.json();
 
   const w = parseFloat(weight);
@@ -41,6 +42,14 @@ export async function PUT(req: Request) {
       ? Math.max(Math.round(Number(customTargetCalories)), 1200)
       : formulaTarget;
   const targetWater = calculateWaterTarget(w);
+  // Optional: empty clears the goal; omitted (older clients) keeps it.
+  const proteinNum = Number(targetProtein);
+  const proteinUpdate =
+    targetProtein === undefined
+      ? {}
+      : { target_protein_g: targetProtein === null || targetProtein === '' || !Number.isFinite(proteinNum) || proteinNum <= 0
+          ? null
+          : Math.min(Math.max(Math.round(proteinNum), 20), 400) };
 
   await supabase
     .from('users')
@@ -54,6 +63,7 @@ export async function PUT(req: Request) {
       tdee,
       target_calories: targetCal,
       target_water_ml: targetWater,
+      ...proteinUpdate,
       updated_at: new Date().toISOString(),
     })
     .eq('id', session.user.id);

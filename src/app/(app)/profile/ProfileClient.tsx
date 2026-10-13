@@ -27,6 +27,7 @@ import {
   calculateTDEE,
   calculateTargetCalories,
   calculateAge,
+  calculateProteinTarget,
 } from '@/lib/calculations';
 import type { Profile } from '@/types';
 
@@ -110,6 +111,9 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const [customTmb, setCustomTmb] = useState(initialCalc.tmb);
   const [isTmbManual, setIsTmbManual] = useState(initialCalc.isManual);
   const [customMeta, setCustomMeta] = useState(initialCalc.meta);
+  const [targetProtein, setTargetProtein] = useState(
+    profile?.target_protein_g != null ? String(Math.round(Number(profile.target_protein_g))) : ''
+  );
 
   // UI states
   const [loading, setLoading] = useState(false);
@@ -194,6 +198,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         activityLevel,
         customTmb: customTmb ? Number(customTmb) : null,
         customTargetCalories: customMeta ? Number(customMeta) : null,
+        targetProtein: targetProtein ? Number(targetProtein) : null,
       }),
     });
     setLoading(false);
@@ -215,6 +220,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   const tmbNum = Number(customTmb);
   const metaNum = Number(customMeta);
   const tdeePreview = tmbNum ? calculateTDEE(tmbNum, activityLevel) : null;
+  const weightNum = parseFloat(weight);
+  const proteinSuggestion = weightNum > 0 ? calculateProteinTarget(weightNum) : null;
 
   return (
     <div className="flex flex-col gap-4 pt-6 pb-8 animate-fade-in">
@@ -473,6 +480,37 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               className="h-11 w-full rounded-xl px-3.5 text-sm tabular-nums bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 transition-all duration-150"
             />
             <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Mínimo de 1.200 kcal/dia.</p>
+          </div>
+
+          {/* Meta de proteína */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                Meta de proteína (g/dia)
+              </span>
+              {proteinSuggestion && String(proteinSuggestion) !== targetProtein && (
+                <button
+                  type="button"
+                  onClick={() => setTargetProtein(String(proteinSuggestion))}
+                  className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                >
+                  <Calculator size={9} />
+                  Usar sugestão ({proteinSuggestion} g)
+                </button>
+              )}
+            </div>
+            <input
+              type="number"
+              value={targetProtein}
+              onChange={(e) => setTargetProtein(e.target.value)}
+              min={20}
+              max={400}
+              placeholder={proteinSuggestion ? `Sugestão: ${proteinSuggestion}` : 'Ex.: 140'}
+              className="h-11 w-full rounded-xl px-3.5 text-sm tabular-nums bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 transition-all duration-150"
+            />
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              Sugestão de 1,8 g por kg de peso. Deixe em branco para não acompanhar proteína.
+            </p>
           </div>
         </SectionCard>
 

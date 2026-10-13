@@ -8,6 +8,7 @@ export interface Profile {
   activity_level: 'sedentary' | 'moderate' | 'active' | null;
   tdee: number | null;
   target_calories: number | null;
+  target_protein_g: number | null;
   target_water_ml: number;
 }
 

@@ -25,25 +25,35 @@ export type DayStatus = {
 };
 
 type ProfileRow = {
-  full_name: string | null;
-  target_calories: number | null;
-  target_protein_g: number | null;
-  target_water_ml: number | null;
+  full_name?: string | null;
+  target_calories?: number | string | null;
+  target_protein_g?: number | string | null;
+  target_water_ml?: number | string | null;
+};
+
+const num = (v: unknown): number | null => {
+  const n = v == null || v === '' ? NaN : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 };
 
 export function toTargets(p: ProfileRow | null): UserTargets {
   return {
     firstName: (p?.full_name ?? '').trim().split(' ')[0] || 'você',
-    calories:  p?.target_calories ?? null,
-    protein:   p?.target_protein_g != null ? Number(p.target_protein_g) : null,
-    waterMl:   p?.target_water_ml ?? 2500,
+    calories:  num(p?.target_calories),
+    protein:   num(p?.target_protein_g),
+    waterMl:   num(p?.target_water_ml) ?? 2500,
   };
 }
 
-export const PROFILE_COLUMNS = 'id, full_name, target_calories, target_protein_g, target_water_ml';
+// '*' instead of a column list: a single missing or renamed column would make
+// PostgREST reject the whole query and every user would silently get the
+// defaults (no name, no calorie/protein goals).
+export const PROFILE_COLUMNS = '*';
 
 export async function getUserTargets(userId: string): Promise<UserTargets> {
-  const { data } = await supabase.from('users').select(PROFILE_COLUMNS).eq('id', userId).single();
+  const { data, error } = await supabase.from('users').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle();
+  if (error) console.error(`[day-status] profile query failed userId=${userId}:`, error.message);
+  else if (!data) console.warn(`[day-status] profile not found userId=${userId}`);
   return toTargets(data as ProfileRow | null);
 }
 

@@ -14,6 +14,7 @@ import {
 } from '@/lib/notification-sender';
 import {
   getDayStatus,
+  getUserTargets,
   daysSinceLastWorkout,
   toTargets,
   PROFILE_COLUMNS,
@@ -136,7 +137,7 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     out.push({
       category: 'goal',
       ref:      'evening',
-      html:     buildEveningMessage(targets, day, await generateEveningClosing(targets, day)),
+      html:     buildEveningMessage(targets, day, await generateEveningClosing(userId, targets, day)),
       keyboard: () => [openAppButton('📊 Abrir o app', '/dashboard')],
     });
   }
@@ -194,7 +195,7 @@ export async function GET(req: Request) {
   if (linked.length === 0) return NextResponse.json({ hour, users: 0 });
 
   const userIds = linked.map((l) => l.user_id);
-  const [{ data: profiles }, { data: prefRows }, { data: logRows }] = await Promise.all([
+  const [{ data: profiles, error: profileErr }, { data: prefRows }, { data: logRows }] = await Promise.all([
     supabase.from('users').select(PROFILE_COLUMNS).in('id', userIds),
     supabase.from('notification_preferences').select('*').in('user_id', userIds),
     supabase
@@ -204,6 +205,8 @@ export async function GET(req: Request) {
       .eq('status', 'sent')
       .gte('sent_at', `${today}T00:00:00.000-03:00`),
   ]);
+
+  if (profileErr) console.error('[cron-run] profile query failed:', profileErr.message);
 
   type ProfileRow = Parameters<typeof toTargets>[0] & { id: string };
   const profileMap = new Map(((profiles ?? []) as ProfileRow[]).map((p) => [p.id, p]));
@@ -219,10 +222,11 @@ export async function GET(req: Request) {
         counts.quiet++;
         return;
       }
+      const profile = profileMap.get(userId);
       const ctx: UserCtx = {
         userId,
         chatId,
-        targets:   toTargets(profileMap.get(userId) ?? null),
+        targets:   profile ? toTargets(profile) : await getUserTargets(userId),
         prefs,
         todayLogs: logs.filter((l) => l.user_id === userId),
       };
