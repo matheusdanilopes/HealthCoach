@@ -37,3 +37,9 @@ export function calculateAge(birthDate: string): number {
 export function calculateWaterTarget(weight: number): number {
   return Math.round(weight * 35);
 }
+
+// Suggested daily protein: 1.8 g/kg, the middle of the 1.6–2.2 g/kg range
+// used by the coach for both fat loss and muscle gain.
+export function calculateProteinTarget(weight: number): number {
+  return Math.round(weight * 1.8);
+}
