@@ -197,9 +197,13 @@ export function missedGoals(t: UserTargets, s: DayStatus): GoalKey[] {
   return dayMetrics(t, s).filter((m) => !m.ok).map((m) => m.key);
 }
 
-// aiClosing (plain text) replaces the closing line when a goal was missed;
-// without it the fixed tip below is used.
-export function buildEveningMessage(t: UserTargets, s: DayStatus, aiClosing?: string | null): string {
+// aiClosing (plain text comment + tips for tomorrow) replaces the closing line
+// when a goal was missed; without it the fixed tip below is used.
+export function buildEveningMessage(
+  t: UserTargets,
+  s: DayStatus,
+  aiClosing?: { message: string; tips: string[] } | null,
+): string {
   const metrics = dayMetrics(t, s);
   const missed = metrics.filter((m) => !m.ok);
   const lines = [`🌙 <b>Fechamento do dia, ${escapeHtml(t.firstName)}</b>`, '', metricsBlock(metrics), ''];
@@ -207,7 +211,11 @@ export function buildEveningMessage(t: UserTargets, s: DayStatus, aiClosing?: st
   if (missed.length === 0) {
     lines.push('Dia redondo — todas as metas batidas! 🎉');
   } else if (aiClosing) {
-    lines.push(escapeHtml(aiClosing));
+    if (aiClosing.message) lines.push(escapeHtml(aiClosing.message));
+    if (aiClosing.tips.length) {
+      if (aiClosing.message) lines.push('');
+      lines.push('<b>💡 Para amanhã</b>', ...aiClosing.tips.map((tip) => `• ${escapeHtml(tip)}`));
+    }
   } else if (missed.length === metrics.length) {
     lines.push(`Amanhã é um novo dia. Comece por um ponto: ${FOCUS_TIP[missed[0].key]}.`);
   } else {

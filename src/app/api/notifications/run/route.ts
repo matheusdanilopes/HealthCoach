@@ -137,7 +137,7 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     out.push({
       category: 'goal',
       ref:      'evening',
-      html:     buildEveningMessage(targets, day, await generateEveningClosing(targets, day)),
+      html:     buildEveningMessage(targets, day, await generateEveningClosing(userId, targets, day)),
       keyboard: () => [openAppButton('📊 Abrir o app', '/dashboard')],
     });
   }

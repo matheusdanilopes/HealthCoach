@@ -26,3 +26,8 @@ export function brazilNDaysAgo(n: number, fromDate?: string): string {
   d.setDate(d.getDate() - n);
   return d.toISOString().split('T')[0];
 }
+
+// "HH:mm" in Brazil time for an ISO timestamp.
+export function brazilTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('pt-BR', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+}
