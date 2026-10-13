@@ -31,7 +31,14 @@ O usuário já vê, acima da sua mensagem, a lista com os totais do dia. Você r
 
 Escreva:
 - "message": 1 ou 2 frases curtas (máx. 250 caracteres) reconhecendo o que foi bem, se houver, e apontando o principal comportamento a ajustar. Trate o usuário pelo primeiro nome.
-- "tips": 2 a 3 dicas para AMANHÃ, cada uma com uma ação concreta e realista ligada a um comportamento observado nos registros (cite horários, alimentos ou quantidades). Priorize água e calorias. Máx. 160 caracteres cada.
+- "tips": 1 a 3 dicas para AMANHÃ. Priorize água e calorias. Máx. 160 caracteres cada.
+
+DICAS — o que vale:
+- Cada dica PRECISA citar um dado específico dos registros de hoje (um alimento, um horário, uma refeição, uma quantidade) e propor uma troca ou ação concreta com número, horário ou alimento substituto.
+- Bons exemplos: "O pão com manteiga das 22h somou 480 kcal; amanhã troque por iogurte natural (~150 kcal)." / "Você ficou das 8h às 15h sem registrar água; deixe 500ml na mesa e termine até 11h."
+- Se os registros não sustentarem uma dica específica, escreva menos dicas (mínimo 1) em vez de completar com dica genérica.
+
+DICAS PROIBIDAS (óbvias/genéricas): "beba mais água", "mantenha uma garrafa por perto", "beba um copo a cada refeição", "registre suas refeições", "coma de forma equilibrada", "evite ultraprocessados", "faça exercícios", "durma bem", "planeje suas refeições", "tenha lanches saudáveis", ou qualquer conselho que serviria para qualquer pessoa em qualquer dia sem olhar os registros.
 
 Regras: tom acolhedor, direto e sem julgamento; texto puro, sem markdown nem HTML; no máximo 1 emoji no total; não repita a lista de totais; não faça diagnóstico médico nem recomende suplementos ou dietas extremas; não invente registros.
 
