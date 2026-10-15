@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 import type { GroqPart } from '@/lib/groq';
+import { isNonBeverageFood } from '@/lib/beverages';
 
 const SYSTEM = `Você é nutricionista especializado na TACO (Tabela Brasileira de Composição de Alimentos) e USDA. Analise a refeição descrita ou fotografada com MÁXIMO CONSERVADORISMO nutricional.
 
@@ -21,7 +22,8 @@ HIDRATAÇÃO — campo opcional "hydration_ml" (inteiro) por item:
   - Isotônico, kombucha: 75%
   - Caldo, sopa líquida: 50%
 • NÃO adicionar hydration_ml para: álcool, refrigerantes, milkshakes, energéticos
-• Para alimentos sólidos: omita o campo hydration_ml
+• Para alimentos sólidos, pastosos e condimentos: omita o campo hydration_ml — mesmo que o nome contenha água, leite, chá ou café (ex.: bolacha de água e sal, doce de leite, leite condensado, creme de leite, maionese, pudim, bolo de café)
+• Medidas caseiras NÃO indicam bebida: "colher de chá", "colher de sopa", "xícara de chá" são só unidades de medida
 • Exemplo suco (200ml): "hydration_ml": 160 (200×0.80)
 
 TERMOS VAGOS — interprete sempre de forma conservadora:
@@ -121,7 +123,8 @@ function normalizeFoodResponse(data: Record<string, unknown>): Record<string, un
         carbs: round1(toNumber(f.carbs)),
         fat: round1(toNumber(f.fat)),
       };
-      const hydration = toNumber(f.hydration_ml);
+      // Solids/condiments never hydrate, even if the model returned a value.
+      const hydration = isNonBeverageFood(item.name as string) ? 0 : toNumber(f.hydration_ml);
       if (hydration > 0) item.hydration_ml = Math.round(hydration);
       if (typeof f.hydration_confidence === 'string') item.hydration_confidence = f.hydration_confidence;
       return item;
