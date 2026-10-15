@@ -502,7 +502,9 @@ export default function DiaryClient({ userId, serverDate, targetCalories, target
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(log) => setLogs((prev) => [...prev, log])}
+        onAdded={(log, replacedIds = []) =>
+          setLogs((prev) => [...prev.filter((l) => !replacedIds.includes(l.id)), log])
+        }
       />
       <EditFoodModal
         open={editingLog !== null}

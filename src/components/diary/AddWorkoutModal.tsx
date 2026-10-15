@@ -63,7 +63,8 @@ interface AddWorkoutModalProps {
   onClose: () => void;
   userId: string;
   date?: string;
-  onAdded: (log: FoodLog) => void;
+  // replacedIds: entries this save superseded (e.g. the day's earlier steps log).
+  onAdded: (log: FoodLog, replacedIds?: string[]) => void;
 }
 
 const CONFIDENCE_STYLE: Record<string, string> = {
@@ -209,16 +210,28 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
     setSaving(true);
     setError(null);
     try {
-      let workoutName: string;
       if (stepsResult) {
-        workoutName = `👣 Passos · ${stepsResult.steps.toLocaleString('pt-BR')}`;
-      } else {
-        const found      = WORKOUT_TYPES.find((t) => t.value === workoutType);
-        const emoji      = found?.emoji ?? '🏃';
-        const label      = found?.label ?? (description.trim() || 'Treino');
-        const durationStr = duration ? ` · ${duration}min` : '';
-        workoutName = `${emoji} ${label}${durationStr}`;
+        // One steps entry per day: the server replaces the day's earlier one.
+        const res = await fetch('/api/workout/steps', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ steps: stepsResult.steps, log_date: date }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+        if (!data?.log) throw new Error('Resposta inválida do servidor ao salvar.');
+
+        const log = data.log as FoodLog;
+        onAdded(log, [log.id, ...(data.removedIds ?? [])]);
+        onClose();
+        return;
       }
+
+      const found      = WORKOUT_TYPES.find((t) => t.value === workoutType);
+      const emoji      = found?.emoji ?? '🏃';
+      const label      = found?.label ?? (description.trim() || 'Treino');
+      const durationStr = duration ? ` · ${duration}min` : '';
+      const workoutName = `${emoji} ${label}${durationStr}`;
 
       const res = await fetch('/api/food', {
         method: 'POST',
@@ -398,7 +411,7 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
             </div>
 
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-              Registre os passos uma vez por dia, com o total do dia. O cálculo considera só o gasto extra dos passos, acima do repouso.
+              Informe o total do dia. Se já houver passos registrados nesta data, eles serão substituídos. O cálculo considera só o gasto extra dos passos, acima do repouso.
             </p>
 
             {error && (

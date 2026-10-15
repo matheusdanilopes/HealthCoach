@@ -240,7 +240,9 @@ export default function DashboardClient({
         onClose={() => setAddWorkoutOpen(false)}
         userId={userId}
         date={selectedDate}
-        onAdded={(log) => setFoodLogs((prev) => [...prev, log])}
+        onAdded={(log, replacedIds = []) =>
+          setFoodLogs((prev) => [...prev.filter((l) => !replacedIds.includes(l.id)), log])
+        }
       />
       {isToday && (
         <WeightLogModal
