@@ -176,7 +176,7 @@ export default function NotificationsClient() {
   }
 
   const morningHour = prefs ? clamp(prefs.quiet_end, 5, 11) : 7;
-  const eveningHour = prefs ? clamp(prefs.quiet_start - 1, 18, 23) : 21;
+  const eveningHour = prefs ? clamp(prefs.quiet_start - 1, 18, 23) : 22;
 
   return (
     <div className="py-6 space-y-5">

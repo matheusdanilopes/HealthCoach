@@ -28,7 +28,7 @@ export const DEFAULT_PREFERENCES: NotificationPreferences = {
   meals:       true,
   workouts:    true,
   goals:       true,
-  quiet_start: 22,
+  quiet_start: 23,
   quiet_end:   7,
 };
 

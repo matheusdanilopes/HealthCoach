@@ -44,10 +44,10 @@ As notificações são enviadas por um bot do Telegram, com agendamento de hora 
 | Quando | Mensagem |
 | --- | --- |
 | Fim do horário silencioso (padrão 7h) | Bom dia: resumo de ontem, foco do dia e metas |
-| 9h–20h, só se abaixo do ritmo | Hidratação (máx. 3/dia, intervalo ≥ 2h30) com botões **+250ml / +500ml** |
+| 9h–21h, só se abaixo do ritmo | Hidratação (máx. 3/dia, intervalo ≥ 2h30) com botões **+250ml / +500ml** |
 | 10h / 14h / 20h | Café, almoço ou jantar não registrado, com saldo de kcal e proteína |
 | 18h, após 2+ dias sem treino | Lembrete de treino |
-| 1h antes do silencioso (padrão 21h) | Fechamento do dia com metas batidas |
+| 1h antes do silencioso (padrão 22h) | Fechamento do dia com metas batidas |
 
 Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
 
