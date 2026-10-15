@@ -21,7 +21,6 @@ METs REALISTAS (tabela ACSM conservadora):
 - Ciclismo leve: 4.0 | moderado: 6.8 | intenso: 9.5
 - Musculação: leve 3.5 | moderada 5.0 | intensa 6.0 (NÃO ultrapasse 6.5 sem evidência)
 - HIIT: 8.0-12.0 conforme intensidade real
-- CrossFit: 7.0-10.0
 - Funcional: 5.0-7.5
 - Cardio (geral): 5.0-8.0
 - Esportes: 6.0-8.0
