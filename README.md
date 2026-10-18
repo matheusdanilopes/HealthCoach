@@ -72,3 +72,14 @@ Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
    curl -H "Authorization: Bearer $CRON_SECRET" https://SEU-APP.vercel.app/api/telegram/setup
    ```
 5. No app, acesse **Perfil → Notificações → Conectar Telegram**.
+
+## Treinos IA
+
+Tela **Corpo → Treinos IA** (`/treinos`). Gera um plano semanal de treino com IA, em casa ou na academia, com séries, repetições, descanso, carga e explicação de execução de cada exercício.
+
+- **Perfil de treino** (salvo uma vez): nível, dias por semana, tempo por treino, equipamentos em casa e lesões/limitações.
+- **Plano semanal**: sessões A/B/C… com aquecimento, exercícios e desaquecimento. Gerar um novo plano mantém os anteriores no histórico.
+- **Registro do treino**: marca cada série com repetições (ou segundos) e carga; tem timer de descanso e o treino em andamento fica salvo no aparelho. Ao finalizar, o gasto calórico (MET × peso × duração) entra no diário como `🏋️ Musculação`, então dashboard, Coach IA e Telegram passam a contar o treino.
+- **Progressão**: dupla progressão — quando todas as séries chegam ao topo da faixa, o app sugere subir a carga. O histórico de cargas também vai para a IA ao gerar o próximo plano.
+
+Aplique a migration `018_training_coach.sql` antes do deploy.

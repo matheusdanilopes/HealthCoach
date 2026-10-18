@@ -101,7 +101,7 @@ function normalizeName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function inferGoal(tdee: number | null, target: number | null): CoachGoal {
+export function inferGoal(tdee: number | null, target: number | null): CoachGoal {
   if (tdee && target) {
     if (target > tdee * 1.03) return 'ganho_muscular';
     if (target >= tdee * 0.93) return 'recomposicao';
