@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { cn, suggestMealType } from '@/lib/utils';
-import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets } from 'lucide-react';
+import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets, Mic, Square } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
 import type { FoodLog, MealType } from '@/types';
@@ -39,8 +39,44 @@ interface AIFoodLoggerProps {
   onAdded: (log: FoodLog) => void;
 }
 
+const MAX_IMAGE_MB = 15;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const ANALYZE_TIMEOUT_MS = 45_000;
+
+const TAB_LABELS: Record<'text' | 'image' | 'manual' | 'voice', string> = {
+  text: 'Texto',
+  image: 'Imagem',
+  manual: 'Manual',
+  voice: 'Voz',
+};
+
 const inputCls =
   'w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-[12px] text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400';
+
+interface SpeechRecognitionResultLike {
+  0: { transcript: string };
+}
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 function resolveItemHydration(item: FoodItem): number {
   // Use AI-returned value if present and positive
@@ -50,53 +86,78 @@ function resolveItemHydration(item: FoodItem): number {
   return detectBeverage(text).estimatedMl;
 }
 
-export default function AIFoodLogger({
+export default function AIFoodLogger(props: AIFoodLoggerProps) {
+  const { open } = props;
+  // Remount the modal's internal state fresh every time it opens, instead of
+  // resetting ~12 state variables by hand inside an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  const [epoch, setEpoch] = useState(0);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setEpoch(epoch + 1);
+  }
+  return <AIFoodLoggerModal key={epoch} {...props} />;
+}
+
+function AIFoodLoggerModal({
   open,
   onClose,
   defaultMeal,
   date,
   onAdded,
 }: AIFoodLoggerProps) {
-  const [tab, setTab] = useState<'text' | 'image'>('text');
+  const [tab, setTab] = useState<'text' | 'image' | 'manual' | 'voice'>('text');
   const [mealType, setMealType] = useState<MealType | null>(defaultMeal ?? null);
   const [mealError, setMealError] = useState(false);
   const [textInput, setTextInput] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualQuantity, setManualQuantity] = useState('');
+  const [manualCalories, setManualCalories] = useState('');
+  const [manualProtein, setManualProtein] = useState('');
+  const [manualCarbs, setManualCarbs] = useState('');
+  const [manualFat, setManualFat] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [voiceSupported] = useState(
+    () => typeof window !== 'undefined' && !!getSpeechRecognitionCtor()
+  );
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [prevResult, setPrevResult] = useState<AnalysisResult | null>(null);
   const [editedFoods, setEditedFoods] = useState<FoodItem[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editBuffer, setEditBuffer] = useState<FoodItem | null>(null);
   const [bufferAnalyzing, setBufferAnalyzing] = useState(false);
   const [bufferNeedsReanalysis, setBufferNeedsReanalysis] = useState(false);
+  const [bufferError, setBufferError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedIndices, setSavedIndices] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setMealType(defaultMeal ?? null);
-      setMealError(false);
-      setTab('text');
-      setTextInput('');
-      setImageFile(null);
-      setImagePreview(null);
-      setResult(null);
-      setEditedFoods([]);
+  // Merge AI hydration with local fallback detection whenever a new result comes in.
+  if (result !== prevResult) {
+    setPrevResult(result);
+    if (result) {
+      setEditedFoods(result.foods.map((f) => ({
+        ...f,
+        hydration_ml: resolveItemHydration(f),
+      })));
       setEditingIndex(null);
       setEditBuffer(null);
-      setBufferNeedsReanalysis(false);
-      setConfirmClose(false);
-      setError(null);
-      setSaving(false);
+      setSavedIndices(new Set());
+    } else {
+      setEditedFoods([]);
+      setSavedIndices(new Set());
     }
-  }, [open, defaultMeal]);
+  }
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -105,19 +166,7 @@ export default function AIFoodLogger({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [textInput]);
 
-  useEffect(() => {
-    if (result) {
-      // Merge AI hydration with local fallback detection
-      setEditedFoods(result.foods.map((f) => ({
-        ...f,
-        hydration_ml: resolveItemHydration(f),
-      })));
-      setEditingIndex(null);
-      setEditBuffer(null);
-    } else {
-      setEditedFoods([]);
-    }
-  }, [result]);
+  useEffect(() => () => recognitionRef.current?.stop(), []);
 
   const computedTotal = useMemo(
     () =>
@@ -142,6 +191,7 @@ export default function AIFoodLogger({
     setEditBuffer({ ...editedFoods[i] });
     setEditingIndex(i);
     setBufferNeedsReanalysis(false);
+    setBufferError(null);
   }
 
   function commitEdit() {
@@ -149,20 +199,30 @@ export default function AIFoodLogger({
       setEditedFoods((prev) =>
         prev.map((f, i) => (i === editingIndex ? { ...editBuffer } : f))
       );
+      // Values changed since the last save — this item needs to be re-submitted.
+      setSavedIndices((prev) => {
+        if (!prev.has(editingIndex)) return prev;
+        const next = new Set(prev);
+        next.delete(editingIndex);
+        return next;
+      });
     }
     setEditingIndex(null);
     setEditBuffer(null);
+    setBufferError(null);
   }
 
   function cancelEdit() {
     setEditingIndex(null);
     setEditBuffer(null);
     setBufferNeedsReanalysis(false);
+    setBufferError(null);
   }
 
   async function reanalyzeBuffer() {
     if (!editBuffer) return;
     setBufferAnalyzing(true);
+    setBufferError(null);
     try {
       const description = editBuffer.quantity.trim()
         ? `${editBuffer.name} ${editBuffer.quantity}`
@@ -189,8 +249,8 @@ export default function AIFoodLogger({
           : null
       );
       setBufferNeedsReanalysis(false);
-    } catch {
-      // error shown inline via the buffer state staying unchanged
+    } catch (e) {
+      setBufferError(e instanceof Error ? e.message : 'Não foi possível reanalisar. Tente novamente.');
     } finally {
       setBufferAnalyzing(false);
     }
@@ -205,10 +265,23 @@ export default function AIFoodLogger({
   }
 
   function handleImageSelect(file: File) {
-    setImageFile(file);
     setResult(null);
     setError(null);
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Formato não suportado. Envie uma imagem JPG, PNG ou WEBP.');
+      return;
+    }
+    if (file.size === 0) {
+      setError('Arquivo de imagem vazio. Escolha outra foto.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setError(`Imagem muito grande (máx. ${MAX_IMAGE_MB}MB). Tente uma foto com menor resolução.`);
+      return;
+    }
+    setImageFile(file);
     const reader = new FileReader();
+    reader.onerror = () => setError('Não foi possível ler a imagem. Tente outra foto.');
     reader.onload = (e) => setImagePreview(e.target?.result as string);
     reader.readAsDataURL(file);
   }
@@ -223,7 +296,7 @@ export default function AIFoodLogger({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) handleImageSelect(file);
+    if (file) handleImageSelect(file);
   }
 
   function removeImage() {
@@ -232,10 +305,56 @@ export default function AIFoodLogger({
     setResult(null);
   }
 
-  function switchTab(t: 'text' | 'image') {
+  function switchTab(t: 'text' | 'image' | 'manual' | 'voice') {
+    if (recording) recognitionRef.current?.stop();
     setTab(t);
     setResult(null);
     setError(null);
+  }
+
+  function toggleRecording() {
+    if (recording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return;
+    const recognition = new Ctor();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) transcript += event.results[i][0].transcript;
+      setTextInput(transcript);
+    };
+    recognition.onerror = () => setRecording(false);
+    recognition.onend = () => setRecording(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setRecording(true);
+    setError(null);
+  }
+
+  function addManualFood() {
+    if (!manualName.trim() || !manualCalories) return;
+    const food: FoodItem = {
+      name: manualName.trim(),
+      quantity: manualQuantity.trim(),
+      calories: Math.round(Number(manualCalories) || 0),
+      protein: Number(manualProtein) || 0,
+      carbs: Number(manualCarbs) || 0,
+      fat: Number(manualFat) || 0,
+      hydration_ml: 0,
+    };
+    setError(null);
+    setResult({
+      foods: [food],
+      totalCalories: food.calories,
+      totalProtein: food.protein,
+      totalCarbs: food.carbs,
+      totalFat: food.fat,
+    });
   }
 
   async function compressImage(dataUrl: string): Promise<{ base64: string; mimeType: string }> {
@@ -275,7 +394,7 @@ export default function AIFoodLogger({
     setError(null);
     try {
       let body: Record<string, unknown>;
-      if (tab === 'text') {
+      if (tab === 'text' || tab === 'voice') {
         if (!textInput.trim()) return;
         body = { type: 'text', description: textInput.trim() };
       } else {
@@ -283,19 +402,57 @@ export default function AIFoodLogger({
         const { base64, mimeType } = await compressImage(imagePreview);
         body = { type: 'image', imageBase64: base64, mimeType };
       }
-      const res = await fetch('/api/food/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? 'Erro desconhecido');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch('/api/food/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? `Erro ao analisar (HTTP ${res.status}).`);
+      if (!json) throw new Error('Resposta inválida do servidor. Tente novamente.');
       setResult(json as AnalysisResult);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError('A análise demorou demais e foi cancelada. Tente uma foto menor ou verifique sua conexão.');
+      } else if (e instanceof TypeError) {
+        setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      }
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  async function saveFood(food: FoodItem): Promise<FoodLog> {
+    const res = await fetch('/api/food', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
+        meal_type: mealType!,
+        calories: Math.round(Number(food.calories) || 0),
+        protein: Number(food.protein) || null,
+        carbs: Number(food.carbs) || null,
+        fat: Number(food.fat) || null,
+        log_date: date,
+        hydration_ml: food.hydration_ml ?? 0,
+        hydration_source: (food.hydration_ml ?? 0) > 0 ? 'meal' : null,
+        hydration_confidence: food.hydration_confidence ?? null,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+    if (!data) throw new Error('Resposta inválida do servidor ao salvar.');
+    return data as FoodLog;
   }
 
   async function handleConfirm() {
@@ -306,36 +463,49 @@ export default function AIFoodLogger({
     }
     setSaving(true);
     setError(null);
-    try {
-      const promises = editedFoods.map((food) =>
-        fetch('/api/food', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            food_name: food.quantity ? `${food.name} (${food.quantity})` : food.name,
-            meal_type: mealType!,
-            calories: Math.round(Number(food.calories) || 0),
-            protein: Number(food.protein) || null,
-            carbs: Number(food.carbs) || null,
-            fat: Number(food.fat) || null,
-            log_date: date,
-            hydration_ml: food.hydration_ml ?? 0,
-            hydration_source: (food.hydration_ml ?? 0) > 0 ? 'meal' : null,
-            hydration_confidence: food.hydration_confidence ?? null,
-          }),
-        }).then((r) => r.json() as Promise<FoodLog>)
-      );
-      const logs = await Promise.all(promises);
-      logs.forEach((log) => onAdded(log));
-      onClose();
-    } catch {
-      setError('Erro ao salvar. Tente novamente.');
-    } finally {
-      setSaving(false);
+
+    // Only (re-)submit items not already persisted, so a retry after a partial
+    // failure can't insert duplicate rows for foods that already saved.
+    const pendingIndices = editedFoods.reduce<number[]>((acc, _, i) => {
+      if (!savedIndices.has(i)) acc.push(i);
+      return acc;
+    }, []);
+
+    const outcomes = await Promise.allSettled(
+      pendingIndices.map((i) => saveFood(editedFoods[i]).then((log) => ({ index: i, log })))
+    );
+
+    const newSaved = new Set(savedIndices);
+    let failCount = 0;
+    for (const outcome of outcomes) {
+      if (outcome.status === 'fulfilled') {
+        newSaved.add(outcome.value.index);
+        onAdded(outcome.value.log);
+      } else {
+        failCount++;
+      }
     }
+    setSavedIndices(newSaved);
+
+    if (failCount === 0) {
+      onClose();
+    } else {
+      const savedNow = outcomes.length - failCount;
+      setError(
+        savedNow > 0
+          ? `${savedNow} de ${outcomes.length} alimentos salvos. ${failCount} ${failCount === 1 ? 'falhou' : 'falharam'} — tente novamente.`
+          : 'Não foi possível salvar. Verifique sua conexão e tente novamente.'
+      );
+    }
+    setSaving(false);
   }
 
-  const canAnalyze = tab === 'text' ? textInput.trim().length > 0 : !!imagePreview;
+  const canAnalyze =
+    tab === 'text' || tab === 'voice'
+      ? textInput.trim().length > 0
+      : tab === 'image'
+      ? !!imagePreview
+      : false;
 
   return (
     <Modal open={open} onClose={handleClose} title="Registrar refeição com IA">
@@ -349,9 +519,11 @@ export default function AIFoodLogger({
               Sair sem salvar?
             </p>
             <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              {editedFoods.length > 0
-                ? `${editedFoods.length} alimento${editedFoods.length !== 1 ? 's' : ''} analisado${editedFoods.length !== 1 ? 's' : ''} será${editedFoods.length !== 1 ? 'ão' : ''} descartado${editedFoods.length !== 1 ? 's' : ''}.`
-                : 'As alterações em edição serão descartadas.'}
+              {(() => {
+                const unsaved = editedFoods.length - savedIndices.size;
+                if (unsaved <= 0) return 'As alterações em edição serão descartadas.';
+                return `${unsaved} alimento${unsaved !== 1 ? 's' : ''} analisado${unsaved !== 1 ? 's' : ''} ainda não salvo${unsaved !== 1 ? 's' : ''} será${unsaved !== 1 ? 'ão' : ''} descartado${unsaved !== 1 ? 's' : ''}.`;
+              })()}
             </p>
           </div>
           <div className="flex gap-2 w-full">
@@ -384,27 +556,51 @@ export default function AIFoodLogger({
           {/* Mode tabs */}
           {!result && (
             <div className="flex bg-zinc-100 dark:bg-zinc-800/60 rounded-xl p-1 gap-1">
-              {(['text', 'image'] as const).map((t) => (
+              {(['text', 'image', 'manual', 'voice'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => switchTab(t)}
                   className={cn(
-                    'flex-1 py-2 rounded-lg text-[13px] font-medium transition-all',
+                    'flex-1 py-2 rounded-lg text-[12px] font-medium transition-all whitespace-nowrap',
                     tab === t
                       ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
                   )}
                 >
-                  {t === 'text' ? 'Texto' : 'Imagem'}
+                  {TAB_LABELS[t]}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Text input */}
-          {!result && tab === 'text' && (
+          {/* Text / Voice input */}
+          {!result && (tab === 'text' || tab === 'voice') && (
             <div className="flex flex-col gap-3">
+              {tab === 'voice' && (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    disabled={!voiceSupported}
+                    className={cn(
+                      'h-16 w-16 rounded-full flex items-center justify-center transition-all disabled:opacity-40 disabled:pointer-events-none',
+                      recording
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
+                        : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                    )}
+                  >
+                    {recording ? <Square size={20} /> : <Mic size={22} />}
+                  </button>
+                  <p className="text-[12px] text-zinc-500 dark:text-zinc-400 text-center">
+                    {!voiceSupported
+                      ? 'Reconhecimento de voz não suportado neste navegador.'
+                      : recording
+                      ? 'Ouvindo... toque para parar'
+                      : 'Toque para falar o que você comeu'}
+                  </p>
+                </div>
+              )}
               <textarea
                 ref={textareaRef}
                 value={textInput}
@@ -423,6 +619,84 @@ export default function AIFoodLogger({
               <Button onClick={analyze} loading={analyzing} disabled={!canAnalyze} className="w-full gap-2">
                 <Sparkles size={14} />
                 Analisar com IA
+              </Button>
+            </div>
+          )}
+
+          {/* Manual input */}
+          {!result && tab === 'manual' && (
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Alimento</span>
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="Ex: 2 ovos mexidos"
+                  className={inputCls}
+                />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Quantidade (opcional)</span>
+                <input
+                  type="text"
+                  value={manualQuantity}
+                  onChange={(e) => setManualQuantity(e.target.value)}
+                  placeholder="Ex: 1 unidade"
+                  className={inputCls}
+                />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Calorias (kcal)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={manualCalories}
+                  onChange={(e) => setManualCalories(e.target.value)}
+                  placeholder="0"
+                  className={inputCls}
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Proteína (g)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={manualProtein}
+                    onChange={(e) => setManualProtein(e.target.value)}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Carbs (g)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={manualCarbs}
+                    onChange={(e) => setManualCarbs(e.target.value)}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Gordura (g)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={manualFat}
+                    onChange={(e) => setManualFat(e.target.value)}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </label>
+              </div>
+              <Button onClick={addManualFood} disabled={!manualName.trim() || !manualCalories} className="w-full">
+                Adicionar
               </Button>
             </div>
           )}
@@ -553,7 +827,10 @@ export default function AIFoodLogger({
                 {editedFoods.map((food, i) => (
                   <div
                     key={i}
-                    className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40"
+                    className={cn(
+                      'bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40',
+                      savedIndices.has(i) && 'opacity-60'
+                    )}
                   >
                     {editingIndex === i && editBuffer ? (
                       <div className="flex flex-col gap-2.5">
@@ -657,6 +934,11 @@ export default function AIFoodLogger({
                             Re-analise com IA antes de confirmar
                           </p>
                         )}
+                        {bufferError && (
+                          <p className="text-[11px] text-red-500 dark:text-red-400 text-center -mb-1">
+                            {bufferError}
+                          </p>
+                        )}
                         <div className="flex gap-2 pt-0.5">
                           <button
                             type="button"
@@ -701,14 +983,20 @@ export default function AIFoodLogger({
                             <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                               {food.calories} kcal
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => enterEditMode(i)}
-                              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-                              title="Editar"
-                            >
-                              <Pencil size={11} />
-                            </button>
+                            {savedIndices.has(i) ? (
+                              <span title="Já salvo" className="flex items-center text-emerald-500">
+                                <CheckCircle2 size={13} />
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => enterEditMode(i)}
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil size={11} />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-3">
@@ -778,7 +1066,9 @@ export default function AIFoodLogger({
               )}
 
               <Button onClick={handleConfirm} loading={saving} className="w-full">
-                Confirmar e salvar
+                {savedIndices.size > 0 && savedIndices.size < editedFoods.length
+                  ? `Salvar restantes (${editedFoods.length - savedIndices.size})`
+                  : 'Confirmar e salvar'}
               </Button>
             </div>
           )}

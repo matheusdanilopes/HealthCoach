@@ -592,7 +592,7 @@ export default function MarmitasClient() {
 
   return (
     <>
-      <div className="flex flex-col gap-5 pt-6 pb-10 animate-fade-in">
+      <div className="flex flex-col gap-5 pt-7 pb-10 animate-fade-in">
 
         {/* Page header */}
         <div className="flex items-start justify-between gap-3">
@@ -676,7 +676,7 @@ export default function MarmitasClient() {
             )}
 
             {/* Goal */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4">
+            <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
                 Meu objetivo
               </p>
@@ -693,7 +693,7 @@ export default function MarmitasClient() {
             </div>
 
             {/* Budget */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4">
+            <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
                 Orçamento
               </p>
@@ -710,7 +710,7 @@ export default function MarmitasClient() {
             </div>
 
             {/* Meal count */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4">
+            <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
                 Quantidade de marmitas
               </p>
@@ -757,7 +757,7 @@ export default function MarmitasClient() {
             </div>
 
             {/* Marmita weight */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4">
+            <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
                 Peso esperado por marmita
               </p>
@@ -961,7 +961,7 @@ export default function MarmitasClient() {
             })}
 
             {/* Add item manually */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4">
+            <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
                 Adicionar item
               </p>

@@ -11,10 +11,6 @@ interface AIChatProps {
   dailyWater: number;
   userId: string;
   onFoodLogged?: (log: FoodLog) => void;
-  /** Increment to programmatically open the chat */
-  triggerOpen?: number;
-  /** Pre-fills the input when triggerOpen fires */
-  initialInput?: string;
 }
 
 const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage }) {
@@ -48,7 +44,7 @@ const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage })
 
 const MAX_HISTORY = 10;
 
-export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged, triggerOpen, initialInput }: AIChatProps) {
+export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: 'assistant',
@@ -58,9 +54,6 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const prevTrigger = useRef(0);
-  const initialInputRef = useRef(initialInput);
-  initialInputRef.current = initialInput;
 
   // Scroll to bottom only when messages change
   useEffect(() => {
@@ -74,16 +67,6 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
       return () => clearTimeout(t);
     }
   }, [open]);
-
-  // Open chat with pre-filled input when triggered externally (e.g. from insight card)
-  useEffect(() => {
-    if (!triggerOpen || triggerOpen === prevTrigger.current) return;
-    prevTrigger.current = triggerOpen;
-    setOpen(true);
-    if (initialInputRef.current) {
-      setInput(initialInputRef.current);
-    }
-  }, [triggerOpen]);
 
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,16 +88,6 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: trimmed.map((m) => ({ role: m.role, content: m.content })),
-          userContext: {
-            userId,
-            name: profile.full_name,
-            targetCalories: profile.target_calories,
-            dailyCalories,
-            remaining: (profile.target_calories ?? 0) - dailyCalories,
-            dailyWater,
-            targetWater: profile.target_water_ml,
-            weight: profile.current_weight,
-          },
         }),
       });
       const data = await res.json();
@@ -142,7 +115,7 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, profile, dailyCalories, dailyWater, userId, onFoodLogged]);
+  }, [input, loading, messages, onFoodLogged]);
 
   return (
     <>

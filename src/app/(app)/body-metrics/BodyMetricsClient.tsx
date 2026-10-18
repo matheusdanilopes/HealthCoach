@@ -329,10 +329,10 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
   /* ─── Render ─── */
 
   return (
-    <div className="flex flex-col gap-4 pt-8 pb-24 animate-fade-in">
+    <div className="flex flex-col gap-4 pt-7 pb-8 animate-fade-in">
 
       {/* ── Hero Header ── */}
-      <div className="relative overflow-hidden rounded-3xl p-5 bg-gradient-to-br from-emerald-500 to-emerald-700 dark:from-emerald-600 dark:to-emerald-800 shadow-lg shadow-emerald-500/20 dark:shadow-emerald-900/25">
+      <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 dark:from-emerald-600 dark:via-emerald-700 dark:to-teal-800 shadow-lg shadow-emerald-500/20 dark:shadow-emerald-900/25 shadow-[0_8px_32px_0_rgb(0,0,0,0.12)]">
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-emerald-100 text-[10px] font-bold uppercase tracking-widest mb-1.5">
@@ -381,7 +381,7 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
 
       {/* ── Global Error ── */}
       {globalError && (
-        <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-xl px-4 py-2.5 text-[12px] text-red-600 dark:text-red-400 font-medium animate-fade-in">
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-2xl px-4 py-2.5 text-[12px] text-red-600 dark:text-red-400 font-medium animate-fade-in">
           {globalError}
         </div>
       )}
@@ -418,7 +418,7 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
               return (
                 <div
                   key={key}
-                  className="snap-start flex-shrink-0 w-[148px] bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none"
+                  className="snap-start flex-shrink-0 w-[148px] bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none"
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <div
@@ -460,7 +460,7 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
           </div>
 
           {/* ── Chart ── */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+          <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
 
             {/* Metric tabs */}
             <div className="flex gap-1 mb-4 overflow-x-auto pb-0.5 scrollbar-hide">
@@ -558,7 +558,7 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
           </div>
 
           {/* ── Timeline ── */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none overflow-hidden">
 
             {/* Header */}
             <div className="px-5 pt-5 pb-3 flex items-center justify-between">

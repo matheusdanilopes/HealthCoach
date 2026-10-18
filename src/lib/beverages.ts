@@ -22,7 +22,9 @@ export interface BeverageDetection {
 // Helper: compile a pattern with proper Unicode word boundaries
 // Uses negative lookbehind/ahead for Unicode letters (\p{L}, requires /u flag)
 function wb(src: string, flags = 'iu'): RegExp {
-  return new RegExp(`(?<!\\p{L})${src}(?!\\p{L})`, flags);
+  // Group the source so the boundaries apply to every alternative (a|b|c),
+  // not just the first and last one — otherwise "tomate" would match "mate".
+  return new RegExp(`(?<!\\p{L})(?:${src})(?!\\p{L})`, flags);
 }
 
 // Patterns that disqualify a beverage from contributing to hydration
@@ -41,6 +43,40 @@ const EXCLUDED: RegExp[] = [
   wb('suco\\s+(?:de\\s+)?(?:caixa|lata)|n[eé]ctar'),
   wb('refri'),
 ];
+
+// Solid foods / condiments whose names contain beverage words ("bolacha de
+// água e sal", "doce de leite", "bolo de café"…). They never count as hydration,
+// even if the AI returns a hydration value for them.
+const NON_BEVERAGE: RegExp[] = [
+  wb('bolachas?|biscoitos?|crackers?|torradas?|p[aã]o|p[aã]es|p[aã]ozinho|bisnaguinhas?|broas?|roscas?|bolos?|cookies?|wafers?'),
+  wb('doce\\s+de\\s+leite|leite\\s+condensado|creme\\s+de\\s+leite|leite\\s+ninho'),
+  wb('em\\s+p[oó]|sach[eê]s?\\s+de\\s+ch[aá]|tabletes?|c[aá]psulas?|comprimidos?|suplementos?'),
+  wb('maionese|molhos?|ketchup|mostarda|requeij[aã]o|manteiga|margarina|queijos?|nata|chantilly|patê'),
+  wb('pudi(?:m|ns)|mousses?|sorvetes?|picol[eé]s?|brigadeiros?|bombons?|pav[eê]'),
+  wb('chocolate\\s+(?:ao\\s+leite|amargo|meio\\s+amargo|branco|em\\s+barra)|barras?\\s+de\\s+chocolate'),
+  wb('arroz\\s+(?:doce|com\\s+leite)|mingau|canjica|cuscuz|farofa|farinha'),
+  // Vitamin supplements ("vitamina C", "vitamina B12", "vitamina D3") — not the smoothie
+  wb('vitamina\\s+(?:[a-ek]\\d*|b\\d+)'),
+];
+
+// Kitchen measures and meal names that contain beverage words — "1 colher de
+// chá", "col. sopa", "xícara de chá", "café da manhã". They are reduced to the
+// bare measure word before matching, so they never trigger a beverage rule.
+const MEASURE_PHRASES: Array<[RegExp, string]> = [
+  [/(colher(?:es|zinhas?)?|col\.?)\s*(?:\(\s*)?(?:de\s+)?(?:sopa|ch[aá]|caf[eé]|sobremesa)/giu, '$1'],
+  // "xícara de chá" is the standard cup measure; "xícara de café" stays (it's coffee).
+  [/(x[ií]caras?)\s*(?:\(\s*)?(?:de\s+)?ch[aá](?!\s+(?:de|com|preto|verde|mate|gelado|quente|sem)(?!\p{L}))/giu, '$1'],
+  [/caf[eé]\s+da\s+manh[aã]/giu, ''],
+];
+
+/** True when the name describes a solid food/condiment that must not hydrate. */
+export function isNonBeverageFood(foodName: string): boolean {
+  return NON_BEVERAGE.some((p) => p.test(foodName));
+}
+
+function stripMeasures(text: string): string {
+  return MEASURE_PHRASES.reduce((t, [p, r]) => t.replace(p, r), text);
+}
 
 interface BeverageRule {
   pattern: RegExp;
@@ -127,7 +163,41 @@ function extractRawMl(text: string): number | null {
   return null;
 }
 
-export function detectBeverage(foodName: string): BeverageDetection {
+// Zero/diet/light variants of normally-excluded sodas — hydrate like sparkling water
+const ZERO_SODA_PATTERNS: RegExp[] = [
+  // "refrigerante zero/diet/light" in any order
+  /(?<![\p{L}])refrigerante.{0,25}(?:zero|diet|light|sem\s*a[cç][uú]car)(?![\p{L}])/iu,
+  /(?<![\p{L}])(?:zero|diet|light).{0,10}refrigerante(?![\p{L}])/iu,
+  // Brand + zero/diet/light
+  /(?<![\p{L}])coca.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])pepsi.{0,10}(?:zero|diet|black|light)(?![\p{L}])/iu,
+  /(?<![\p{L}])guaran[aá].{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])fanta.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])sprite.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])schweppes.{0,10}zero(?![\p{L}])/iu,
+  /(?<![\p{L}])soda.{0,10}(?:zero|diet|light)(?![\p{L}])/iu,
+];
+
+export function detectBeverage(rawName: string): BeverageDetection {
+  const foodName = stripMeasures(rawName);
+  const notBeverage: BeverageDetection = { isBeverage: false, hydrationFactor: 0, estimatedMl: 0, confidence: 'low' };
+
+  // Zero/diet/light sodas detected before general exclusions — they're mostly water
+  for (const pattern of ZERO_SODA_PATTERNS) {
+    if (pattern.test(foodName)) {
+      const rawMl = extractRawMl(foodName);
+      const volMl = Math.min(rawMl ?? 350, 2000);
+      return {
+        isBeverage: true,
+        hydrationFactor: 0.75,
+        estimatedMl: Math.round(volMl * 0.75),
+        confidence: rawMl ? 'high' : 'medium',
+      };
+    }
+  }
+
+  if (isNonBeverageFood(foodName)) return notBeverage;
+
   // Check exclusions first
   for (const ex of EXCLUDED) {
     if (ex.test(foodName)) {
@@ -151,5 +221,5 @@ export function detectBeverage(foodName: string): BeverageDetection {
     }
   }
 
-  return { isBeverage: false, hydrationFactor: 0, estimatedMl: 0, confidence: 'low' };
+  return notBeverage;
 }

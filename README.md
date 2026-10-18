@@ -34,3 +34,59 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Banco de dados (Neon)
+
+O app usa Postgres no [Neon](https://neon.tech) via `@neondatabase/serverless` (`src/lib/db.ts`), configurado pela variável `DATABASE_URL`.
+
+- Schema completo: `db/schema.sql` (equivale às migrations 001–018 de `supabase/migrations`, que ficam só como histórico).
+- O Supabase continua sendo usado apenas como agendador (`pg_cron` + `pg_net` chamando as rotas do app, ver abaixo); ele não guarda mais dados do app.
+
+## Notificações (Telegram)
+
+As notificações são enviadas por um bot do Telegram, com agendamento de hora em hora via Supabase `pg_cron` (só dispara as chamadas HTTP; os dados ficam no Neon).
+
+**O que o usuário recebe** (respeitando categorias e horário silencioso definidos em `/notifications`):
+
+| Quando | Mensagem |
+| --- | --- |
+| Fim do horário silencioso (padrão 7h) | Bom dia: resumo de ontem, foco do dia e metas |
+| 9h–20h, só se abaixo do ritmo | Hidratação (máx. 3/dia, intervalo ≥ 2h30) com botões **+250ml / +500ml** |
+| 10h / 14h / 20h | Café, almoço ou jantar não registrado, com saldo de kcal e proteína |
+| 18h, após 2+ dias sem treino | Lembrete de treino |
+| 1h antes do silencioso (padrão 21h) | Fechamento do dia com metas batidas |
+
+Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
+
+**Chat limpo:** os comandos do usuário são apagados assim que processados. As mensagens do bot somem ao tocar num botão ou ao expirar: lembretes em 2h, respostas de comandos em 10 min, e resumos quando chega o próximo resumo. A limpeza roda a cada 10 min (`/api/telegram/cleanup`, migration 015).
+
+**Configuração**
+
+1. Crie o bot com o [@BotFather](https://t.me/BotFather) e anote o token e o username.
+2. Variáveis de ambiente na Vercel:
+   - `TELEGRAM_BOT_TOKEN` — token do BotFather
+   - `TELEGRAM_BOT_USERNAME` — username do bot (sem `@`)
+   - `TELEGRAM_WEBHOOK_SECRET` — string aleatória (`A-Z a-z 0-9 _ -`, até 256 caracteres)
+   - `APP_URL` — URL pública do app, ex.: `https://healthcoach.vercel.app`
+   - `CRON_SECRET` — já existente
+3. No Supabase (agendador), aplique os jobs de `pg_cron` das migrations `014_telegram_notifications.sql` e `015_telegram_message_cleanup.sql` e cadastre os segredos:
+   ```sql
+   SELECT vault.create_secret('https://SEU-APP.vercel.app', 'app_url');
+   SELECT vault.create_secret('<CRON_SECRET>', 'cron_secret');
+   ```
+4. Após o deploy, registre o webhook e o menu de comandos:
+   ```bash
+   curl -H "Authorization: Bearer $CRON_SECRET" https://SEU-APP.vercel.app/api/telegram/setup
+   ```
+5. No app, acesse **Perfil → Notificações → Conectar Telegram**.
+
+## Treinos IA
+
+Tela **Corpo → Treinos IA** (`/treinos`). Gera um plano semanal de treino com IA, em casa ou na academia, com séries, repetições, descanso, carga e explicação de execução de cada exercício.
+
+- **Perfil de treino** (salvo uma vez): nível, dias por semana, tempo por treino, equipamentos em casa e lesões/limitações.
+- **Plano semanal**: sessões A/B/C… com aquecimento, exercícios e desaquecimento. Gerar um novo plano mantém os anteriores no histórico.
+- **Registro do treino**: marca cada série com repetições (ou segundos) e carga; tem timer de descanso e o treino em andamento fica salvo no aparelho. Ao finalizar, o gasto calórico (MET × peso × duração) entra no diário como `🏋️ Musculação`, então dashboard, Coach IA e Telegram passam a contar o treino.
+- **Progressão**: dupla progressão — quando todas as séries chegam ao topo da faixa, o app sugere subir a carga. O histórico de cargas também vai para a IA ao gerar o próximo plano.
+
+As tabelas de treino já fazem parte de `db/schema.sql`.

@@ -1,0 +1,76 @@
+import { insertInto, sql } from '@/lib/db';
+import { deleteMessage, sendMessage, type InlineKeyboard, type TelegramResult } from '@/lib/telegram';
+
+// Keeps the chat clean: every bot message is recorded with an expiry and
+// deleted by cleanupExpiredMessages() (cron every 10 min + opportunistically
+// on each incoming update).
+
+export type MessageKind = 'reminder' | 'reply' | 'summary';
+
+// Telegram refuses to delete messages older than 48h; stay safely below it.
+const MAX_LIFETIME_MIN = 47 * 60;
+
+const DEFAULT_TTL_MIN: Record<MessageKind, number> = {
+  reminder: 120,              // stale once the moment has passed
+  reply:    10,               // command answers
+  summary:  MAX_LIFETIME_MIN, // replaced by the next summary (see expireSummaries)
+};
+
+export async function trackMessage(chatId: number, messageId: number, kind: MessageKind, ttlMin = DEFAULT_TTL_MIN[kind]): Promise<void> {
+  const deleteAfter = new Date(Date.now() + Math.min(ttlMin, MAX_LIFETIME_MIN) * 60_000).toISOString();
+  try {
+    await insertInto(
+      'telegram_messages',
+      { chat_id: chatId, message_id: messageId, kind, delete_after: deleteAfter },
+      { onConflict: 'chat_id,message_id' },
+    );
+  } catch (err) {
+    console.error('[telegram-messages] track failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+export async function sendTracked(
+  chatId: number,
+  html: string,
+  kind: MessageKind,
+  keyboard?: InlineKeyboard,
+  ttlMin?: number,
+): Promise<TelegramResult<{ message_id: number }>> {
+  const result = await sendMessage(chatId, html, keyboard);
+  if (result.ok) await trackMessage(chatId, result.result.message_id, kind, ttlMin);
+  return result;
+}
+
+// Deletes a message right away (user commands, acted-on notifications).
+export async function deleteNow(chatId: number, messageId: number): Promise<void> {
+  await deleteMessage(chatId, messageId);
+  await sql`DELETE FROM telegram_messages WHERE chat_id = ${chatId} AND message_id = ${messageId}`;
+}
+
+// A new summary makes the previous summaries obsolete.
+export async function expireSummaries(chatId: number): Promise<void> {
+  await sql`
+    UPDATE telegram_messages SET delete_after = ${new Date().toISOString()}
+    WHERE chat_id = ${chatId} AND kind = 'summary'
+  `;
+}
+
+export async function cleanupExpiredMessages(chatId?: number): Promise<{ deleted: number; failed: number }> {
+  const due = (await sql`
+    SELECT chat_id, message_id FROM telegram_messages
+    WHERE delete_after <= ${new Date().toISOString()}
+      AND (${chatId ?? null}::bigint IS NULL OR chat_id = ${chatId ?? null})
+    ORDER BY delete_after ASC
+    LIMIT 300
+  `) as Array<{ chat_id: number; message_id: number }>;
+  const counts = { deleted: 0, failed: 0 };
+
+  for (const m of due) {
+    const res = await deleteMessage(m.chat_id, m.message_id);
+    // Already gone, too old or chat blocked: nothing more we can do, so drop the row either way.
+    if (res.ok) counts.deleted++;
+    else counts.failed++;
+    await sql`DELETE FROM telegram_messages WHERE chat_id = ${m.chat_id} AND message_id = ${m.message_id}`;
+  }
+  return counts;
+}

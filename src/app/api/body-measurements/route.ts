@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 
 const FIELDS = [
   'waist','neck','hips','chest',
@@ -13,14 +13,14 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabase
-    .from('body_measurements')
-    .select('*')
-    .eq('user_id', session.user.id)
-    .order('date', { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  try {
+    const data = await sql`
+      SELECT * FROM body_measurements WHERE user_id = ${session.user.id} ORDER BY date DESC
+    `;
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -48,12 +48,10 @@ export async function POST(req: Request) {
     payload[f] = body[f] != null && body[f] !== '' ? Number(body[f]) : null;
   }
 
-  const { data, error } = await supabase
-    .from('body_measurements')
-    .upsert(payload, { onConflict: 'user_id,date' })
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  try {
+    const [data] = await insertInto('body_measurements', payload, { onConflict: 'user_id,date', returning: '*' });
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }

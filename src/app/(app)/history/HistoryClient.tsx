@@ -138,7 +138,7 @@ function KpiCard({ icon, label, value, unit, delta, deltaUnit, higherIsBetter = 
   const isGood = delta != null && (higherIsBetter ? delta > 0 : delta < 0);
   const isBad  = delta != null && (higherIsBetter ? delta < 0 : delta > 0);
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none">
+    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none">
       <div className="flex items-center gap-2 mb-3">
         <div className="h-7 w-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
           {icon}
@@ -169,7 +169,7 @@ function KpiCard({ icon, label, value, unit, delta, deltaUnit, higherIsBetter = 
 
 function SectionCard({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none', className)}>
+    <div className={cn('bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none', className)}>
       {children}
     </div>
   );
@@ -178,7 +178,7 @@ function SectionCard({ children, className }: { children: React.ReactNode; class
 function SectionLabel({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-4">
-      <span className="text-emerald-500 flex-shrink-0">{icon}</span>
+      <span className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-1 text-emerald-500 flex-shrink-0 flex items-center justify-center">{icon}</span>
       <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">{title}</p>
     </div>
   );
@@ -187,7 +187,7 @@ function SectionLabel({ icon, title }: { icon: React.ReactNode; title: string })
 function EmptyState({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
   return (
     <div className="h-36 flex flex-col items-center justify-center gap-2.5">
-      <div className="h-10 w-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 dark:text-zinc-500">
+      <div className="h-12 w-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 dark:text-zinc-500">
         {icon}
       </div>
       <div className="text-center">
@@ -377,17 +377,17 @@ export default function HistoryClient({
   const achievedCount = milestones.filter((m) => m.ok).length;
 
   return (
-    <div className="flex flex-col gap-5 pt-8 pb-8 animate-fade-in">
+    <div className="flex flex-col gap-4 pt-7 pb-8 animate-fade-in">
 
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Evolução</h1>
+          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight">Evolução</h1>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 font-medium">
             {daysTracked > 0 ? `${daysTracked} dias acompanhados` : 'Comece registrando seus dados'}
           </p>
         </div>
-        <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl p-1 self-start mt-1">
+        <div className="flex gap-1 bg-zinc-100/80 dark:bg-zinc-800/80 rounded-xl p-1 self-start mt-1">
           {([7, 30, 90] as Range[]).map((n) => (
             <button key={n} onClick={() => setRange(n)}
               className={cn(
@@ -691,7 +691,7 @@ export default function HistoryClient({
 
       {/* ── Marmitas Inteligentes ────────────────────────────────────── */}
       <Link href="/marmitas"
-        className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-emerald-200 dark:hover:border-emerald-800/60 transition-colors group">
+        className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none hover:border-emerald-200 dark:hover:border-emerald-800/60 transition-colors group">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 flex items-center justify-center flex-shrink-0">
             <UtensilsCrossed size={18} className="text-emerald-500" />
@@ -868,7 +868,7 @@ export default function HistoryClient({
             { href: '/body-measurements',  icon: <Ruler size={17} />,  label: 'Medidas',   sub: 'Cintura · braços · coxas' },
           ].map(({ href, icon, label, sub }) => (
             <Link key={href} href={href}
-              className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-[0_1px_3px_0_rgb(0,0,0,0.04)] dark:shadow-none hover:border-emerald-200 dark:hover:border-emerald-800/50 transition-all active:scale-[0.97] group">
+              className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl shadow-[0_2px_8px_0_rgb(0,0,0,0.06)] dark:shadow-none hover:border-emerald-200 dark:hover:border-emerald-800/50 transition-all active:scale-[0.97] group">
               <div>
                 <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">{label}</p>
                 <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{sub}</p>

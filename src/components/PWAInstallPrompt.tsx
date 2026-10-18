@@ -59,7 +59,9 @@ export default function PWAInstallPrompt() {
       if (until && Date.now() < until) return;
     } catch {}
 
+    // navigator.userAgent is only meaningful client-side; detect after mount.
     const onIOS = isIOS();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIos(onIOS);
 
     if (onIOS) {

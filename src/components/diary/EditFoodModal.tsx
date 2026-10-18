@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
@@ -20,55 +20,43 @@ const inputCls =
 
 const labelCls = 'text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500';
 
-export default function EditFoodModal({ open, onClose, log, onUpdated }: EditFoodModalProps) {
-  const [mealType, setMealType] = useState<MealType | null>(null);
-  const [foodName, setFoodName] = useState('');
-  const [calories, setCalories] = useState(0);
-  const [protein, setProtein] = useState(0);
-  const [carbs, setCarbs] = useState(0);
-  const [fat, setFat] = useState(0);
-  const [hydrationMl, setHydrationMl] = useState(0);
-  const [isBeverageField, setIsBeverageField] = useState(false);
+export default function EditFoodModal(props: EditFoodModalProps) {
+  const { open } = props;
+  // Remount the modal's internal state fresh every time it opens, instead of
+  // resetting every state variable by hand inside an effect. `log` can only
+  // change together with `open` (the modal blocks the UI that sets it).
+  const [wasOpen, setWasOpen] = useState(open);
+  const [epoch, setEpoch] = useState(0);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setEpoch(epoch + 1);
+  }
+  return <EditFoodModalBody key={epoch} {...props} />;
+}
+
+function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps) {
+  // Map legacy 'snack' to 'afternoon_snack'; treat null as null so user selects
+  const initialMealType: MealType | null = log
+    ? log.meal_type === 'snack'
+      ? 'afternoon_snack'
+      : (log.meal_type as MealType | null) ?? null
+    : null;
+  const initialIsBeverage = !!log && ((log.hydration_ml ?? 0) > 0 || detectBeverage(log.food_name).isBeverage);
+
+  const [mealType, setMealType] = useState<MealType | null>(initialMealType);
+  const [foodName, setFoodName] = useState(log?.food_name ?? '');
+  const [calories, setCalories] = useState(log?.calories ?? 0);
+  const [protein, setProtein] = useState(log?.protein ?? 0);
+  const [carbs, setCarbs] = useState(log?.carbs ?? 0);
+  const [fat, setFat] = useState(log?.fat ?? 0);
+  const [hydrationMl, setHydrationMl] = useState(log?.hydration_ml ?? 0);
+  const [isBeverageField, setIsBeverageField] = useState(initialIsBeverage);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [needsReanalysis, setNeedsReanalysis] = useState(false);
-
-  const initialRef = useRef({ mealType: null as MealType | null, foodName: '', calories: 0, protein: 0, carbs: 0, fat: 0, hydrationMl: 0 });
-
-  useEffect(() => {
-    if (open && log) {
-      const isBev = (log.hydration_ml ?? 0) > 0 || detectBeverage(log.food_name).isBeverage;
-      // Map legacy 'snack' to 'afternoon_snack'; treat null as null so user selects
-      const logMealType: MealType | null = log.meal_type === 'snack'
-        ? 'afternoon_snack'
-        : (log.meal_type as MealType | null) ?? null;
-      const init = {
-        mealType: logMealType,
-        foodName: log.food_name,
-        calories: log.calories,
-        protein: log.protein ?? 0,
-        carbs: log.carbs ?? 0,
-        fat: log.fat ?? 0,
-        hydrationMl: log.hydration_ml ?? 0,
-      };
-      initialRef.current = init;
-      setMealType(init.mealType);
-      setFoodName(init.foodName);
-      setCalories(init.calories);
-      setProtein(init.protein);
-      setCarbs(init.carbs);
-      setFat(init.fat);
-      setHydrationMl(init.hydrationMl);
-      setIsBeverageField(isBev);
-      setError(null);
-      setIsDirty(false);
-      setConfirmClose(false);
-      setNeedsReanalysis(false);
-    }
-  }, [open, log]);
 
   function markDirty() { setIsDirty(true); }
 

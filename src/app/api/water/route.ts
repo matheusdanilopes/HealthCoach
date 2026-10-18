@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 
 export async function GET(req: Request) {
@@ -10,15 +10,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date') ?? brazilToday();
 
-  const { data } = await supabase
-    .from('water_logs')
-    .select('id, amount_ml, created_at')
-    .eq('user_id', session.user.id)
-    .eq('log_date', date)
-    .order('created_at', { ascending: true });
+  const data = await sql`
+    SELECT id, amount_ml, created_at FROM water_logs
+    WHERE user_id = ${session.user.id} AND log_date = ${date}
+    ORDER BY created_at ASC
+  `;
 
-  const totalMl = (data ?? []).reduce((s: number, r: { amount_ml: number }) => s + r.amount_ml, 0);
-  return NextResponse.json({ logs: data ?? [], totalMl });
+  const totalMl = data.reduce((s: number, r) => s + r.amount_ml, 0);
+  return NextResponse.json({ logs: data, totalMl });
 }
 
 export async function POST(req: Request) {
@@ -31,14 +30,12 @@ export async function POST(req: Request) {
   const insertData: Record<string, unknown> = { user_id: session.user.id, amount_ml, log_date: date };
   if (created_at) insertData.created_at = created_at;
 
-  const { data, error } = await supabase
-    .from('water_logs')
-    .insert(insertData)
-    .select('id, amount_ml, created_at')
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, log: data });
+  try {
+    const [data] = await insertInto('water_logs', insertData, { returning: 'id, amount_ml, created_at' });
+    return NextResponse.json({ ok: true, log: data });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: Request) {
@@ -49,12 +46,11 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  const { error } = await supabase
-    .from('water_logs')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', session.user.id);
+  try {
+    await sql`DELETE FROM water_logs WHERE id = ${id} AND user_id = ${session.user.id}`;
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 
 export async function DELETE(
   _req: Request,
@@ -12,13 +12,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const { error } = await supabase
-      .from('meal_prep_recipes')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', session.user.id);
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await sql`DELETE FROM meal_prep_recipes WHERE id = ${id} AND user_id = ${session.user.id}`;
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -37,13 +31,10 @@ export async function PATCH(
     const body = await req.json();
     const { is_favorite } = body;
 
-    const { error } = await supabase
-      .from('meal_prep_recipes')
-      .update({ is_favorite })
-      .eq('id', id)
-      .eq('user_id', session.user.id);
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await sql`
+      UPDATE meal_prep_recipes SET is_favorite = ${is_favorite}
+      WHERE id = ${id} AND user_id = ${session.user.id}
+    `;
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

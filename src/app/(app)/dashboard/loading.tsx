@@ -1,37 +1,33 @@
 function Skeleton({ className }: { className?: string }) {
-  return (
-    <div className={`animate-shimmer rounded-xl ${className ?? ''}`} />
-  );
+  return <div className={`skeleton ${className ?? ''}`} />;
 }
 
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-col gap-6 pt-8 pb-6">
+    <div className="flex flex-col gap-4 pt-6 pb-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 px-1">
         <div className="flex flex-col gap-2">
-          <Skeleton className="h-3 w-28" />
-          <Skeleton className="h-6 w-44" />
+          <Skeleton className="h-3.5 w-32 rounded-lg" />
+          <Skeleton className="h-7 w-48 rounded-xl" />
         </div>
-        <Skeleton className="h-9 w-20 rounded-xl" />
+        <Skeleton className="h-11 w-24 rounded-2xl" />
       </div>
 
-      {/* 2-column layout */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start">
-        {/* Left */}
-        <div className="flex flex-col gap-3 flex-1 w-full">
-          <Skeleton className="h-[180px] rounded-2xl" />
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-12 rounded-xl" />
-            <Skeleton className="h-12 rounded-xl" />
-          </div>
-        </div>
-        {/* Right */}
-        <div className="flex flex-col gap-3 w-full sm:w-56 flex-shrink-0">
-          <Skeleton className="h-[148px] rounded-2xl" />
-          <Skeleton className="h-[148px] rounded-2xl" />
-        </div>
-      </div>
+      {/* Week strip */}
+      <Skeleton className="h-[104px] rounded-2xl" />
+
+      {/* Daily summary */}
+      <Skeleton className="h-[330px] rounded-3xl" />
+
+      {/* Primary action */}
+      <Skeleton className="h-14 rounded-2xl" />
+
+      {/* Water */}
+      <Skeleton className="h-[136px] rounded-3xl" />
+
+      {/* Meals */}
+      <Skeleton className="h-[340px] rounded-3xl" />
     </div>
   );
 }

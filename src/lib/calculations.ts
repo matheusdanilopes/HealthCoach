@@ -37,3 +37,27 @@ export function calculateAge(birthDate: string): number {
 export function calculateWaterTarget(weight: number): number {
   return Math.round(weight * 35);
 }
+
+// Suggested daily protein: 1.8 g/kg, the middle of the 1.6–2.2 g/kg range
+// used by the coach for both fat loss and muscle gain.
+export function calculateProteinTarget(weight: number): number {
+  return Math.round(weight * 1.8);
+}
+
+// Net energy cost of a day's step count (above resting, which the TMB already
+// covers). Stride length is estimated from height (≈ 41.5% men / 41.3% women)
+// and the ACSM walking equation gives a net cost of ~0.5 kcal per kg per km.
+export function calculateStepsCalories(
+  steps: number,
+  weight: number,
+  height: number | null,
+  sex: 'male' | 'female' | null
+): { calories: number; distanceKm: number; strideCm: number } {
+  const strideCm = height ? height * (sex === 'female' ? 0.413 : 0.415) : 70;
+  const distanceKm = (steps * strideCm) / 100_000;
+  return {
+    calories: Math.round(0.5 * weight * distanceKm),
+    distanceKm: Math.round(distanceKm * 100) / 100,
+    strideCm: Math.round(strideCm),
+  };
+}

@@ -114,6 +114,13 @@ async function main() {
     .toFile(join(ICONS_DIR, 'icon-512x512-maskable.png'));
   console.log('  icon-512x512-maskable.png');
 
+  // Notification icon — solid background (no transparent rounded corners)
+  await sharp(Buffer.from(maskableSVG))
+    .resize(192, 192)
+    .png({ compressionLevel: 9 })
+    .toFile(join(ICONS_DIR, 'icon-notification.png'));
+  console.log('  icon-notification.png');
+
   // Save master SVG files
   writeFileSync(join(ICONS_DIR, 'icon.svg'), regularSVG);
   writeFileSync(join(ICONS_DIR, 'icon-maskable.svg'), maskableSVG);

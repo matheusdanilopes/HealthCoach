@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
-import { withGeminiRetry } from '@/lib/gemini-retry';
-
-let gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  return (gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }));
-}
+import { sql } from '@/lib/db';
+import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 
 const SYSTEM = `Você é um especialista em ciências do esporte e metabolismo energético. Estime o gasto calórico com máxima precisão e rigor científico.
 
@@ -27,7 +21,6 @@ METs REALISTAS (tabela ACSM conservadora):
 - Ciclismo leve: 4.0 | moderado: 6.8 | intenso: 9.5
 - Musculação: leve 3.5 | moderada 5.0 | intensa 6.0 (NÃO ultrapasse 6.5 sem evidência)
 - HIIT: 8.0-12.0 conforme intensidade real
-- CrossFit: 7.0-10.0
 - Funcional: 5.0-7.5
 - Cardio (geral): 5.0-8.0
 - Esportes: 6.0-8.0
@@ -62,29 +55,38 @@ Campos obrigatórios:
 - trainingLoad: "leve" | "moderada" | "alta" | "muito alta"
 - confidence: "baixa" | "média" | "alta"
 - metValue: decimal com 1 casa (ex: 5.5)
-- summary: frase curta descritiva (máx 80 chars)`;
+- summary: frase curta descritiva (máx 80 chars). NUNCA use aspas duplas (") dentro do texto do summary — isso quebra o JSON. Não use nenhum tipo de aspas para dar ênfase a palavras.`;
 
-function extractJSON(raw: string): Record<string, unknown> {
-  const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-  try {
-    return JSON.parse(stripped);
-  } catch {
-    const start = stripped.indexOf('{');
-    if (start === -1) throw new Error('No JSON found in response');
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = start; i < stripped.length; i++) {
-      const ch = stripped[i];
-      if (escape) { escape = false; continue; }
-      if (ch === '\\' && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{') depth++;
-      else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
-    }
-    throw new Error('No valid JSON object found in response');
-  }
+// Last-resort recovery for when the model's JSON is well-formed enough to be
+// obviously the right shape but fails strict JSON.parse — most commonly an
+// unescaped double quote inside the free-text "summary" field. Since the
+// schema is fixed and flat, each field can be pulled out with a targeted
+// regex instead of giving up and surfacing a parse error to the user.
+function recoverWorkoutFields(raw: string): Record<string, unknown> | null {
+  const numberField = (key: string): number | undefined => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`));
+    return m ? Number(m[1]) : undefined;
+  };
+  const enumField = (key: string): string | undefined => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`));
+    return m ? m[1] : undefined;
+  };
+
+  const estimatedCalories = numberField('estimatedCalories');
+  if (estimatedCalories === undefined) return null;
+
+  // Grab everything between the opening quote and the last quote before the
+  // object closes, rather than stopping at the first (possibly inner) quote.
+  const summaryMatch = raw.match(/"summary"\s*:\s*"([\s\S]*)"\s*\}/);
+
+  return {
+    estimatedCalories,
+    intensity: enumField('intensity') ?? 'moderada',
+    trainingLoad: enumField('trainingLoad') ?? 'moderada',
+    confidence: enumField('confidence') ?? 'média',
+    metValue: numberField('metValue') ?? 0,
+    summary: summaryMatch ? summaryMatch[1].trim() : '',
+  };
 }
 
 export async function POST(req: Request) {
@@ -92,21 +94,28 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await req.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Não foi possível ler a requisição. Tente novamente.' },
+        { status: 400 }
+      );
+    }
 
-    const [{ data: profile }, { data: bodyMetrics }] = await Promise.all([
-      supabase
-        .from('users')
-        .select('current_weight, sex, birth_date, height_cm')
-        .eq('id', session.user.id)
-        .single(),
-      supabase
-        .from('body_metrics')
-        .select('weight, body_fat, muscle_mass')
-        .eq('user_id', session.user.id)
-        .order('date', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+    const durationMinutes = Number(body.durationMinutes);
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      return NextResponse.json({ error: 'Duração do treino inválida.' }, { status: 400 });
+    }
+
+    const [[profile], [bodyMetrics]] = await Promise.all([
+      sql`SELECT current_weight, sex, birth_date, height_cm FROM users WHERE id = ${session.user.id}`,
+      sql`
+        SELECT weight, body_fat, muscle_mass FROM body_metrics
+        WHERE user_id = ${session.user.id} ORDER BY date DESC LIMIT 1
+      `,
     ]);
 
     const weight = bodyMetrics?.weight ?? profile?.current_weight ?? 75;
@@ -115,7 +124,7 @@ export async function POST(req: Request) {
     if (body.description?.trim())   lines.push(`- Descrição livre: ${body.description.trim()}`);
     if (body.workoutType)           lines.push(`- Tipo: ${body.workoutType}`);
     if (body.intensity)             lines.push(`- Intensidade declarada: ${body.intensity}`);
-    if (body.durationMinutes)       lines.push(`- Duração: ${body.durationMinutes} minutos`);
+    lines.push(`- Duração: ${durationMinutes} minutos`);
     if (body.heartRate)             lines.push(`- FC média: ${body.heartRate} bpm`);
     if (body.distanceKm)            lines.push(`- Distância: ${body.distanceKm} km`);
     if (body.loadKg)                lines.push(`- Carga total movimentada: ${body.loadKg} kg`);
@@ -134,32 +143,47 @@ export async function POST(req: Request) {
     if (bodyMetrics?.body_fat)      lines.push(`- Gordura corporal: ${bodyMetrics.body_fat}%`);
     if (bodyMetrics?.muscle_mass)   lines.push(`- Massa muscular: ${bodyMetrics.muscle_mass} kg`);
 
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: lines.join('\n') }] }],
-        config: {
-          systemInstruction: SYSTEM,
-          maxOutputTokens: 300,
-          temperature: 0.15,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      })
-    );
+    const prompt = lines.join('\n');
 
-    const raw = response.text ?? '';
-    if (!raw) return NextResponse.json({ error: 'Empty response from AI' }, { status: 500 });
+    const toPositive = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
 
     let data: Record<string, unknown>;
     try {
-      data = extractJSON(raw);
-    } catch {
-      return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      data = await generateJSON({
+        label: 'workout-analyze',
+        system: SYSTEM,
+        parts: [{ text: prompt }],
+        // The JSON payload itself is small (~150 tokens), but newer models can
+        // spend part of the output budget on hidden reasoning before writing
+        // it — a tight budget truncates the JSON mid-object.
+        maxOutputTokens: 800,
+        temperature: 0.15,
+        validate: (d) => toPositive(d.estimatedCalories) > 0,
+      });
+    } catch (err) {
+      if (!(err instanceof AIParseError)) throw err;
+      const recovered = err.raws.map(recoverWorkoutFields).find((r) => r !== null);
+      if (!recovered) {
+        return NextResponse.json(
+          { error: 'Não foi possível interpretar a resposta da IA. Tente novamente.' },
+          { status: 500 }
+        );
+      }
+      data = recovered;
     }
 
-    if (!data.estimatedCalories) {
-      return NextResponse.json({ error: 'Invalid AI response format' }, { status: 500 });
+    if (!toPositive(data.estimatedCalories)) {
+      return NextResponse.json(
+        { error: 'A IA não conseguiu estimar o gasto deste treino. Tente novamente.' },
+        { status: 500 }
+      );
     }
+    data.estimatedCalories = Math.round(toPositive(data.estimatedCalories));
+    data.metValue = Math.round(toPositive(data.metValue) * 10) / 10;
+    data.summary = typeof data.summary === 'string' ? data.summary.slice(0, 120) : '';
 
     // Ensure confidence field has a valid value
     const validConfidence = ['alta', 'média', 'baixa'];
@@ -169,22 +193,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Workout analyze error:', msg);
-    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
-    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
-    if (is503) {
-      return NextResponse.json(
-        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
-        { status: 503 }
-      );
-    }
-    if (is429) {
-      return NextResponse.json(
-        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
-        { status: 429 }
-      );
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return aiErrorResponse(err, 'workout-analyze', 'Erro ao analisar o treino. Tente novamente.');
   }
 }

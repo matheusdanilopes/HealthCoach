@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { auth } from '@/auth';
-import { withGeminiRetry } from '@/lib/gemini-retry';
-
-let gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  return (gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }));
-}
+import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
+import type { GroqPart } from '@/lib/groq';
+import { isNonBeverageFood } from '@/lib/beverages';
 
 const SYSTEM = `Você é nutricionista especializado na TACO (Tabela Brasileira de Composição de Alimentos) e USDA. Analise a refeição descrita ou fotografada com MÁXIMO CONSERVADORISMO nutricional.
 
@@ -26,7 +22,8 @@ HIDRATAÇÃO — campo opcional "hydration_ml" (inteiro) por item:
   - Isotônico, kombucha: 75%
   - Caldo, sopa líquida: 50%
 • NÃO adicionar hydration_ml para: álcool, refrigerantes, milkshakes, energéticos
-• Para alimentos sólidos: omita o campo hydration_ml
+• Para alimentos sólidos, pastosos e condimentos: omita o campo hydration_ml — mesmo que o nome contenha água, leite, chá ou café (ex.: bolacha de água e sal, doce de leite, leite condensado, creme de leite, maionese, pudim, bolo de café)
+• Medidas caseiras NÃO indicam bebida: "colher de chá", "colher de sopa", "xícara de chá" são só unidades de medida
 • Exemplo suco (200ml): "hydration_ml": 160 (200×0.80)
 
 TERMOS VAGOS — interprete sempre de forma conservadora:
@@ -90,31 +87,104 @@ REGRAS FINAIS:
 2. Preparações mistas: discrimine cada componente separadamente
 3. calories = inteiro; macros com uma casa decimal
 4. total* = soma exata dos itens listados
-5. Em caso de dúvida → SUBESTIME`;
+5. Em caso de dúvida → SUBESTIME
+6. NUNCA use aspas duplas (") dentro dos textos de "name" ou "quantity" — isso quebra o JSON. Escreva polegadas, apelidos ou ênfases sem aspas`;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractJSON(raw: string): any {
-  const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-  try {
-    return JSON.parse(stripped);
-  } catch {
-    // Use balanced-brace extraction so trailing text with braces doesn't break the parse
-    const start = stripped.indexOf('{');
-    if (start === -1) throw new Error('No JSON found in response');
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = start; i < stripped.length; i++) {
-      const ch = stripped[i];
-      if (escape) { escape = false; continue; }
-      if (ch === '\\' && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{') depth++;
-      else if (ch === '}' && --depth === 0) return JSON.parse(stripped.slice(start, i + 1));
-    }
-    throw new Error('No valid JSON object found in response');
+const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // decoded size
+
+function base64ByteLength(base64: string): number {
+  const len = base64.length;
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((len * 3) / 4) - padding;
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+// Models occasionally send numbers as strings, negative or missing values.
+function toNumber(value: unknown): number {
+  const n = typeof value === 'string' ? Number(value.replace(',', '.')) : Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// Coerces the AI payload into the shape the client expects and recomputes the
+// totals from the items, so the summary always matches what is listed.
+function normalizeFoodResponse(data: Record<string, unknown>): Record<string, unknown> | null {
+  if (!Array.isArray(data.foods)) return null;
+  const foods = (data.foods as unknown[])
+    .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
+    .filter((f) => typeof f.name === 'string' && f.name.trim() !== '')
+    .map((f) => {
+      const item: Record<string, unknown> = {
+        name: String(f.name).trim(),
+        quantity: typeof f.quantity === 'string' ? f.quantity.trim() : String(f.quantity ?? ''),
+        calories: Math.round(toNumber(f.calories)),
+        protein: round1(toNumber(f.protein)),
+        carbs: round1(toNumber(f.carbs)),
+        fat: round1(toNumber(f.fat)),
+      };
+      // Solids/condiments never hydrate, even if the model returned a value.
+      const hydration = isNonBeverageFood(item.name as string) ? 0 : toNumber(f.hydration_ml);
+      if (hydration > 0) item.hydration_ml = Math.round(hydration);
+      if (typeof f.hydration_confidence === 'string') item.hydration_confidence = f.hydration_confidence;
+      return item;
+    });
+  if (foods.length === 0) return null;
+
+  const sum = (key: string) => foods.reduce((acc, f) => acc + (f[key] as number), 0);
+  return {
+    foods,
+    totalCalories: Math.round(sum('calories')),
+    totalProtein: round1(sum('protein')),
+    totalCarbs: round1(sum('carbs')),
+    totalFat: round1(sum('fat')),
+    confidence: ['high', 'medium', 'low'].includes(data.confidence as string) ? data.confidence : 'medium',
+    portionAssumption: ['small', 'medium', 'large'].includes(data.portionAssumption as string)
+      ? data.portionAssumption
+      : 'medium',
+  };
+}
+
+// Last-resort recovery for when the model's JSON is the right shape but fails
+// strict JSON.parse — typically an unescaped double quote inside a food name,
+// or the response being cut off mid-array on long meals. Each food item is a
+// flat object, so complete items can be pulled out individually instead of
+// surfacing a parse error to the user.
+function recoverFoodFields(raw: string): Record<string, unknown> | null {
+  const numberField = (src: string, key: string): number | undefined => {
+    const m = src.match(new RegExp(`"${key}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`));
+    return m ? Number(m[1]) : undefined;
+  };
+  // Lazy match up to the closing quote that is followed by a comma or the end
+  // of the object, so a stray inner quote doesn't cut the value short.
+  const stringField = (src: string, key: string): string | undefined => {
+    const m = src.match(new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"\\s*(?:,\\s*"|\\})`));
+    return m ? m[1].trim() : undefined;
+  };
+
+  const foods: Record<string, unknown>[] = [];
+  // Only fully closed item objects match, so a truncated trailing item is dropped.
+  for (const [chunk] of raw.matchAll(/\{[^{}]*"name"[^{}]*\}/g)) {
+    const calories = numberField(chunk, 'calories');
+    if (calories === undefined) continue;
+    foods.push({
+      name: stringField(chunk, 'name'),
+      quantity: stringField(chunk, 'quantity') ?? '',
+      calories,
+      protein: numberField(chunk, 'protein'),
+      carbs: numberField(chunk, 'carbs'),
+      fat: numberField(chunk, 'fat'),
+      hydration_ml: numberField(chunk, 'hydration_ml'),
+    });
   }
+
+  const portion = raw.match(/"portionAssumption"\s*:\s*"(small|medium|large)"/);
+  return normalizeFoodResponse({
+    foods,
+    // Items may have been dropped or mangled, so never claim high confidence.
+    confidence: 'low',
+    portionAssumption: portion?.[1],
+  });
 }
 
 export async function POST(req: Request) {
@@ -122,75 +192,76 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await req.json();
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let parts: any[];
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Não foi possível ler a requisição. A imagem pode ser grande demais ou os dados estão corrompidos.' },
+        { status: 400 }
+      );
+    }
+
+    let parts: GroqPart[];
     if (body.type === 'text') {
       if (!body.description?.trim()) {
         return NextResponse.json({ error: 'Missing description' }, { status: 400 });
       }
       parts = [{ text: `Refeição: ${body.description}` }];
     } else if (body.type === 'image') {
-      if (!body.imageBase64) {
+      if (!body.imageBase64 || typeof body.imageBase64 !== 'string') {
         return NextResponse.json({ error: 'Missing image' }, { status: 400 });
       }
+      const mimeType = body.mimeType || 'image/jpeg';
+      if (!ALLOWED_IMAGE_MIME_TYPES.includes(mimeType)) {
+        return NextResponse.json(
+          { error: 'Formato de imagem não suportado. Use JPG, PNG ou WEBP.' },
+          { status: 400 }
+        );
+      }
+      if (base64ByteLength(body.imageBase64) > MAX_IMAGE_BYTES) {
+        return NextResponse.json(
+          { error: 'Imagem muito grande. Tente uma foto com menor resolução.' },
+          { status: 413 }
+        );
+      }
       parts = [
-        { inlineData: { mimeType: body.mimeType || 'image/jpeg', data: body.imageBase64 } },
+        { inlineData: { mimeType, data: body.imageBase64 } },
         { text: 'Analise esta foto de refeição.' },
       ];
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
 
-    const response = await withGeminiRetry(() =>
-      getGemini().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts }],
-        config: {
-          systemInstruction: SYSTEM,
-          maxOutputTokens: 2048,
-          temperature: 0.2,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      })
-    );
-
-    const raw = response.text ?? '';
-    if (!raw) {
-      return NextResponse.json({ error: 'Empty response from AI' }, { status: 500 });
-    }
-
     let data: Record<string, unknown>;
     try {
-      data = extractJSON(raw);
-    } catch (parseErr) {
-      console.error('Analyze: JSON parse error', parseErr, 'raw:', raw.slice(0, 300));
-      return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
+      data = await generateJSON({
+        label: 'food-analyze',
+        system: SYSTEM,
+        parts,
+        // Newer models can spend part of the output budget on hidden reasoning;
+        // meals with many items need room for the full foods array or the
+        // JSON is truncated mid-object.
+        maxOutputTokens: 4096,
+        temperature: 0.2,
+        validate: (d) => normalizeFoodResponse(d) !== null,
+      });
+    } catch (err) {
+      if (!(err instanceof AIParseError)) throw err;
+      const recovered = err.raws.map(recoverFoodFields).find((r) => r !== null);
+      if (!recovered) {
+        return NextResponse.json(
+          { error: 'Não foi possível interpretar a resposta da IA. Tente novamente ou descreva a refeição com mais detalhes.' },
+          { status: 500 }
+        );
+      }
+      data = recovered;
     }
 
-    if (!Array.isArray(data.foods) || data.foods.length === 0) {
-      return NextResponse.json({ error: 'Invalid AI response format' }, { status: 500 });
-    }
-
-    return NextResponse.json(data);
+    // validate/recover above guarantee this is non-null.
+    return NextResponse.json(normalizeFoodResponse(data));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Analyze API error:', msg);
-    const is503 = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
-    const is429 = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
-    if (is503) {
-      return NextResponse.json(
-        { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
-        { status: 503 }
-      );
-    }
-    if (is429) {
-      return NextResponse.json(
-        { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
-        { status: 429 }
-      );
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return aiErrorResponse(err, 'food-analyze', 'Erro ao analisar a refeição. Tente novamente.');
   }
 }

@@ -8,6 +8,7 @@ export interface Profile {
   activity_level: 'sedentary' | 'moderate' | 'active' | null;
   tdee: number | null;
   target_calories: number | null;
+  target_protein_g: number | null;
   target_water_ml: number;
 }
 
@@ -90,19 +91,6 @@ export interface BodyMeasurements {
   updated_at: string;
 }
 
-export interface AIInsight {
-  id: string;
-  user_id: string;
-  type: 'nutrition' | 'hydration' | 'workout' | 'body' | 'behavior' | 'motivation';
-  priority: 'informativo' | 'atencao' | 'positivo' | 'recomendacao';
-  title: string;
-  message: string;
-  cta: string | null;
-  metadata: Record<string, unknown> | null;
-  generated_at: string;
-  read_at: string | null;
-}
-
 export type MealType =
   | 'breakfast'
   | 'morning_snack'
@@ -114,3 +102,23 @@ export type MealType =
   | 'post_workout'
   | 'other';
 export type ActivityLevel = 'sedentary' | 'moderate' | 'active';
+
+export type CoachImpact = 'alto' | 'medio' | 'baixo';
+
+export interface CoachAnalysis {
+  summary: string;
+  score: number | null;
+  scoreLabel: string;
+  strengths: { title: string; detail: string }[];
+  mistakes: { title: string; detail: string; evidence: string }[];
+  improvements: { title: string; action: string; impact: CoachImpact }[];
+  strategy: {
+    headline: string;
+    calories: string;
+    protein: string;
+    training: string;
+    habits: string[];
+  };
+  nextSteps: string[];
+  closing: string;
+}

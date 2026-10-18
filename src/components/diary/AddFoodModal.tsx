@@ -32,6 +32,7 @@ export default function AddFoodModal({
   const [fat, setFat] = useState('');
   const [loading, setLoading] = useState(false);
   const [mealError, setMealError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const suggestedType = suggestMealType(new Date().getHours());
 
@@ -43,6 +44,7 @@ export default function AddFoodModal({
     setCarbs('');
     setFat('');
     setMealError(false);
+    setError(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -53,28 +55,34 @@ export default function AddFoodModal({
       return;
     }
     setMealError(false);
+    setError(null);
     setLoading(true);
 
-    const res = await fetch('/api/food', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        food_name: foodName,
-        meal_type: mealType,
-        calories: parseInt(calories),
-        protein: protein ? parseFloat(protein) : null,
-        carbs: carbs ? parseFloat(carbs) : null,
-        fat: fat ? parseFloat(fat) : null,
-      }),
-    });
+    try {
+      const res = await fetch('/api/food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          food_name: foodName,
+          meal_type: mealType,
+          calories: parseInt(calories),
+          protein: protein ? parseFloat(protein) : null,
+          carbs: carbs ? parseFloat(carbs) : null,
+          fat: fat ? parseFloat(fat) : null,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+      if (!data) throw new Error('Resposta inválida do servidor.');
 
-    setLoading(false);
-    if (!res.ok) return;
-
-    const data = await res.json() as FoodLog;
-    onAdded(data);
-    reset();
-    onClose();
+      onAdded(data as FoodLog);
+      reset();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível salvar. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleMealChange(meal: MealType) {
@@ -147,6 +155,10 @@ export default function AddFoodModal({
               Selecione a refeição acima para continuar.
             </p>
           </div>
+        )}
+
+        {error && (
+          <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
         )}
 
         <Button type="submit" loading={loading} className="w-full">

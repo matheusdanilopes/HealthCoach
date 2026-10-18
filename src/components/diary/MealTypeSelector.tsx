@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { cn, getMealLabel, getMealIcon } from '@/lib/utils';
 import type { MealType } from '@/types';
@@ -33,20 +33,11 @@ export default function MealTypeSelector({
   errorMessage = 'Selecione a refeição para continuar.',
 }: MealTypeSelectorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [shaking, setShaking] = useState(false);
 
   useEffect(() => {
     if (!error) return;
     // Scroll the selector into view inside the modal's overflow container
     containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    // Trigger shake — re-arm on every new error trigger
-    setShaking(false);
-    const raf = requestAnimationFrame(() => {
-      setShaking(true);
-      const t = setTimeout(() => setShaking(false), 500);
-      return () => clearTimeout(t);
-    });
-    return () => cancelAnimationFrame(raf);
   }, [error]);
 
   return (
@@ -55,7 +46,7 @@ export default function MealTypeSelector({
       <div
         className={cn(
           'rounded-2xl border p-2 transition-all duration-200',
-          shaking && 'animate-shake',
+          error && 'animate-shake',
           error
             ? 'border-red-300 dark:border-red-700/60 bg-red-50/40 dark:bg-red-950/20 ring-2 ring-red-300/50 dark:ring-red-800/40'
             : 'border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30'

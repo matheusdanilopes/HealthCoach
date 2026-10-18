@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql, updateWhere } from '@/lib/db';
 
 const FIELDS = [
   'waist','neck','hips','chest',
@@ -32,16 +32,13 @@ export async function PUT(
     payload[f] = body[f] != null && body[f] !== '' ? Number(body[f]) : null;
   }
 
-  const { data, error } = await supabase
-    .from('body_measurements')
-    .update(payload)
-    .eq('id', id)
-    .eq('user_id', session.user.id)
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  try {
+    const [data] = await updateWhere('body_measurements', payload, { id, user_id: session.user.id }, { returning: '*' });
+    if (!data) return NextResponse.json({ error: 'Medida não encontrada' }, { status: 404 });
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -53,12 +50,10 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const { error } = await supabase
-    .from('body_measurements')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', session.user.id);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  try {
+    await sql`DELETE FROM body_measurements WHERE id = ${id} AND user_id = ${session.user.id}`;
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }

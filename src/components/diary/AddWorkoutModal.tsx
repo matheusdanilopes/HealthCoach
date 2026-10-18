@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import {
   Sparkles, RotateCcw, Flame,
   ChevronRight, ChevronLeft,
-  Plus, Minus,
+  Plus, Minus, AlertTriangle,
 } from 'lucide-react';
 import type { FoodLog } from '@/types';
 
@@ -15,10 +15,10 @@ const WORKOUT_TYPES = [
   { value: 'musculação', label: 'Musculação', emoji: '🏋️' },
   { value: 'corrida',    label: 'Corrida',    emoji: '🏃' },
   { value: 'caminhada',  label: 'Caminhada',  emoji: '🚶' },
+  { value: 'passos',     label: 'Passos',     emoji: '👣' },
   { value: 'ciclismo',   label: 'Ciclismo',   emoji: '🚴' },
   { value: 'hiit',       label: 'HIIT',       emoji: '⚡' },
   { value: 'funcional',  label: 'Funcional',  emoji: '🤸' },
-  { value: 'crossfit',   label: 'CrossFit',   emoji: '💪' },
   { value: 'cardio',     label: 'Cardio',     emoji: '❤️' },
   { value: 'esportes',   label: 'Esportes',   emoji: '⚽' },
   { value: 'tênis',      label: 'Tênis',      emoji: '🎾' },
@@ -38,6 +38,8 @@ const INTENSITIES = [
 type Intensity = typeof INTENSITIES[number]['value'];
 
 const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
+const STEPS_PRESETS = [5000, 8000, 10000, 12000, 15000];
+const ANALYZE_TIMEOUT_MS = 45_000;
 
 interface WorkoutAnalysis {
   estimatedCalories: number;
@@ -48,12 +50,21 @@ interface WorkoutAnalysis {
   summary: string;
 }
 
+interface StepsResult {
+  steps: number;
+  calories: number;
+  distanceKm: number;
+  strideCm: number;
+  weightKg: number;
+}
+
 interface AddWorkoutModalProps {
   open: boolean;
   onClose: () => void;
   userId: string;
   date?: string;
-  onAdded: (log: FoodLog) => void;
+  // replacedIds: entries this save superseded (e.g. the day's earlier steps log).
+  onAdded: (log: FoodLog, replacedIds?: string[]) => void;
 }
 
 const CONFIDENCE_STYLE: Record<string, string> = {
@@ -76,7 +87,20 @@ const INPUT_CLS = cn(
   'placeholder:text-zinc-300 dark:placeholder:text-zinc-600'
 );
 
-export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWorkoutModalProps) {
+export default function AddWorkoutModal(props: AddWorkoutModalProps) {
+  const { open } = props;
+  // Remount the modal's internal state fresh every time it opens, instead of
+  // resetting every state variable by hand inside an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  const [epoch, setEpoch] = useState(0);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setEpoch(epoch + 1);
+  }
+  return <AddWorkoutModalBody key={epoch} {...props} />;
+}
+
+function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalProps) {
   const [step, setStep] = useState(0);
   const [workoutType, setWorkoutType] = useState<WorkoutType | null>(null);
   const [description, setDescription] = useState('');
@@ -90,28 +114,19 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
   const [showOptional, setShowOptional] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<WorkoutAnalysis | null>(null);
+  const [steps, setSteps] = useState('');
+  const [stepsResult, setStepsResult] = useState<StepsResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      setStep(0);
-      setWorkoutType(null);
-      setDescription('');
-      setIntensity(null);
-      setDuration('');
-      setHeartRate('');
-      setDistance('');
-      setLoad('');
-      setRpe('');
-      setSmartwatchKcal('');
-      setShowOptional(false);
-      setResult(null);
-      setError(null);
-      setSaving(false);
-      setAnalyzing(false);
+  function handleClose() {
+    if ((result || stepsResult) && !saving) {
+      setConfirmClose(true);
+    } else {
+      onClose();
     }
-  }, [open]);
+  }
 
   function adjustDuration(delta: number) {
     setDuration((prev) => {
@@ -125,6 +140,8 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
     setAnalyzing(true);
     setError(null);
     setStep(3);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
     try {
       const res = await fetch('/api/workout/analyze', {
         method: 'POST',
@@ -140,22 +157,76 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
           rpe:             rpe             ? parseInt(rpe)             : undefined,
           smartwatchKcal:  smartwatchKcal  ? parseInt(smartwatchKcal)  : undefined,
         }),
+        signal: controller.signal,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? 'Erro desconhecido');
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? `Erro ao analisar (HTTP ${res.status}).`);
+      if (!json) throw new Error('Resposta inválida do servidor. Tente novamente.');
       setResult(json as WorkoutAnalysis);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError('A análise demorou demais e foi cancelada. Verifique sua conexão e tente novamente.');
+      } else if (e instanceof TypeError) {
+        setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Não foi possível analisar. Tente novamente.');
+      }
       setStep(2);
+    } finally {
+      clearTimeout(timeoutId);
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleCalculateSteps() {
+    setAnalyzing(true);
+    setError(null);
+    setStep(3);
+    try {
+      const res = await fetch('/api/workout/steps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steps: parseInt(steps) }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? `Erro ao calcular (HTTP ${res.status}).`);
+      if (!json) throw new Error('Resposta inválida do servidor. Tente novamente.');
+      setStepsResult(json as StepsResult);
+    } catch (e) {
+      if (e instanceof TypeError) {
+        setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Não foi possível calcular. Tente novamente.');
+      }
+      setStep(1);
     } finally {
       setAnalyzing(false);
     }
   }
 
   async function handleConfirm() {
-    if (!result) return;
+    const calories = stepsResult ? stepsResult.calories : result?.estimatedCalories;
+    if (!calories) return;
     setSaving(true);
+    setError(null);
     try {
+      if (stepsResult) {
+        // One steps entry per day: the server replaces the day's earlier one.
+        const res = await fetch('/api/workout/steps', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ steps: stepsResult.steps, log_date: date }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+        if (!data?.log) throw new Error('Resposta inválida do servidor ao salvar.');
+
+        const log = data.log as FoodLog;
+        onAdded(log, [log.id, ...(data.removedIds ?? [])]);
+        onClose();
+        return;
+      }
+
       const found      = WORKOUT_TYPES.find((t) => t.value === workoutType);
       const emoji      = found?.emoji ?? '🏃';
       const label      = found?.label ?? (description.trim() || 'Treino');
@@ -168,24 +239,61 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
         body: JSON.stringify({
           food_name: workoutName,
           meal_type: 'snack',
-          calories:  -result.estimatedCalories,
+          calories:  -calories,
           log_date:  date,
         }),
       });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `Erro ao salvar (HTTP ${res.status}).`);
+      if (!data) throw new Error('Resposta inválida do servidor ao salvar.');
 
-      if (!res.ok) return;
-      const log = await res.json() as FoodLog;
-      onAdded(log);
+      onAdded(data as FoodLog);
       onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível salvar o treino. Tente novamente.');
     } finally {
       setSaving(false);
     }
   }
 
   const selectedType = WORKOUT_TYPES.find((t) => t.value === workoutType);
+  const isSteps = workoutType === 'passos';
+  const totalSteps = isSteps ? 2 : 3;
+  const stepsNum = parseInt(steps);
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={handleClose} title="Registrar treino">
+      {confirmClose ? (
+        <div className="flex flex-col items-center gap-5 py-3">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="h-10 w-10 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+              <AlertTriangle size={18} className="text-amber-500" />
+            </div>
+            <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-200">
+              Sair sem salvar?
+            </p>
+            <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              O treino analisado ainda não foi salvo e será descartado.
+            </p>
+          </div>
+          <div className="flex gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => setConfirmClose(false)}
+              className="flex-1 h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all"
+            >
+              Continuar
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-10 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 text-[13px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all"
+            >
+              Sair mesmo assim
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-col">
 
         {/* Progress bar (steps 0-2) */}
@@ -193,7 +301,7 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
           <div className="h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden mb-5">
             <div
               className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${((step + 1) / 3) * 100}%` }}
+              style={{ width: `${(Math.min(step + 1, totalSteps) / totalSteps) * 100}%` }}
             />
           </div>
         )}
@@ -254,8 +362,85 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
           </div>
         )}
 
+        {/* ── Step 1 (Passos): daily step count ── */}
+        {step === 1 && isSteps && (
+          <div className="animate-fade-in flex flex-col gap-4">
+            <div>
+              <h2 className="text-[18px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
+                Passos do dia
+              </h2>
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                Informe o total de passos registrado no seu smartwatch
+              </p>
+            </div>
+
+            <div className="flex gap-1.5 flex-wrap">
+              {STEPS_PRESETS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setSteps(String(n))}
+                  className={cn(
+                    'h-8 px-3 rounded-lg text-[12px] font-semibold transition-all duration-150 border active:scale-95',
+                    steps === String(n)
+                      ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
+                      : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                  )}
+                >
+                  {n.toLocaleString('pt-BR')}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={steps}
+                onChange={(e) => setSteps(e.target.value)}
+                placeholder="8500"
+                min="1"
+                max="200000"
+                className={cn(
+                  'flex-1 rounded-xl border bg-zinc-50 dark:bg-zinc-800/60 px-3 py-2.5',
+                  'border-zinc-200 dark:border-zinc-700/60 text-[20px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100',
+                  'focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400/60 transition-all text-center'
+                )}
+              />
+              <span className="text-[13px] text-zinc-400 dark:text-zinc-500 font-medium flex-shrink-0">passos</span>
+            </div>
+
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+              Informe o total do dia. Se já houver passos registrados nesta data, eles serão substituídos. O cálculo considera só o gasto extra dos passos, acima do repouso.
+            </p>
+
+            {error && (
+              <p className="text-[12px] text-red-500 dark:text-red-400">{error}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => { setStep(0); setError(null); }}
+                className="h-11 w-11 flex-shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-700/60 flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors active:scale-95"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <Button
+                onClick={handleCalculateSteps}
+                disabled={!(Number.isInteger(stepsNum) && stepsNum > 0 && stepsNum <= 200000)}
+                variant="primary"
+                className="flex-1 gap-2"
+              >
+                <Flame size={14} />
+                Calcular kcal
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── Step 1: Intensity + Duration ── */}
-        {step === 1 && (
+        {step === 1 && !isSteps && (
           <div className="animate-fade-in flex flex-col gap-4">
             <div>
               <h2 className="text-[18px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
@@ -525,9 +710,78 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
                 </div>
                 <div className="h-16 rounded-xl animate-shimmer" />
                 <p className="text-[12px] text-zinc-400 dark:text-zinc-500 text-center animate-pulse">
-                  Analisando com IA...
+                  {isSteps ? 'Calculando...' : 'Analisando com IA...'}
                 </p>
               </div>
+            ) : stepsResult ? (
+              <>
+                <div>
+                  <h2 className="text-[18px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
+                    Cálculo concluído
+                  </h2>
+                  <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                    Gasto calórico dos passos do dia
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:from-emerald-950/40 dark:via-green-950/30 dark:to-teal-950/20 rounded-2xl px-5 py-5 border border-emerald-100 dark:border-emerald-900/40">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Flame size={12} className="text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                      Gasto dos passos
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[48px] font-bold tabular-nums text-emerald-800 dark:text-emerald-200 leading-none tracking-tight">
+                      {stepsResult.calories.toLocaleString('pt-BR')}
+                    </span>
+                    <span className="text-[16px] font-medium text-emerald-500 dark:text-emerald-400">kcal</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Passos',    value: stepsResult.steps.toLocaleString('pt-BR') },
+                    { label: 'Distância', value: `${stepsResult.distanceKm.toLocaleString('pt-BR')} km` },
+                    { label: 'Passada',   value: `${stepsResult.strideCm} cm` },
+                  ].map((b) => (
+                    <div key={b.label} className="rounded-xl border px-2 py-2.5 flex flex-col items-center gap-0.5 bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/40">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{b.label}</span>
+                      <span className="text-[12px] font-bold text-zinc-700 dark:text-zinc-300 tabular-nums">{b.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40">
+                  <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                    Passada estimada pela sua altura e gasto de 0,5 kcal por kg a cada km ({stepsResult.weightKg} kg).
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setStepsResult(null); setStep(1); setError(null); }}
+                    className="flex items-center gap-1.5 px-4 h-11 rounded-xl border border-zinc-200 dark:border-zinc-700/60 text-[13px] font-medium text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors active:scale-95"
+                  >
+                    <RotateCcw size={12} />
+                    Refazer
+                  </button>
+                  <Button
+                    onClick={handleConfirm}
+                    loading={saving}
+                    disabled={stepsResult.calories <= 0}
+                    variant="primary"
+                    className="flex-1"
+                  >
+                    Confirmar passos
+                  </Button>
+                </div>
+
+                {error && (
+                  <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
+                )}
+              </>
             ) : result ? (
               <>
                 <div>
@@ -605,12 +859,17 @@ export default function AddWorkoutModal({ open, onClose, date, onAdded }: AddWor
                     Confirmar treino
                   </Button>
                 </div>
+
+                {error && (
+                  <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
+                )}
               </>
             ) : null}
           </div>
         )}
 
       </div>
+      )}
     </Modal>
   );
 }
