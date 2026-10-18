@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql, updateWhere } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { detectBeverage } from '@/lib/beverages';
 
 const FOOD_FIELDS = 'id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at';
-const FOOD_FIELDS_LEGACY = 'id, food_name, meal_type, calories, protein, carbs, fat, created_at';
 
 function resolveHydration(
   foodName: string,
@@ -56,26 +55,12 @@ export async function POST(req: Request) {
     log_date: date,
   };
 
-  let { data: row, error } = await supabase
-    .from('food_logs')
-    .insert({ ...baseInsert, ...hydration })
-    .select(FOOD_FIELDS)
-    .single();
-
-  if (error) {
-    // Migration not yet applied — retry without hydration columns
-    const { data: legacyRow, error: legacyError } = await supabase
-      .from('food_logs')
-      .insert(baseInsert)
-      .select(FOOD_FIELDS_LEGACY)
-      .single();
-    row = legacyRow as unknown as typeof row;
-    error = legacyError;
+  try {
+    const [row] = await insertInto('food_logs', { ...baseInsert, ...hydration }, { returning: FOOD_FIELDS });
+    return NextResponse.json({ ...row, user_id: session.user.id });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ...row, user_id: session.user.id });
 }
 
 export async function PATCH(req: Request) {
@@ -99,30 +84,18 @@ export async function PATCH(req: Request) {
   };
   if (meal_type) baseUpdate.meal_type = meal_type;
 
-  let { data: row, error } = await supabase
-    .from('food_logs')
-    .update({ ...baseUpdate, ...hydration })
-    .eq('id', id)
-    .eq('user_id', session.user.id)
-    .select(FOOD_FIELDS)
-    .single();
-
-  if (error) {
-    // Migration not yet applied — retry without hydration columns
-    const { data: legacyRow, error: legacyError } = await supabase
-      .from('food_logs')
-      .update(baseUpdate)
-      .eq('id', id)
-      .eq('user_id', session.user.id)
-      .select(FOOD_FIELDS_LEGACY)
-      .single();
-    row = legacyRow as unknown as typeof row;
-    error = legacyError;
+  try {
+    const [row] = await updateWhere(
+      'food_logs',
+      { ...baseUpdate, ...hydration },
+      { id, user_id: session.user.id },
+      { returning: FOOD_FIELDS },
+    );
+    if (!row) return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
+    return NextResponse.json({ ...row, user_id: session.user.id });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ...row, user_id: session.user.id });
 }
 
 export async function DELETE(req: Request) {
@@ -133,11 +106,7 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  await supabase
-    .from('food_logs')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', session.user.id);
+  await sql`DELETE FROM food_logs WHERE id = ${id} AND user_id = ${session.user.id}`;
 
   return NextResponse.json({ ok: true });
 }

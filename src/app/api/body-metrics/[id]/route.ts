@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 
 export async function PUT(
   req: Request,
@@ -21,23 +21,23 @@ export async function PUT(
     return NextResponse.json({ error: 'Peso inválido' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from('body_metrics')
-    .update({
-      date,
-      weight,
-      muscle_mass: muscle_mass ?? null,
-      body_fat: body_fat ?? null,
-      visceral_fat: visceral_fat ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .eq('user_id', session.user.id)
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  try {
+    const [data] = await sql`
+      UPDATE body_metrics SET
+        date = ${date},
+        weight = ${weight},
+        muscle_mass = ${muscle_mass ?? null},
+        body_fat = ${body_fat ?? null},
+        visceral_fat = ${visceral_fat ?? null},
+        updated_at = ${new Date().toISOString()}
+      WHERE id = ${id} AND user_id = ${session.user.id}
+      RETURNING *
+    `;
+    if (!data) return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -49,12 +49,10 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const { error } = await supabase
-    .from('body_metrics')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', session.user.id);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  try {
+    await sql`DELETE FROM body_metrics WHERE id = ${id} AND user_id = ${session.user.id}`;
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }

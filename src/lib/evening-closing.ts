@@ -1,5 +1,5 @@
 import { generateJSON } from '@/lib/ai';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { getMealLabel } from '@/lib/utils';
 import { brazilTime } from '@/lib/timezone';
 import { missedGoals, type GoalKey } from '@/lib/notification-messages';
@@ -67,22 +67,22 @@ type FoodRow = {
 type WaterRow = { amount_ml: number; created_at: string };
 
 async function getDayEntries(userId: string, date: string) {
-  const [{ data: food, error: foodErr }, { data: water, error: waterErr }] = await Promise.all([
-    supabase.from('food_logs')
-      .select('food_name, meal_type, calories, protein, carbs, fat, hydration_ml, created_at')
-      .eq('user_id', userId)
-      .eq('log_date', date)
-      .order('created_at'),
-    supabase.from('water_logs')
-      .select('amount_ml, created_at')
-      .eq('user_id', userId)
-      .eq('log_date', date)
-      .order('created_at'),
-  ]);
-  if (foodErr || waterErr) {
-    console.error('[evening-closing] entries query failed:', foodErr?.message ?? waterErr?.message);
-  }
-  return { food: (food ?? []) as FoodRow[], water: (water ?? []) as WaterRow[] };
+  const [food, water] = await Promise.all([
+    sql`
+      SELECT food_name, meal_type, calories, protein, carbs, fat, hydration_ml, created_at
+      FROM food_logs WHERE user_id = ${userId} AND log_date = ${date}
+      ORDER BY created_at
+    `,
+    sql`
+      SELECT amount_ml, created_at FROM water_logs
+      WHERE user_id = ${userId} AND log_date = ${date}
+      ORDER BY created_at
+    `,
+  ]).catch((err) => {
+    console.error('[evening-closing] entries query failed:', err instanceof Error ? err.message : err);
+    return [[], []];
+  });
+  return { food: food as FoodRow[], water: water as WaterRow[] };
 }
 
 function buildPrompt(

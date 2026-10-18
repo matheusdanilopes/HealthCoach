@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto } from '@/lib/db';
 
 export async function POST(req: Request) {
   try {
@@ -14,9 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing plan or config' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('meal_prep_recipes')
-      .insert({
+    const [data] = await insertInto<{ id: string }>('meal_prep_recipes', {
         user_id:        session.user.id,
         name:           plan.title,
         meal_count:     config.mealCount,
@@ -29,23 +27,16 @@ export async function POST(req: Request) {
         avg_fat:        plan.avg_fat,
         estimated_cost: plan.estimated_cost,
         cost_per_meal:  plan.cost_per_meal,
-        ingredients:    plan.ingredients ?? [],
-        steps:          plan.steps ?? [],
-        shopping_list:  plan.shopping_list ?? [],
+        ingredients:    JSON.stringify(plan.ingredients ?? []),
+        steps:          JSON.stringify(plan.steps ?? []),
+        shopping_list:  JSON.stringify(plan.shopping_list ?? []),
         ai_explanation:      plan.ai_explanation      ?? null,
-        meals:               plan.meals               ?? [],
+        meals:               JSON.stringify(plan.meals ?? []),
         porcoes:             plan.porcoes             ?? null,
         tempo_preparo_min:   plan.tempo_preparo_min   ?? null,
         tempo_cozimento_min: plan.tempo_cozimento_min ?? null,
         is_favorite:         false,
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      console.error('[meal-prep/save] DB error:', error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    }, { returning: 'id' });
 
     return NextResponse.json({ success: true, id: data.id });
   } catch (err) {

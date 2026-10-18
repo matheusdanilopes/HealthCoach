@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 
 export async function GET() {
   const session = await auth();
@@ -8,14 +8,12 @@ export async function GET() {
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   }
 
-  const { data: users, error } = await supabase
-    .from('users')
-    .select('id, email, full_name, created_at')
-    .order('created_at', { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json(users);
+  try {
+    const users = await sql`SELECT id, email, full_name, created_at FROM users ORDER BY created_at DESC`;
+    return NextResponse.json(users);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: Request) {
@@ -37,7 +35,7 @@ export async function DELETE(req: Request) {
     );
   }
 
-  await supabase.from('users').delete().eq('id', id);
+  await sql`DELETE FROM users WHERE id = ${id}`;
 
   return NextResponse.json({ ok: true });
 }

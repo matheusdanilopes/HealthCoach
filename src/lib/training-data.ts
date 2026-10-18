@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilNDaysAgo } from '@/lib/timezone';
 import { COACH_GOAL_LABEL, type CoachGoal, type CoachSnapshot } from '@/lib/coach-data';
 import {
@@ -51,12 +51,11 @@ export function parseTrainingProfile(body: Record<string, unknown>): TrainingPro
 }
 
 export async function getTrainingProfile(userId: string): Promise<TrainingProfile | null> {
-  const { data, error } = await supabase
-    .from('training_profiles')
-    .select('experience, days_per_week, session_minutes, home_equipment, limitations')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (error || !data) return null;
+  const [data] = await sql`
+    SELECT experience, days_per_week, session_minutes, home_equipment, limitations
+    FROM training_profiles WHERE user_id = ${userId}
+  `.catch(() => []);
+  if (!data) return null;
   return {
     experience: data.experience,
     daysPerWeek: data.days_per_week,
@@ -115,46 +114,37 @@ function rowToSummary(r: Pick<PlanRow, 'id' | 'name' | 'goal' | 'location' | 'da
 }
 
 export async function getActivePlan(userId: string): Promise<WorkoutPlan | null> {
-  const { data, error } = await supabase
-    .from('workout_plans')
-    .select(PLAN_FIELDS)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (error || !data) return null;
-  return rowToPlan(data as PlanRow);
+  const [data] = await sql
+    .query(`SELECT ${PLAN_FIELDS} FROM workout_plans WHERE user_id = $1 AND is_active`, [userId])
+    .catch(() => []);
+  return data ? rowToPlan(data as PlanRow) : null;
 }
 
 export async function listPlans(userId: string): Promise<WorkoutPlanSummary[]> {
-  const { data, error } = await supabase
-    .from('workout_plans')
-    .select(PLAN_SUMMARY_FIELDS)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(20);
-  if (error || !data) return [];
+  const data = await sql
+    .query(
+      `SELECT ${PLAN_SUMMARY_FIELDS} FROM workout_plans WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`,
+      [userId],
+    )
+    .catch(() => []);
   return (data as PlanRow[]).map(rowToSummary);
 }
 
 // Makes `planId` the only active plan. The partial unique index allows one
-// active plan per user, so the others are switched off first.
+// active plan per user, so the others are switched off first (same transaction).
 export async function activatePlan(userId: string, planId: string): Promise<WorkoutPlan | null> {
-  const { error: offError } = await supabase
-    .from('workout_plans')
-    .update({ is_active: false })
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .neq('id', planId);
-  if (offError) throw new Error(offError.message);
-
-  const { data, error } = await supabase
-    .from('workout_plans')
-    .update({ is_active: true })
-    .eq('id', planId)
-    .eq('user_id', userId)
-    .select(PLAN_FIELDS)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
+  const [, rows] = await sql.transaction([
+    sql`
+      UPDATE workout_plans SET is_active = false
+      WHERE user_id = ${userId} AND is_active AND id <> ${planId}
+        AND EXISTS (SELECT 1 FROM workout_plans WHERE id = ${planId} AND user_id = ${userId})
+    `,
+    sql.query(
+      `UPDATE workout_plans SET is_active = true WHERE id = $1 AND user_id = $2 RETURNING ${PLAN_FIELDS}`,
+      [planId, userId],
+    ),
+  ]);
+  const data = rows[0];
   return data ? rowToPlan(data as PlanRow) : null;
 }
 
@@ -179,14 +169,20 @@ const toLoggedSet = (s: Pick<SetRow, 'set_number' | 'reps' | 'seconds' | 'load_k
 });
 
 export async function getRecentSessions(userId: string, limit = 15): Promise<WorkoutSessionSummary[]> {
-  const { data, error } = await supabase
-    .from('workout_sessions')
-    .select('id, day_label, session_date, duration_min, rpe, calories, created_at, workout_sets(exercise_name, exercise_order, set_number, reps, seconds, load_kg)')
-    .eq('user_id', userId)
-    .order('session_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error || !data) return [];
+  const data = await sql`
+    SELECT s.id, s.day_label, s.session_date, s.duration_min, s.rpe, s.calories, s.created_at,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'exercise_name', w.exercise_name, 'exercise_order', w.exercise_order, 'set_number', w.set_number,
+          'reps', w.reps, 'seconds', w.seconds, 'load_kg', w.load_kg
+        ))
+        FROM workout_sets w WHERE w.session_id = s.id
+      ), '[]'::json) AS workout_sets
+    FROM workout_sessions s
+    WHERE s.user_id = ${userId}
+    ORDER BY s.session_date DESC, s.created_at DESC
+    LIMIT ${limit}
+  `.catch(() => []);
 
   return data.map((s) => {
     const sets = ((s.workout_sets ?? []) as (Omit<SetRow, 'exercise_key' | 'session_id' | 'created_at'> & { exercise_order: number })[])
@@ -213,22 +209,23 @@ export async function getRecentSessions(userId: string, limit = 15): Promise<Wor
 /** Last logged sets per exercise (keyed by `exerciseKey`), last 180 days. */
 export async function getExerciseHistory(userId: string): Promise<Record<string, ExerciseHistory>> {
   const since = brazilNDaysAgo(180);
-  const { data, error } = await supabase
-    .from('workout_sets')
-    .select('exercise_key, exercise_name, set_number, reps, seconds, load_kg, session_id, created_at, workout_sessions!inner(session_date)')
-    .eq('user_id', userId)
-    .gte('workout_sessions.session_date', since)
-    .order('created_at', { ascending: false })
-    .limit(3000);
-  if (error || !data) return {};
+  const data = await sql`
+    SELECT w.exercise_key, w.exercise_name, w.set_number, w.reps, w.seconds, w.load_kg,
+           w.session_id, w.created_at, s.session_date
+    FROM workout_sets w
+    JOIN workout_sessions s ON s.id = w.session_id
+    WHERE w.user_id = ${userId} AND s.session_date >= ${since}
+    ORDER BY w.created_at DESC
+    LIMIT 3000
+  `.catch(() => []);
 
   const history: Record<string, ExerciseHistory & { sessionIds: Set<string>; lastSession: string }> = {};
-  for (const row of data as unknown as (SetRow & { workout_sessions: { session_date: string } })[]) {
+  for (const row of data as (SetRow & { session_date: string })[]) {
     let h = history[row.exercise_key];
     if (!h) {
       h = history[row.exercise_key] = {
         name: row.exercise_name,
-        lastDate: row.workout_sessions.session_date,
+        lastDate: row.session_date,
         sets: [],
         bestLoadKg: null,
         sessions: 0,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { generateJSON } from '@/lib/ai';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
 
@@ -298,24 +298,18 @@ export async function POST(req: Request) {
     const today        = brazilToday();
     const thirtyDaysAgo = brazilNDaysAgo(30, today);
 
-    const [{ data: profile }, { data: foodLogs }] = await Promise.all([
-      supabase
-        .from('users')
-        .select('current_weight, target_calories, target_protein_g, sex')
-        .eq('id', userId)
-        .single(),
-      supabase
-        .from('food_logs')
-        .select('food_name, calories, protein, carbs, fat, log_date')
-        .eq('user_id', userId)
-        .gte('log_date', thirtyDaysAgo)
-        .gt('calories', 0)
-        .order('created_at', { ascending: false })
-        .limit(200),
+    const [[profile], foodLogs] = await Promise.all([
+      sql`SELECT current_weight, target_calories, target_protein_g, sex FROM users WHERE id = ${userId}`,
+      sql`
+        SELECT food_name, calories, protein, carbs, fat, log_date FROM food_logs
+        WHERE user_id = ${userId} AND log_date >= ${thirtyDaysAgo} AND calories > 0
+        ORDER BY created_at DESC
+        LIMIT 200
+      `,
     ]);
 
     const byDate: Record<string, { cal: number; prot: number; carbs: number; fat: number }> = {};
-    for (const log of foodLogs ?? []) {
+    for (const log of foodLogs) {
       if (!byDate[log.log_date]) byDate[log.log_date] = { cal: 0, prot: 0, carbs: 0, fat: 0 };
       byDate[log.log_date].cal   += log.calories;
       byDate[log.log_date].prot  += log.protein ?? 0;
@@ -330,7 +324,7 @@ export async function POST(req: Request) {
     const avgFat   = hdates.length > 0 ? Math.round(hvals.reduce((s, v) => s + v.fat,   0) / hdates.length) : 55;
 
     const foodCounts: Record<string, number> = {};
-    for (const log of foodLogs ?? []) {
+    for (const log of foodLogs) {
       const n = (log.food_name ?? '').toLowerCase().trim();
       if (n) foodCounts[n] = (foodCounts[n] ?? 0) + 1;
     }

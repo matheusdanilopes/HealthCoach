@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import BodyMeasurementsClient from './BodyMeasurementsClient';
 import type { BodyMeasurements } from '@/types';
 
@@ -33,13 +33,11 @@ export default async function BodyMeasurementsPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const { data } = await supabase
-    .from('body_measurements')
-    .select('*')
-    .eq('user_id', session.user.id)
-    .order('date', { ascending: false });
+  const data = await sql`
+    SELECT * FROM body_measurements WHERE user_id = ${session.user.id} ORDER BY date DESC
+  `;
 
-  const measurements: BodyMeasurements[] = (data ?? []).map(parseRow);
+  const measurements: BodyMeasurements[] = data.map(parseRow);
 
   return <BodyMeasurementsClient initialMeasurements={measurements} />;
 }

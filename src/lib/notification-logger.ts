@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 
 export type NotificationCategory = 'hydration' | 'meal' | 'workout' | 'goal' | 'system' | 'test';
 export type NotificationStatus = 'sent' | 'failed';
@@ -15,31 +15,30 @@ export interface LogEntry {
 }
 
 export async function logNotification(entry: LogEntry): Promise<void> {
-  const { error } = await supabase.from('notification_logs').insert({
-    ...(entry.id ? { id: entry.id } : {}),
-    user_id:   entry.user_id,
-    category:  entry.category,
-    ref:       entry.ref ?? null,
-    title:     entry.title,
-    body:      entry.body,
-    status:    entry.status,
-    error_msg: entry.error_msg ?? null,
-    sent_at:   new Date().toISOString(),
-  });
-  if (error) {
-    console.error('[notification-logger] failed to write log:', error.message);
+  try {
+    await insertInto('notification_logs', {
+      ...(entry.id ? { id: entry.id } : {}),
+      user_id:   entry.user_id,
+      category:  entry.category,
+      ref:       entry.ref ?? null,
+      title:     entry.title,
+      body:      entry.body,
+      status:    entry.status,
+      error_msg: entry.error_msg ?? null,
+      sent_at:   new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[notification-logger] failed to write log:', err instanceof Error ? err.message : err);
   }
 }
 
 // Records that the user acted on a notification (pressed one of its buttons).
 // Stored in opened_at so engagement can be measured per category.
 export async function markNotificationActed(logId: string, userId: string): Promise<void> {
-  await supabase
-    .from('notification_logs')
-    .update({ opened_at: new Date().toISOString() })
-    .eq('id', logId)
-    .eq('user_id', userId)
-    .is('opened_at', null);
+  await sql`
+    UPDATE notification_logs SET opened_at = ${new Date().toISOString()}
+    WHERE id = ${logId} AND user_id = ${userId} AND opened_at IS NULL
+  `;
 }
 
 export type RecentNotification = {
@@ -53,11 +52,11 @@ export type RecentNotification = {
 };
 
 export async function getRecentNotifications(userId: string, limit = 15): Promise<RecentNotification[]> {
-  const { data } = await supabase
-    .from('notification_logs')
-    .select('id, category, title, status, sent_at, opened_at, error_msg')
-    .eq('user_id', userId)
-    .order('sent_at', { ascending: false })
-    .limit(limit);
-  return (data ?? []) as RecentNotification[];
+  return (await sql`
+    SELECT id, category, title, status, sent_at, opened_at, error_msg
+    FROM notification_logs
+    WHERE user_id = ${userId}
+    ORDER BY sent_at DESC
+    LIMIT ${limit}
+  `) as RecentNotification[];
 }

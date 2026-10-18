@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import BottomNav from '@/components/layout/BottomNav';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { LogoIcon } from '@/components/ui/Logo';
@@ -9,11 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const { data } = await supabase
-    .from('users')
-    .select('target_calories')
-    .eq('id', session.user.id)
-    .single();
+  const [data] = await sql`SELECT target_calories FROM users WHERE id = ${session.user.id}`;
 
   if (data?.target_calories == null) redirect('/register');
 

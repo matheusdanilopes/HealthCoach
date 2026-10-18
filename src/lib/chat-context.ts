@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
 
 export type ChatIntent =
@@ -112,22 +112,16 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent): P
   const needsMeals     = intent === 'food_logging'       || intent === 'general_coaching';
 
   // Phase 1: always fetch profile + today's summary
-  const [{ data: profileData }, { data: todayLogsData }, { data: todayWaterData }] = await Promise.all([
-    supabase
-      .from('users')
-      .select('full_name, current_weight, target_calories, target_protein_g, target_water_ml, tdee')
-      .eq('id', userId)
-      .single(),
-    supabase
-      .from('food_logs')
-      .select('food_name, meal_type, calories, protein, carbs, fat, hydration_ml')
-      .eq('user_id', userId)
-      .eq('log_date', today),
-    supabase
-      .from('water_logs')
-      .select('amount_ml')
-      .eq('user_id', userId)
-      .eq('log_date', today),
+  const [[profileData], todayLogsData, todayWaterData] = await Promise.all([
+    sql`
+      SELECT full_name, current_weight, target_calories, target_protein_g, target_water_ml, tdee
+      FROM users WHERE id = ${userId}
+    `,
+    sql`
+      SELECT food_name, meal_type, calories, protein, carbs, fat, hydration_ml
+      FROM food_logs WHERE user_id = ${userId} AND log_date = ${today}
+    `,
+    sql`SELECT amount_ml FROM water_logs WHERE user_id = ${userId} AND log_date = ${today}`,
   ]);
 
   const targetCal   = profileData?.target_calories ?? 0;
@@ -143,14 +137,14 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent): P
     else if (targetCal > tdee * 1.03) goal = 'ganho de massa';
   }
 
-  const allLogs    = (todayLogsData as FoodLogRow[] | null) ?? [];
+  const allLogs    = todayLogsData as FoodLogRow[];
   const todayFood  = allLogs.filter(l => l.calories > 0);
   const todayCal   = todayFood.reduce((s, l) => s + l.calories, 0);
   const todayProt  = Math.round(todayFood.reduce((s, l) => s + (l.protein ?? 0), 0));
   const todayCarbs = Math.round(todayFood.reduce((s, l) => s + (l.carbs ?? 0), 0));
   const todayFat   = Math.round(todayFood.reduce((s, l) => s + (l.fat ?? 0), 0));
   const workoutKcal = Math.abs(allLogs.filter(l => l.calories < 0).reduce((s, l) => s + l.calories, 0));
-  const manualWater = ((todayWaterData as WaterLogRow[] | null) ?? []).reduce((s, l) => s + l.amount_ml, 0);
+  const manualWater = (todayWaterData as WaterLogRow[]).reduce((s, l) => s + l.amount_ml, 0);
   // Include zero-calorie beverages (diet sodas etc.) in hydration
   const foodWater   = allLogs.filter(l => l.calories >= 0).reduce((s, l) => s + (l.hydration_ml ?? 0), 0);
   const todayWater  = manualWater + foodWater;
@@ -195,16 +189,20 @@ async function fetchHydration(
   thirtyDaysAgo: string,
   targetWater: number,
 ): Promise<string> {
-  const [{ data: w7 }, { data: w30 }] = await Promise.all([
-    supabase.from('water_logs').select('amount_ml, log_date')
-      .eq('user_id', userId).gte('log_date', sevenDaysAgo).lt('log_date', today),
-    supabase.from('water_logs').select('amount_ml, log_date')
-      .eq('user_id', userId).gte('log_date', thirtyDaysAgo).lt('log_date', today),
+  const [w7, w30] = await Promise.all([
+    sql`
+      SELECT amount_ml, log_date FROM water_logs
+      WHERE user_id = ${userId} AND log_date >= ${sevenDaysAgo} AND log_date < ${today}
+    `,
+    sql`
+      SELECT amount_ml, log_date FROM water_logs
+      WHERE user_id = ${userId} AND log_date >= ${thirtyDaysAgo} AND log_date < ${today}
+    `,
   ]);
 
-  const avg7   = avgWaterByDay((w7 as WaterLogRow[] | null) ?? []);
-  const avg30  = avgWaterByDay((w30 as WaterLogRow[] | null) ?? []);
-  const grp30  = groupWaterByDate((w30 as WaterLogRow[] | null) ?? []);
+  const avg7   = avgWaterByDay(w7 as WaterLogRow[]);
+  const avg30  = avgWaterByDay(w30 as WaterLogRow[]);
+  const grp30  = groupWaterByDate(w30 as WaterLogRow[]);
   const dates30 = Object.keys(grp30);
   const metGoal = dates30.filter(d => grp30[d] >= targetWater).length;
 
@@ -213,13 +211,12 @@ async function fetchHydration(
 }
 
 async function fetchNutrition(userId: string, today: string, thirtyDaysAgo: string): Promise<string> {
-  const { data: hist } = await supabase.from('food_logs')
-    .select('calories, protein, carbs, fat, log_date')
-    .eq('user_id', userId)
-    .gte('log_date', thirtyDaysAgo)
-    .lt('log_date', today);
+  const hist = await sql`
+    SELECT calories, protein, carbs, fat, log_date FROM food_logs
+    WHERE user_id = ${userId} AND log_date >= ${thirtyDaysAgo} AND log_date < ${today}
+  `;
 
-  const food = ((hist as NutritionLogRow[] | null) ?? []).filter(l => l.calories > 0);
+  const food = (hist as NutritionLogRow[]).filter(l => l.calories > 0);
   const byDate: Record<string, { cal: number; prot: number; carbs: number; fat: number }> = {};
   for (const l of food) {
     if (!byDate[l.log_date]) byDate[l.log_date] = { cal: 0, prot: 0, carbs: 0, fat: 0 };
@@ -254,19 +251,24 @@ async function fetchWeight(
   currentWeight: number | null | undefined,
   thirtyDaysAgo: string,
 ): Promise<string> {
-  const [{ data: wLogs }, { data: bm }] = await Promise.all([
-    supabase.from('weight_logs').select('weight_kg, log_date')
-      .eq('user_id', userId).gte('log_date', thirtyDaysAgo).order('log_date', { ascending: true }),
-    supabase.from('body_metrics').select('date, weight, muscle_mass, body_fat')
-      .eq('user_id', userId).order('date', { ascending: false }).limit(2),
+  const [wLogs, bm] = await Promise.all([
+    sql`
+      SELECT weight_kg, log_date FROM weight_logs
+      WHERE user_id = ${userId} AND log_date >= ${thirtyDaysAgo}
+      ORDER BY log_date ASC
+    `,
+    sql`
+      SELECT date, weight, muscle_mass, body_fat FROM body_metrics
+      WHERE user_id = ${userId} ORDER BY date DESC LIMIT 2
+    `,
   ]);
 
-  const logs   = (wLogs as WeightLogRow[] | null) ?? [];
+  const logs   = wLogs as WeightLogRow[];
   const latest = logs[logs.length - 1]?.weight_kg ?? currentWeight;
   const oldest = logs[0]?.weight_kg;
   const diff   = latest && oldest && String(latest) !== String(oldest)
     ? (Number(latest) - Number(oldest)).toFixed(1) : null;
-  const latestBM = ((bm as BodyMetricRow[] | null) ?? [])[0];
+  const latestBM = (bm as BodyMetricRow[])[0];
 
   return `→ Peso: ${latest ?? '?'}kg${diff ? ` (${Number(diff) > 0 ? '+' : ''}${diff}kg em 30d)` : ''}
 → Gordura corporal: ${latestBM?.body_fat != null ? `${Number(latestBM.body_fat).toFixed(1)}%` : 'não medida'}
@@ -274,14 +276,12 @@ async function fetchWeight(
 }
 
 async function fetchTraining(userId: string, today: string, thirtyDaysAgo: string): Promise<string> {
-  const { data: wkLogs } = await supabase.from('food_logs')
-    .select('calories, log_date')
-    .eq('user_id', userId)
-    .lt('calories', 0)
-    .gte('log_date', thirtyDaysAgo)
-    .lt('log_date', today);
+  const wkLogs = await sql`
+    SELECT calories, log_date FROM food_logs
+    WHERE user_id = ${userId} AND calories < 0 AND log_date >= ${thirtyDaysAgo} AND log_date < ${today}
+  `;
 
-  const logs       = (wkLogs as WorkoutLogRow[] | null) ?? [];
+  const logs       = wkLogs as WorkoutLogRow[];
   const wkDays     = new Set(logs.map(w => w.log_date)).size;
   const totalBurned = Math.abs(logs.reduce((s, w) => s + w.calories, 0));
   const avgBurned  = wkDays > 0 ? Math.round(totalBurned / wkDays) : 0;

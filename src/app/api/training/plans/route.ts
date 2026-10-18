@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto } from '@/lib/db';
 import { aiErrorResponse, AIParseError, generateJSON } from '@/lib/ai';
 import { buildCoachSnapshot, type CoachGoal } from '@/lib/coach-data';
 import type { TrainingLocation } from '@/lib/training';
@@ -69,9 +69,9 @@ export async function POST(req: Request) {
 
     // Saved inactive first, then activated, so a failure here never leaves
     // the user without the plan they already had.
-    const { data: row, error } = await supabase
-      .from('workout_plans')
-      .insert({
+    let row: { id: string } | undefined;
+    try {
+      [row] = await insertInto<{ id: string }>('workout_plans', {
         user_id: userId,
         name: plan.name,
         goal,
@@ -81,14 +81,14 @@ export async function POST(req: Request) {
         overview: plan.overview,
         schedule: plan.schedule,
         progression: plan.progression,
-        safety: plan.safety,
-        days: plan.days,
+        safety: JSON.stringify(plan.safety),
+        days: JSON.stringify(plan.days),
         is_active: false,
-      })
-      .select('id')
-      .single();
-    if (error || !row) {
-      console.error('[training-plan] insert failed:', error?.message);
+      }, { returning: 'id' });
+    } catch (err) {
+      console.error('[training-plan] insert failed:', err instanceof Error ? err.message : err);
+    }
+    if (!row) {
       return NextResponse.json({ error: 'Não foi possível salvar o plano.' }, { status: 500 });
     }
 

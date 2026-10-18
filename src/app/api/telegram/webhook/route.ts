@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { addWaterLog, MAX_WATER_ML } from '@/lib/water';
 import { getDayStatus, getUserTargets } from '@/lib/day-status';
@@ -45,8 +45,8 @@ function validSecret(req: Request): boolean {
 }
 
 async function userIdForChat(chatId: number): Promise<string | null> {
-  const { data } = await supabase.from('telegram_links').select('user_id').eq('chat_id', chatId).maybeSingle();
-  return (data as { user_id: string } | null)?.user_id ?? null;
+  const [data] = await sql`SELECT user_id FROM telegram_links WHERE chat_id = ${chatId}`;
+  return (data as { user_id: string } | undefined)?.user_id ?? null;
 }
 
 async function waterProgressText(userId: string): Promise<string> {
@@ -66,12 +66,8 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
     return;
   }
 
-  const { data } = await supabase
-    .from('telegram_links')
-    .select('user_id, link_token_expires_at')
-    .eq('link_token', token)
-    .maybeSingle();
-  const link = data as { user_id: string; link_token_expires_at: string | null } | null;
+  const [data] = await sql`SELECT user_id, link_token_expires_at FROM telegram_links WHERE link_token = ${token}`;
+  const link = data as { user_id: string; link_token_expires_at: string | null } | undefined;
 
   if (!link || !link.link_token_expires_at || new Date(link.link_token_expires_at) < new Date()) {
     await reply(chat.id, '⚠️ Este link expirou ou já foi usado. Gere um novo no app em <b>Notificações → Conectar Telegram</b>.');
@@ -79,21 +75,23 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
   }
 
   // A chat belongs to a single account: detach it from any previous one.
-  await supabase.from('telegram_links').update({ chat_id: null }).eq('chat_id', chat.id).neq('user_id', link.user_id);
-  const { error } = await supabase
-    .from('telegram_links')
-    .update({
-      chat_id:               chat.id,
-      username:              from?.username ?? null,
-      linked_at:             new Date().toISOString(),
-      link_token:            null,
-      link_token_expires_at: null,
-      updated_at:            new Date().toISOString(),
-    })
-    .eq('user_id', link.user_id);
-
-  if (error) {
-    console.error('[telegram] link failed:', error.message);
+  try {
+    const now = new Date().toISOString();
+    await sql.transaction([
+      sql`UPDATE telegram_links SET chat_id = NULL WHERE chat_id = ${chat.id} AND user_id <> ${link.user_id}`,
+      sql`
+        UPDATE telegram_links SET
+          chat_id               = ${chat.id},
+          username              = ${from?.username ?? null},
+          linked_at             = ${now},
+          link_token            = NULL,
+          link_token_expires_at = NULL,
+          updated_at            = ${now}
+        WHERE user_id = ${link.user_id}
+      `,
+    ]);
+  } catch (err) {
+    console.error('[telegram] link failed:', err instanceof Error ? err.message : err);
     await reply(chat.id, '❌ Não consegui conectar agora. Tente gerar um novo link no app.');
     return;
   }
@@ -146,7 +144,7 @@ async function handleCommand(chat: TgChat, from: TgUser | undefined, text: strin
       return;
     }
     case '/desconectar': {
-      await supabase.from('telegram_links').update({ chat_id: null, updated_at: new Date().toISOString() }).eq('user_id', userId);
+      await sql`UPDATE telegram_links SET chat_id = NULL, updated_at = ${new Date().toISOString()} WHERE user_id = ${userId}`;
       await reply(chat.id, '🔕 Desconectado. Você não vai mais receber notificações aqui. Para voltar, conecte de novo pelo app.');
       return;
     }

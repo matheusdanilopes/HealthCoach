@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { getLatestWeight } from '@/lib/weight';
 import DashboardClient from './DashboardClient';
@@ -14,42 +14,30 @@ export default async function DashboardPage() {
   const userId = session.user.id;
 
   const [
-    { data: profile },
+    [profile],
     lastWeight,
-    { data: waterData },
+    waterData,
+    foodData,
   ] = await Promise.all([
-    supabase.from('users').select('*').eq('id', userId).single(),
+    sql`SELECT * FROM users WHERE id = ${userId}`,
     getLatestWeight(userId),
-    supabase
-      .from('water_logs')
-      .select('amount_ml, created_at')
-      .eq('user_id', userId)
-      .eq('log_date', today)
-      .order('created_at'),
+    sql`
+      SELECT amount_ml, created_at FROM water_logs
+      WHERE user_id = ${userId} AND log_date = ${today}
+      ORDER BY created_at
+    `,
+    sql`
+      SELECT id, user_id, food_name, meal_type, calories, protein, carbs, fat,
+             hydration_ml, hydration_source, hydration_confidence, created_at
+      FROM food_logs
+      WHERE user_id = ${userId} AND log_date = ${today}
+      ORDER BY created_at
+    `,
   ]);
-
-  const { data: initialFoodData, error: foodError } = await supabase
-    .from('food_logs')
-    .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at')
-    .eq('user_id', userId)
-    .eq('log_date', today)
-    .order('created_at');
-  let foodData = initialFoodData;
-
-  if (foodError) {
-    // Migration not yet applied — fall back to legacy schema
-    const { data: legacyFood } = await supabase
-      .from('food_logs')
-      .select('id, user_id, food_name, meal_type, calories, protein, carbs, fat, created_at')
-      .eq('user_id', userId)
-      .eq('log_date', today)
-      .order('created_at');
-    foodData = legacyFood as unknown as typeof foodData;
-  }
 
   const latestWeight = lastWeight ?? (parseFloat(String((profile as Profile | null)?.current_weight ?? 0)) || 0);
 
-  const initialWaterLogs = (waterData ?? []) as WaterLogEntry[];
+  const initialWaterLogs = waterData as WaterLogEntry[];
 
   return (
     <DashboardClient
@@ -57,7 +45,7 @@ export default async function DashboardPage() {
       serverDate={today}
       latestWeight={latestWeight}
       userId={userId}
-      initialFoodLogs={(foodData ?? []) as FoodLog[]}
+      initialFoodLogs={foodData as FoodLog[]}
       initialWaterLogs={initialWaterLogs}
     />
   );

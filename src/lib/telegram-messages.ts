@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 import { deleteMessage, sendMessage, type InlineKeyboard, type TelegramResult } from '@/lib/telegram';
 
 // Keeps the chat clean: every bot message is recorded with an expiry and
@@ -18,10 +18,15 @@ const DEFAULT_TTL_MIN: Record<MessageKind, number> = {
 
 export async function trackMessage(chatId: number, messageId: number, kind: MessageKind, ttlMin = DEFAULT_TTL_MIN[kind]): Promise<void> {
   const deleteAfter = new Date(Date.now() + Math.min(ttlMin, MAX_LIFETIME_MIN) * 60_000).toISOString();
-  const { error } = await supabase
-    .from('telegram_messages')
-    .upsert({ chat_id: chatId, message_id: messageId, kind, delete_after: deleteAfter }, { onConflict: 'chat_id,message_id' });
-  if (error) console.error('[telegram-messages] track failed:', error.message);
+  try {
+    await insertInto(
+      'telegram_messages',
+      { chat_id: chatId, message_id: messageId, kind, delete_after: deleteAfter },
+      { onConflict: 'chat_id,message_id' },
+    );
+  } catch (err) {
+    console.error('[telegram-messages] track failed:', err instanceof Error ? err.message : err);
+  }
 }
 
 export async function sendTracked(
@@ -39,29 +44,25 @@ export async function sendTracked(
 // Deletes a message right away (user commands, acted-on notifications).
 export async function deleteNow(chatId: number, messageId: number): Promise<void> {
   await deleteMessage(chatId, messageId);
-  await supabase.from('telegram_messages').delete().eq('chat_id', chatId).eq('message_id', messageId);
+  await sql`DELETE FROM telegram_messages WHERE chat_id = ${chatId} AND message_id = ${messageId}`;
 }
 
 // A new summary makes the previous summaries obsolete.
 export async function expireSummaries(chatId: number): Promise<void> {
-  await supabase
-    .from('telegram_messages')
-    .update({ delete_after: new Date().toISOString() })
-    .eq('chat_id', chatId)
-    .eq('kind', 'summary');
+  await sql`
+    UPDATE telegram_messages SET delete_after = ${new Date().toISOString()}
+    WHERE chat_id = ${chatId} AND kind = 'summary'
+  `;
 }
 
 export async function cleanupExpiredMessages(chatId?: number): Promise<{ deleted: number; failed: number }> {
-  let query = supabase
-    .from('telegram_messages')
-    .select('chat_id, message_id')
-    .lte('delete_after', new Date().toISOString())
-    .order('delete_after', { ascending: true })
-    .limit(300);
-  if (chatId !== undefined) query = query.eq('chat_id', chatId);
-
-  const { data } = await query;
-  const due = (data ?? []) as Array<{ chat_id: number; message_id: number }>;
+  const due = (await sql`
+    SELECT chat_id, message_id FROM telegram_messages
+    WHERE delete_after <= ${new Date().toISOString()}
+      AND (${chatId ?? null}::bigint IS NULL OR chat_id = ${chatId ?? null})
+    ORDER BY delete_after ASC
+    LIMIT 300
+  `) as Array<{ chat_id: number; message_id: number }>;
   const counts = { deleted: 0, failed: 0 };
 
   for (const m of due) {
@@ -69,7 +70,7 @@ export async function cleanupExpiredMessages(chatId?: number): Promise<{ deleted
     // Already gone, too old or chat blocked: nothing more we can do, so drop the row either way.
     if (res.ok) counts.deleted++;
     else counts.failed++;
-    await supabase.from('telegram_messages').delete().eq('chat_id', m.chat_id).eq('message_id', m.message_id);
+    await sql`DELETE FROM telegram_messages WHERE chat_id = ${m.chat_id} AND message_id = ${m.message_id}`;
   }
   return counts;
 }
