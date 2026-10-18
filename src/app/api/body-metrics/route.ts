@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabase
-    .from('body_metrics')
-    .select('*')
-    .eq('user_id', session.user.id)
-    .order('date', { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  try {
+    const data = await sql`SELECT * FROM body_metrics WHERE user_id = ${session.user.id} ORDER BY date DESC`;
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -31,9 +29,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Peso inválido' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from('body_metrics')
-    .upsert(
+  let data;
+  try {
+    [data] = await insertInto(
+      'body_metrics',
       {
         user_id: session.user.id,
         date,
@@ -43,26 +42,21 @@ export async function POST(req: Request) {
         visceral_fat: visceral_fat ?? null,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,date' }
-    )
-    .select()
-    .single();
+      { onConflict: 'user_id,date', returning: '*' }
+    );
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const { data: latest } = await supabase
-    .from('body_metrics')
-    .select('date')
-    .eq('user_id', session.user.id)
-    .order('date', { ascending: false })
-    .limit(1)
-    .single();
+  const [latest] = await sql`
+    SELECT date FROM body_metrics WHERE user_id = ${session.user.id} ORDER BY date DESC LIMIT 1
+  `;
 
   if (latest?.date === date) {
-    await supabase
-      .from('users')
-      .update({ current_weight: weight, updated_at: new Date().toISOString() })
-      .eq('id', session.user.id);
+    await sql`
+      UPDATE users SET current_weight = ${weight}, updated_at = ${new Date().toISOString()}
+      WHERE id = ${session.user.id}
+    `;
   }
 
   return NextResponse.json(data);

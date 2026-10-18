@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
 import { getMealLabel } from '@/lib/utils';
 
@@ -127,50 +127,44 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
   const bodyStart = brazilNDaysAgo(90, today);
 
   const [
-    { data: profile },
-    { data: foodData },
-    { data: waterData },
-    { data: weightLogs },
-    { data: metrics },
-    { data: measurements },
+    [profile],
+    foodData,
+    waterData,
+    weightLogs,
+    metrics,
+    measurements,
   ] = await Promise.all([
-    supabase
-      .from('users')
-      .select('full_name, sex, birth_date, height_cm, activity_level, tdee, target_calories, target_protein_g, target_water_ml, current_weight')
-      .eq('id', userId)
-      .single(),
-    supabase
-      .from('food_logs')
-      .select('food_name, meal_type, calories, protein, carbs, fat, hydration_ml, log_date')
-      .eq('user_id', userId)
-      .gte('log_date', periodStart)
-      .lte('log_date', periodEnd)
-      .limit(5000),
-    supabase
-      .from('water_logs')
-      .select('amount_ml, log_date')
-      .eq('user_id', userId)
-      .gte('log_date', periodStart)
-      .lte('log_date', periodEnd)
-      .limit(5000),
-    supabase
-      .from('weight_logs')
-      .select('weight_kg, log_date')
-      .eq('user_id', userId)
-      .gte('log_date', bodyStart)
-      .order('log_date'),
-    supabase
-      .from('body_metrics')
-      .select('date, weight, body_fat, muscle_mass')
-      .eq('user_id', userId)
-      .gte('date', bodyStart)
-      .order('date'),
-    supabase
-      .from('body_measurements')
-      .select('date, waist')
-      .eq('user_id', userId)
-      .gte('date', bodyStart)
-      .order('date'),
+    sql`
+      SELECT full_name, sex, birth_date, height_cm, activity_level, tdee, target_calories,
+             target_protein_g, target_water_ml, current_weight
+      FROM users WHERE id = ${userId}
+    `,
+    sql`
+      SELECT food_name, meal_type, calories, protein, carbs, fat, hydration_ml, log_date
+      FROM food_logs
+      WHERE user_id = ${userId} AND log_date >= ${periodStart} AND log_date <= ${periodEnd}
+      LIMIT 5000
+    `,
+    sql`
+      SELECT amount_ml, log_date FROM water_logs
+      WHERE user_id = ${userId} AND log_date >= ${periodStart} AND log_date <= ${periodEnd}
+      LIMIT 5000
+    `,
+    sql`
+      SELECT weight_kg, log_date FROM weight_logs
+      WHERE user_id = ${userId} AND log_date >= ${bodyStart}
+      ORDER BY log_date
+    `,
+    sql`
+      SELECT date, weight, body_fat, muscle_mass FROM body_metrics
+      WHERE user_id = ${userId} AND date >= ${bodyStart}
+      ORDER BY date
+    `,
+    sql`
+      SELECT date, waist FROM body_measurements
+      WHERE user_id = ${userId} AND date >= ${bodyStart}
+      ORDER BY date
+    `,
   ]);
 
   // ── Profile ──
@@ -184,7 +178,7 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
     : null;
 
   // ── Nutrition ──
-  const rows = (foodData as FoodRow[] | null) ?? [];
+  const rows = foodData as FoodRow[];
   const meals = rows.filter((r) => r.calories > 0);
   const workouts = rows.filter((r) => r.calories < 0);
 
@@ -246,7 +240,7 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
 
   // ── Hydration (manual water + water from drinks/meals) ──
   const waterByDay = new Map<string, number>();
-  for (const w of (waterData as { amount_ml: number; log_date: string }[] | null) ?? []) {
+  for (const w of waterData as { amount_ml: number; log_date: string }[]) {
     waterByDay.set(w.log_date, (waterByDay.get(w.log_date) ?? 0) + w.amount_ml);
   }
   for (const r of rows) {
@@ -258,10 +252,10 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
 
   // ── Body ──
   const weightByDate = new Map<string, number>();
-  for (const w of (weightLogs as { weight_kg: number; log_date: string }[] | null) ?? []) {
+  for (const w of weightLogs as { weight_kg: number; log_date: string }[]) {
     weightByDate.set(w.log_date, Number(w.weight_kg));
   }
-  const metricRows = (metrics as { date: string; weight: number | null; body_fat: number | null; muscle_mass: number | null }[] | null) ?? [];
+  const metricRows = metrics as { date: string; weight: number | null; body_fat: number | null; muscle_mass: number | null }[];
   for (const m of metricRows) {
     if (m.weight != null) weightByDate.set(m.date, Number(m.weight));
   }
@@ -348,7 +342,7 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
       bodyFat: firstLast(metricRows, (r) => (r.body_fat != null ? Number(r.body_fat) : null)),
       muscleMass: firstLast(metricRows, (r) => (r.muscle_mass != null ? Number(r.muscle_mass) : null)),
       waist: firstLast(
-        (measurements as { date: string; waist: number | null }[] | null) ?? [],
+        measurements as { date: string; waist: number | null }[],
         (r) => (r.waist != null ? Number(r.waist) : null)
       ),
     },

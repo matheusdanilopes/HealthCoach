@@ -35,9 +35,16 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+## Banco de dados (Neon)
+
+O app usa Postgres no [Neon](https://neon.tech) via `@neondatabase/serverless` (`src/lib/db.ts`), configurado pela variável `DATABASE_URL`.
+
+- Schema completo: `db/schema.sql` (equivale às migrations 001–018 de `supabase/migrations`, que ficam só como histórico).
+- O Supabase continua sendo usado apenas como agendador (`pg_cron` + `pg_net` chamando as rotas do app, ver abaixo); ele não guarda mais dados do app.
+
 ## Notificações (Telegram)
 
-As notificações são enviadas por um bot do Telegram, com agendamento de hora em hora via Supabase `pg_cron`.
+As notificações são enviadas por um bot do Telegram, com agendamento de hora em hora via Supabase `pg_cron` (só dispara as chamadas HTTP; os dados ficam no Neon).
 
 **O que o usuário recebe** (respeitando categorias e horário silencioso definidos em `/notifications`):
 
@@ -62,7 +69,7 @@ Comandos do bot: `/resumo`, `/agua 300`, `/ajuda`, `/desconectar`.
    - `TELEGRAM_WEBHOOK_SECRET` — string aleatória (`A-Z a-z 0-9 _ -`, até 256 caracteres)
    - `APP_URL` — URL pública do app, ex.: `https://healthcoach.vercel.app`
    - `CRON_SECRET` — já existente
-3. Aplique as migrations `014_telegram_notifications.sql` e `015_telegram_message_cleanup.sql` e cadastre os segredos do agendador:
+3. No Supabase (agendador), aplique os jobs de `pg_cron` das migrations `014_telegram_notifications.sql` e `015_telegram_message_cleanup.sql` e cadastre os segredos:
    ```sql
    SELECT vault.create_secret('https://SEU-APP.vercel.app', 'app_url');
    SELECT vault.create_secret('<CRON_SECRET>', 'cron_secret');
@@ -82,4 +89,4 @@ Tela **Corpo → Treinos IA** (`/treinos`). Gera um plano semanal de treino com 
 - **Registro do treino**: marca cada série com repetições (ou segundos) e carga; tem timer de descanso e o treino em andamento fica salvo no aparelho. Ao finalizar, o gasto calórico (MET × peso × duração) entra no diário como `🏋️ Musculação`, então dashboard, Coach IA e Telegram passam a contar o treino.
 - **Progressão**: dupla progressão — quando todas as séries chegam ao topo da faixa, o app sugere subir a carga. O histórico de cargas também vai para a IA ao gerar o próximo plano.
 
-Aplique a migration `018_training_coach.sql` antes do deploy.
+As tabelas de treino já fazem parte de `db/schema.sql`.

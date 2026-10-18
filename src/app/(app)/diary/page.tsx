@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import DiaryClient from './DiaryClient';
 
@@ -11,11 +11,7 @@ export default async function DiaryPage() {
   const userId = session.user.id;
   const serverDate = brazilToday();
 
-  const { data: profileData } = await supabase
-    .from('users')
-    .select('target_calories, target_water_ml')
-    .eq('id', userId)
-    .single();
+  const [profileData] = await sql`SELECT target_calories, target_water_ml FROM users WHERE id = ${userId}`;
 
   return (
     <DiaryClient

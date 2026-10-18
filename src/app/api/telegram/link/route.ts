@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 import { botUsername, isTelegramConfigured } from '@/lib/telegram';
 import { sendTracked } from '@/lib/telegram-messages';
 
@@ -12,11 +12,9 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data } = await supabase
-    .from('telegram_links')
-    .select('chat_id, username, linked_at')
-    .eq('user_id', session.user.id)
-    .maybeSingle();
+  const [data] = await sql`
+    SELECT chat_id, username, linked_at FROM telegram_links WHERE user_id = ${session.user.id}
+  `;
   const link = data as { chat_id: number | null; username: string | null; linked_at: string | null } | null;
 
   return NextResponse.json({
@@ -39,18 +37,21 @@ export async function POST() {
   }
 
   const token = randomBytes(18).toString('base64url');
-  const { error } = await supabase.from('telegram_links').upsert(
-    {
-      user_id:               session.user.id,
-      link_token:            token,
-      link_token_expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
-      updated_at:            new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  );
-  if (error) {
-    console.error('[telegram] link token error:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await insertInto(
+      'telegram_links',
+      {
+        user_id:               session.user.id,
+        link_token:            token,
+        link_token_expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+        updated_at:            new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[telegram] link token error:', message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   return NextResponse.json({ url: `https://t.me/${bot}?start=${token}`, expiresInMin: TOKEN_TTL_MS / 60_000 });
@@ -61,17 +62,13 @@ export async function DELETE() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data } = await supabase
-    .from('telegram_links')
-    .select('chat_id')
-    .eq('user_id', session.user.id)
-    .maybeSingle();
-  const chatId = (data as { chat_id: number | null } | null)?.chat_id;
+  const [data] = await sql`SELECT chat_id FROM telegram_links WHERE user_id = ${session.user.id}`;
+  const chatId = (data as { chat_id: number | null } | undefined)?.chat_id;
 
-  await supabase
-    .from('telegram_links')
-    .update({ chat_id: null, updated_at: new Date().toISOString() })
-    .eq('user_id', session.user.id);
+  await sql`
+    UPDATE telegram_links SET chat_id = NULL, updated_at = ${new Date().toISOString()}
+    WHERE user_id = ${session.user.id}
+  `;
 
   if (chatId) {
     await sendTracked(chatId, '🔕 Notificações desconectadas pelo app. Para voltar, conecte de novo em <b>Notificações</b>.', 'reply');

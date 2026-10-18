@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilToday, brazilHour, brazilNDaysAgo } from '@/lib/timezone';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { isTelegramConfigured, openAppButton, waterButtons } from '@/lib/telegram';
@@ -17,7 +17,6 @@ import {
   getUserTargets,
   daysSinceLastWorkout,
   toTargets,
-  PROFILE_COLUMNS,
   type DayStatus,
   type UserTargets,
 } from '@/lib/day-status';
@@ -187,31 +186,30 @@ export async function GET(req: Request) {
   const hour  = brazilHour();
   const today = brazilToday();
 
-  const { data: links } = await supabase
-    .from('telegram_links')
-    .select('user_id, chat_id')
-    .not('chat_id', 'is', null);
-  const linked = (links ?? []) as Array<{ user_id: string; chat_id: number }>;
+  const linked = (await sql`
+    SELECT user_id, chat_id FROM telegram_links WHERE chat_id IS NOT NULL
+  `) as Array<{ user_id: string; chat_id: number }>;
   if (linked.length === 0) return NextResponse.json({ hour, users: 0 });
 
   const userIds = linked.map((l) => l.user_id);
-  const [{ data: profiles, error: profileErr }, { data: prefRows }, { data: logRows }] = await Promise.all([
-    supabase.from('users').select(PROFILE_COLUMNS).in('id', userIds),
-    supabase.from('notification_preferences').select('*').in('user_id', userIds),
-    supabase
-      .from('notification_logs')
-      .select('user_id, category, ref, sent_at')
-      .in('user_id', userIds)
-      .eq('status', 'sent')
-      .gte('sent_at', `${today}T00:00:00.000-03:00`),
+  const [profiles, prefRows, logRows] = await Promise.all([
+    sql`SELECT * FROM users WHERE id = ANY(${userIds}::uuid[])`.catch((err) => {
+      console.error('[cron-run] profile query failed:', err instanceof Error ? err.message : err);
+      return [];
+    }),
+    sql`SELECT * FROM notification_preferences WHERE user_id = ANY(${userIds}::uuid[])`,
+    sql`
+      SELECT user_id, category, ref, sent_at FROM notification_logs
+      WHERE user_id = ANY(${userIds}::uuid[])
+        AND status = 'sent'
+        AND sent_at >= ${`${today}T00:00:00.000-03:00`}
+    `,
   ]);
 
-  if (profileErr) console.error('[cron-run] profile query failed:', profileErr.message);
-
   type ProfileRow = Parameters<typeof toTargets>[0] & { id: string };
-  const profileMap = new Map(((profiles ?? []) as ProfileRow[]).map((p) => [p.id, p]));
-  const prefMap    = new Map(((prefRows ?? []) as Array<NotificationPreferences & { user_id: string }>).map((p) => [p.user_id, p]));
-  const logs       = (logRows ?? []) as TodayLog[];
+  const profileMap = new Map((profiles as ProfileRow[]).map((p) => [p.id, p]));
+  const prefMap    = new Map((prefRows as Array<NotificationPreferences & { user_id: string }>).map((p) => [p.user_id, p]));
+  const logs       = logRows as TodayLog[];
 
   const counts = { users: linked.length, quiet: 0, sent: 0, failed: 0, gone: 0, errors: 0 };
 

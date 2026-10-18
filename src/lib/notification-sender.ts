@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { isChatGone, sendMessage, type InlineKeyboard } from '@/lib/telegram';
 import { expireSummaries, trackMessage, type MessageKind } from '@/lib/telegram-messages';
 import { logNotification, type NotificationCategory } from '@/lib/notification-logger';
@@ -89,10 +89,10 @@ export async function sendTelegramNotification(
   const gone = isChatGone(result);
   if (gone) {
     // User blocked the bot or deleted the chat — stop trying until they reconnect.
-    await supabase
-      .from('telegram_links')
-      .update({ chat_id: null, updated_at: new Date().toISOString() })
-      .eq('user_id', userId);
+    await sql`
+      UPDATE telegram_links SET chat_id = NULL, updated_at = ${new Date().toISOString()}
+      WHERE user_id = ${userId}
+    `;
     console.info(`[telegram] chat gone userId=${userId} code=${result.code} — link removed`);
   } else {
     console.error(`[telegram] send failed userId=${userId} code=${result.code} msg=${result.description}`);
@@ -106,10 +106,6 @@ export async function sendTelegramNotification(
 }
 
 export async function getChatId(userId: string): Promise<number | null> {
-  const { data } = await supabase
-    .from('telegram_links')
-    .select('chat_id')
-    .eq('user_id', userId)
-    .maybeSingle();
-  return (data as { chat_id: number | null } | null)?.chat_id ?? null;
+  const [data] = await sql`SELECT chat_id FROM telegram_links WHERE user_id = ${userId}`;
+  return (data as { chat_id: number | null } | undefined)?.chat_id ?? null;
 }

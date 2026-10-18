@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.6.0",
-    "@supabase/supabase-js": "^2.49.4",
+    "@neondatabase/serverless": "^1.2.0",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.3.0",

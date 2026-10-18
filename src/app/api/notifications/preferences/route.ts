@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 import { DEFAULT_PREFERENCES, type NotificationPreferences } from '@/lib/notification-sender';
 
 const BOOL_KEYS = ['hydration', 'meals', 'workouts', 'goals'] as const;
@@ -11,11 +11,10 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data } = await supabase
-    .from('notification_preferences')
-    .select('hydration, meals, workouts, goals, quiet_start, quiet_end')
-    .eq('user_id', session.user.id)
-    .maybeSingle();
+  const [data] = await sql`
+    SELECT hydration, meals, workouts, goals, quiet_start, quiet_end
+    FROM notification_preferences WHERE user_id = ${session.user.id}
+  `;
 
   return NextResponse.json({ ...DEFAULT_PREFERENCES, ...(data ?? {}) });
 }
@@ -35,16 +34,16 @@ export async function PUT(req: Request) {
     if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23) update[k] = v;
   }
 
-  const { error } = await supabase
-    .from('notification_preferences')
-    .upsert(
+  try {
+    await insertInto(
+      'notification_preferences',
       { user_id: session.user.id, ...update, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' },
     );
-
-  if (error) {
-    console.error('[preferences] upsert error:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[preferences] upsert error:', message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import {
   calculateAge,
@@ -38,11 +38,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Dados de perfil inválidos.' }, { status: 400 });
     }
 
-    const { data: existing } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
+    const [existing] = await sql`SELECT id FROM users WHERE email = ${email}`;
 
     if (existing) {
       return NextResponse.json({ error: 'Email já cadastrado.' }, { status: 409 });
@@ -55,9 +51,7 @@ export async function POST(req: Request) {
     const targetWater = calculateWaterTarget(w);
     const today = new Date().toISOString().split('T')[0];
 
-    const { data: newUser, error: insertError } = await supabase
-      .from('users')
-      .insert({
+    const [newUser] = await insertInto<{ id: string }>('users', {
         email,
         password_hash: passwordHash,
         full_name: fullName,
@@ -69,21 +63,18 @@ export async function POST(req: Request) {
         tdee,
         target_calories: targetCal,
         target_water_ml: targetWater,
-      })
-      .select('id')
-      .single();
+    }, { returning: 'id' });
 
-    if (insertError) throw insertError;
     if (!newUser?.id) {
       return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
     }
 
     try {
-      await supabase.from('weight_logs').upsert({
+      await insertInto('weight_logs', {
         user_id: newUser.id,
         weight_kg: w,
         log_date: today,
-      });
+      }, { onConflict: 'user_id,log_date' });
     } catch (weightErr) {
       console.error('weight_log insert failed (non-fatal):', weightErr);
     }

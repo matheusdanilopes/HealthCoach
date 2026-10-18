@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authConfig } from './auth.config';
 
@@ -13,11 +13,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         try {
-          const { data: user } = await supabase
-            .from('users')
-            .select('id, email, password_hash, full_name')
-            .eq('email', credentials.email as string)
-            .maybeSingle();
+          const [user] = await sql`
+            SELECT id, email, password_hash, full_name FROM users WHERE email = ${credentials.email as string}
+          `;
 
           if (!user) return null;
 

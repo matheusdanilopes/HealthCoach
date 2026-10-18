@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { brazilNDaysAgo } from '@/lib/timezone';
 
 // Snapshot of one user's day — the single source of numbers for Telegram
@@ -45,33 +45,32 @@ export function toTargets(p: ProfileRow | null): UserTargets {
   };
 }
 
-// '*' instead of a column list: a single missing or renamed column would make
-// PostgREST reject the whole query and every user would silently get the
-// defaults (no name, no calorie/protein goals).
-export const PROFILE_COLUMNS = '*';
-
 export async function getUserTargets(userId: string): Promise<UserTargets> {
-  const { data, error } = await supabase.from('users').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle();
-  if (error) console.error(`[day-status] profile query failed userId=${userId}:`, error.message);
-  else if (!data) console.warn(`[day-status] profile not found userId=${userId}`);
-  return toTargets(data as ProfileRow | null);
+  let data: ProfileRow | undefined;
+  try {
+    [data] = await sql`SELECT * FROM users WHERE id = ${userId}`;
+    if (!data) console.warn(`[day-status] profile not found userId=${userId}`);
+  } catch (err) {
+    console.error(`[day-status] profile query failed userId=${userId}:`, err instanceof Error ? err.message : err);
+  }
+  return toTargets(data ?? null);
 }
 
 export async function getDayStatus(userId: string, date: string): Promise<DayStatus> {
-  const [{ data: water }, { data: food }] = await Promise.all([
-    supabase.from('water_logs').select('amount_ml, created_at').eq('user_id', userId).eq('log_date', date),
-    supabase.from('food_logs')
-      .select('meal_type, calories, protein, carbs, fat, hydration_ml, created_at')
-      .eq('user_id', userId)
-      .eq('log_date', date),
+  const [water, food] = await Promise.all([
+    sql`SELECT amount_ml, created_at FROM water_logs WHERE user_id = ${userId} AND log_date = ${date}`,
+    sql`
+      SELECT meal_type, calories, protein, carbs, fat, hydration_ml, created_at
+      FROM food_logs WHERE user_id = ${userId} AND log_date = ${date}
+    `,
   ]);
 
   type FoodRow = {
     meal_type: string; calories: number; protein: number | null; carbs: number | null;
     fat: number | null; hydration_ml: number | null; created_at: string;
   };
-  const waterRows = (water ?? []) as Array<{ amount_ml: number; created_at: string }>;
-  const foodRows  = (food ?? []) as FoodRow[];
+  const waterRows = water as Array<{ amount_ml: number; created_at: string }>;
+  const foodRows  = food as FoodRow[];
 
   const status: DayStatus = {
     date,
@@ -109,16 +108,14 @@ export async function getDayStatus(userId: string, date: string): Promise<DaySta
 
 // Days since the last workout entry (0 = today, capped at 14).
 export async function daysSinceLastWorkout(userId: string, today: string): Promise<number> {
-  const { data } = await supabase
-    .from('food_logs')
-    .select('log_date')
-    .eq('user_id', userId)
-    .lt('calories', 0)
-    .gte('log_date', brazilNDaysAgo(14, today))
-    .order('log_date', { ascending: false })
-    .limit(1);
+  const data = await sql`
+    SELECT log_date FROM food_logs
+    WHERE user_id = ${userId} AND calories < 0 AND log_date >= ${brazilNDaysAgo(14, today)}
+    ORDER BY log_date DESC
+    LIMIT 1
+  `;
 
-  const last = (data as Array<{ log_date: string }> | null)?.[0]?.log_date;
+  const last = (data as Array<{ log_date: string }>)[0]?.log_date;
   if (!last) return 14;
   const diff = new Date(today + 'T12:00:00').getTime() - new Date(last + 'T12:00:00').getTime();
   return Math.max(0, Math.round(diff / 86_400_000));

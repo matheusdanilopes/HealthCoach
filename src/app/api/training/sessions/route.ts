@@ -1,6 +1,7 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { exerciseKey, type WorkoutSessionSummary } from '@/lib/training';
 import { getExerciseHistory, getRecentSessions } from '@/lib/training-data';
@@ -23,9 +24,9 @@ function strengthMet(rpe: number | null): number {
 }
 
 async function latestWeight(userId: string): Promise<number> {
-  const [{ data: log }, { data: user }] = await Promise.all([
-    supabase.from('weight_logs').select('weight_kg').eq('user_id', userId).order('log_date', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('users').select('current_weight').eq('id', userId).maybeSingle(),
+  const [[log], [user]] = await Promise.all([
+    sql`SELECT weight_kg FROM weight_logs WHERE user_id = ${userId} ORDER BY log_date DESC LIMIT 1`,
+    sql`SELECT current_weight FROM users WHERE id = ${userId}`,
   ]);
   const w = Number(log?.weight_kg ?? user?.current_weight);
   return Number.isFinite(w) && w > 0 ? w : 70;
@@ -74,73 +75,62 @@ export async function POST(req: Request) {
 
   const sessionDate = brazilToday();
   // The plan may have been deleted mid-workout; the session is kept anyway.
-  const [weight, { data: planRow }] = await Promise.all([
+  const [weight, [planRow]] = await Promise.all([
     latestWeight(userId),
     requestedPlanId
-      ? supabase.from('workout_plans').select('id').eq('id', requestedPlanId).eq('user_id', userId).maybeSingle()
-      : Promise.resolve({ data: null }),
+      ? sql`SELECT id FROM workout_plans WHERE id = ${requestedPlanId} AND user_id = ${userId}`.catch(() => [])
+      : Promise.resolve([]),
   ]);
   const planId: string | null = planRow?.id ?? null;
   const calories = Math.min(Math.round(strengthMet(rpe) * weight * (durationMin / 60)), 5000);
 
-  const { data: foodLog, error: foodError } = await supabase
-    .from('food_logs')
-    .insert({
+  // All rows are written in one transaction so a failure never leaves a
+  // partial workout (and a retry never double-counts it).
+  const foodLogId = randomUUID();
+  const sessionId = randomUUID();
+  const setRows = exercises.flatMap((e, order) =>
+    e.sets.map((s, i) => ({
+      session_id: sessionId,
       user_id: userId,
-      food_name: `🏋️ Musculação · ${durationMin}min`,
-      meal_type: 'snack',
-      calories: -calories,
-      log_date: sessionDate,
-    })
-    .select('id')
-    .single();
-  if (foodError || !foodLog) {
-    console.error('[training-session] food log insert failed:', foodError?.message);
-    return NextResponse.json({ error: 'Não foi possível salvar o treino.' }, { status: 500 });
-  }
-
-  const { data: row, error } = await supabase
-    .from('workout_sessions')
-    .insert({
-      user_id: userId,
-      plan_id: planId,
-      day_label: dayLabel,
-      session_date: sessionDate,
-      duration_min: durationMin,
-      rpe,
-      calories,
-      food_log_id: foodLog.id,
-    })
-    .select('id')
-    .single();
-
-  const setRows = row
-    ? exercises.flatMap((e, order) =>
-        e.sets.map((s, i) => ({
-          session_id: row.id,
-          user_id: userId,
-          exercise_key: exerciseKey(e.name),
-          exercise_name: e.name,
-          exercise_order: order,
-          set_number: i + 1,
-          reps: s.reps,
-          seconds: s.seconds,
-          load_kg: s.loadKg,
-        }))
-      )
-    : [];
-  const setsError = row ? (await supabase.from('workout_sets').insert(setRows)).error : null;
-
-  if (error || !row || setsError) {
-    console.error('[training-session] save failed:', error?.message ?? setsError?.message);
-    // Undo the partial save so a retry doesn't double-count the workout.
-    if (row) await supabase.from('workout_sessions').delete().eq('id', row.id);
-    await supabase.from('food_logs').delete().eq('id', foodLog.id);
+      exercise_key: exerciseKey(e.name),
+      exercise_name: e.name,
+      exercise_order: order,
+      set_number: i + 1,
+      reps: s.reps,
+      seconds: s.seconds,
+      load_kg: s.loadKg,
+    }))
+  );
+  try {
+    await sql.transaction([
+      insertInto('food_logs', {
+        id: foodLogId,
+        user_id: userId,
+        food_name: `🏋️ Musculação · ${durationMin}min`,
+        meal_type: 'snack',
+        calories: -calories,
+        log_date: sessionDate,
+      }),
+      insertInto('workout_sessions', {
+        id: sessionId,
+        user_id: userId,
+        plan_id: planId,
+        day_label: dayLabel,
+        session_date: sessionDate,
+        duration_min: durationMin,
+        rpe,
+        calories,
+        food_log_id: foodLogId,
+      }),
+      insertInto('workout_sets', setRows),
+    ]);
+  } catch (err) {
+    console.error('[training-session] save failed:', err instanceof Error ? err.message : err);
     return NextResponse.json({ error: 'Não foi possível salvar o treino.' }, { status: 500 });
   }
 
   const summary: WorkoutSessionSummary = {
-    id: row.id,
+    id: sessionId,
     dayLabel,
     sessionDate,
     durationMin,

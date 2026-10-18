@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { activatePlan, listPlans } from '@/lib/training-data';
 
 // Makes an earlier plan the active one again.
@@ -26,12 +26,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  const { error } = await supabase
-    .from('workout_plans')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', session.user.id);
-  if (error) return NextResponse.json({ error: 'Não foi possível excluir o plano.' }, { status: 500 });
+  try {
+    await sql`DELETE FROM workout_plans WHERE id = ${id} AND user_id = ${session.user.id}`;
+  } catch {
+    return NextResponse.json({ error: 'Não foi possível excluir o plano.' }, { status: 500 });
+  }
 
   return NextResponse.json({ plans: await listPlans(session.user.id) });
 }

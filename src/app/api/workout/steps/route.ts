@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto, sql, updateWhere } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { calculateStepsCalories } from '@/lib/calculations';
 
@@ -13,19 +13,9 @@ function parseSteps(value: unknown): number | null {
 }
 
 async function computeForUser(userId: string, steps: number) {
-  const [{ data: profile }, { data: bodyMetrics }] = await Promise.all([
-    supabase
-      .from('users')
-      .select('current_weight, sex, height_cm')
-      .eq('id', userId)
-      .single(),
-    supabase
-      .from('body_metrics')
-      .select('weight')
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  const [[profile], [bodyMetrics]] = await Promise.all([
+    sql`SELECT current_weight, sex, height_cm FROM users WHERE id = ${userId}`,
+    sql`SELECT weight FROM body_metrics WHERE user_id = ${userId} ORDER BY date DESC LIMIT 1`,
   ]);
 
   const weight = bodyMetrics?.weight ?? profile?.current_weight ?? 75;
@@ -65,36 +55,32 @@ export async function PUT(req: Request) {
     calories: -calories,
   };
 
-  const { data: existing, error: findError } = await supabase
-    .from('food_logs')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('log_date', date)
-    .like('food_name', `${STEPS_PREFIX}%`)
-    .order('created_at', { ascending: true });
-  if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
+  let existing;
+  try {
+    existing = await sql`
+      SELECT id FROM food_logs
+      WHERE user_id = ${userId} AND log_date = ${date} AND food_name LIKE ${`${STEPS_PREFIX}%`}
+      ORDER BY created_at ASC
+    `;
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 
-  const [keep, ...extras] = existing ?? [];
+  const [keep, ...extras] = existing;
 
-  const { data: row, error } = keep
-    ? await supabase
-        .from('food_logs')
-        .update(fields)
-        .eq('id', keep.id)
-        .eq('user_id', userId)
-        .select('*')
-        .single()
-    : await supabase
-        .from('food_logs')
-        .insert({ ...fields, user_id: userId, log_date: date })
-        .select('*')
-        .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let row;
+  try {
+    [row] = keep
+      ? await updateWhere('food_logs', fields, { id: keep.id, user_id: userId }, { returning: '*' })
+      : await insertInto('food_logs', { ...fields, user_id: userId, log_date: date }, { returning: '*' });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 
   // Clean up duplicates left by entries saved before the one-per-day rule.
   const removedIds = extras.map((e) => e.id as string);
   if (removedIds.length) {
-    await supabase.from('food_logs').delete().in('id', removedIds).eq('user_id', userId);
+    await sql`DELETE FROM food_logs WHERE id = ANY(${removedIds}::uuid[]) AND user_id = ${userId}`;
   }
 
   return NextResponse.json({ log: row, removedIds, replaced: Boolean(keep) });

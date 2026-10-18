@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { updateWhere } from '@/lib/db';
 import {
   calculateAge,
   calculateTMB,
@@ -51,9 +51,7 @@ export async function PUT(req: Request) {
           ? null
           : Math.min(Math.max(Math.round(proteinNum), 20), 400) };
 
-  await supabase
-    .from('users')
-    .update({
+  await updateWhere('users', {
       full_name: fullName,
       birth_date: birthDate,
       current_weight: w,
@@ -65,8 +63,7 @@ export async function PUT(req: Request) {
       target_water_ml: targetWater,
       ...proteinUpdate,
       updated_at: new Date().toISOString(),
-    })
-    .eq('id', session.user.id);
+  }, { id: session.user.id });
 
   return NextResponse.json({ ok: true, tdee, targetCal, targetWater });
 }

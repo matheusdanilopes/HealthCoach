@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { inferGoal } from '@/lib/coach-data';
 import {
   getActivePlan,
@@ -17,13 +17,13 @@ export default async function TreinosPage() {
   const userId = session.user.id;
 
   // The AI is only called when the user asks for a new plan.
-  const [profile, plan, plans, sessions, history, { data: user }] = await Promise.all([
+  const [profile, plan, plans, sessions, history, [user]] = await Promise.all([
     getTrainingProfile(userId),
     getActivePlan(userId),
     listPlans(userId),
     getRecentSessions(userId),
     getExerciseHistory(userId),
-    supabase.from('users').select('tdee, target_calories').eq('id', userId).maybeSingle(),
+    sql`SELECT tdee, target_calories FROM users WHERE id = ${userId}`,
   ]);
 
   const suggestedGoal = plan?.goal ?? inferGoal(

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 
 const SYSTEM = `Você é um especialista em ciências do esporte e metabolismo energético. Estime o gasto calórico com máxima precisão e rigor científico.
@@ -110,19 +110,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Duração do treino inválida.' }, { status: 400 });
     }
 
-    const [{ data: profile }, { data: bodyMetrics }] = await Promise.all([
-      supabase
-        .from('users')
-        .select('current_weight, sex, birth_date, height_cm')
-        .eq('id', session.user.id)
-        .single(),
-      supabase
-        .from('body_metrics')
-        .select('weight, body_fat, muscle_mass')
-        .eq('user_id', session.user.id)
-        .order('date', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+    const [[profile], [bodyMetrics]] = await Promise.all([
+      sql`SELECT current_weight, sex, birth_date, height_cm FROM users WHERE id = ${session.user.id}`,
+      sql`
+        SELECT weight, body_fat, muscle_mass FROM body_metrics
+        WHERE user_id = ${session.user.id} ORDER BY date DESC LIMIT 1
+      `,
     ]);
 
     const weight = bodyMetrics?.weight ?? profile?.current_weight ?? 75;

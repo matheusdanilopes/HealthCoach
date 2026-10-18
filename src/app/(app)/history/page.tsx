@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { subDays } from 'date-fns';
 import { formatDate } from '@/lib/utils';
 import HistoryClient from './HistoryClient';
@@ -13,52 +13,43 @@ export default async function HistoryPage() {
   const ninetyDaysAgo = formatDate(subDays(new Date(), 90));
 
   const [
-    { data: profileData },
-    { data: weightData },
-    { data: foodData },
-    { data: workoutData },
-    { data: waterData },
-    { data: bodyMetricsData },
-    { data: bodyMeasurementsData },
+    [profileData],
+    weightData,
+    foodData,
+    workoutData,
+    waterData,
+    bodyMetricsData,
+    bodyMeasurementsData,
   ] = await Promise.all([
-    supabase
-      .from('users')
-      .select('target_calories, target_protein_g, target_water_ml, current_weight')
-      .eq('id', userId)
-      .single(),
-    supabase
-      .from('weight_logs')
-      .select('log_date, weight_kg')
-      .eq('user_id', userId)
-      .gte('log_date', ninetyDaysAgo)
-      .order('log_date'),
-    supabase
-      .from('food_logs')
-      .select('log_date, calories, protein')
-      .eq('user_id', userId)
-      .gte('log_date', ninetyDaysAgo)
-      .gt('calories', 0),
-    supabase
-      .from('food_logs')
-      .select('log_date')
-      .eq('user_id', userId)
-      .gte('log_date', ninetyDaysAgo)
-      .lt('calories', 0),
-    supabase
-      .from('water_logs')
-      .select('log_date, amount_ml')
-      .eq('user_id', userId)
-      .gte('log_date', ninetyDaysAgo),
-    supabase
-      .from('body_metrics')
-      .select('date, weight, muscle_mass, body_fat, visceral_fat')
-      .eq('user_id', userId)
-      .order('date'),
-    supabase
-      .from('body_measurements')
-      .select('date, waist, neck, hips, chest, right_arm, left_arm, right_thigh, left_thigh')
-      .eq('user_id', userId)
-      .order('date'),
+    sql`
+      SELECT target_calories, target_protein_g, target_water_ml, current_weight
+      FROM users WHERE id = ${userId}
+    `,
+    sql`
+      SELECT log_date, weight_kg FROM weight_logs
+      WHERE user_id = ${userId} AND log_date >= ${ninetyDaysAgo}
+      ORDER BY log_date
+    `,
+    sql`
+      SELECT log_date, calories, protein FROM food_logs
+      WHERE user_id = ${userId} AND log_date >= ${ninetyDaysAgo} AND calories > 0
+    `,
+    sql`
+      SELECT log_date FROM food_logs
+      WHERE user_id = ${userId} AND log_date >= ${ninetyDaysAgo} AND calories < 0
+    `,
+    sql`
+      SELECT log_date, amount_ml FROM water_logs
+      WHERE user_id = ${userId} AND log_date >= ${ninetyDaysAgo}
+    `,
+    sql`
+      SELECT date, weight, muscle_mass, body_fat, visceral_fat FROM body_metrics
+      WHERE user_id = ${userId} ORDER BY date
+    `,
+    sql`
+      SELECT date, waist, neck, hips, chest, right_arm, left_arm, right_thigh, left_thigh
+      FROM body_measurements WHERE user_id = ${userId} ORDER BY date
+    `,
   ]);
 
   const profile = {
@@ -69,14 +60,14 @@ export default async function HistoryPage() {
   };
 
   // Weight logs (ascending by date)
-  const weightLogs = (weightData ?? []).map((r) => ({
+  const weightLogs = weightData.map((r) => ({
     date:   r.log_date,
     weight: parseFloat(String(r.weight_kg)),
   }));
 
   // Aggregate food by date
   const foodByDate: Record<string, { calories: number; protein: number }> = {};
-  for (const log of foodData ?? []) {
+  for (const log of foodData) {
     if (!foodByDate[log.log_date]) foodByDate[log.log_date] = { calories: 0, protein: 0 };
     foodByDate[log.log_date].calories += log.calories;
     foodByDate[log.log_date].protein  += log.protein ?? 0;
@@ -86,11 +77,11 @@ export default async function HistoryPage() {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   // Workout days (unique dates with calorie-burning entries)
-  const workoutDays = [...new Set((workoutData ?? []).map((r) => r.log_date))].sort();
+  const workoutDays = [...new Set(workoutData.map((r) => r.log_date))].sort();
 
   // Aggregate water by date
   const waterByDate: Record<string, number> = {};
-  for (const log of waterData ?? []) {
+  for (const log of waterData) {
     waterByDate[log.log_date] = (waterByDate[log.log_date] ?? 0) + log.amount_ml;
   }
   const dailyWater = Object.entries(waterByDate)
@@ -98,7 +89,7 @@ export default async function HistoryPage() {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   // Body metrics (ascending — first = oldest, last = newest)
-  const bodyMetrics = (bodyMetricsData ?? []).map((r) => ({
+  const bodyMetrics = bodyMetricsData.map((r) => ({
     date:         r.date,
     weight:       r.weight       != null ? Number(r.weight)       : null,
     muscle_mass:  r.muscle_mass  != null ? Number(r.muscle_mass)  : null,
@@ -107,7 +98,7 @@ export default async function HistoryPage() {
   }));
 
   // Body measurements (ascending — first = oldest, last = newest)
-  const bodyMeasurements = (bodyMeasurementsData ?? []).map((r) => {
+  const bodyMeasurements = bodyMeasurementsData.map((r) => {
     const rArm = r.right_arm != null ? Number(r.right_arm) : null;
     const lArm = r.left_arm  != null ? Number(r.left_arm)  : null;
     const rThigh = r.right_thigh != null ? Number(r.right_thigh) : null;

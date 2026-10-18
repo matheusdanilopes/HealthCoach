@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { FunctionCallingConfigMode, Type } from '@google/genai';
 import { auth } from '@/auth';
-import { supabase } from '@/lib/db';
+import { insertInto } from '@/lib/db';
 import { withGeminiRetry } from '@/lib/gemini-retry';
 import { callGroq } from '@/lib/groq';
 import { DEFAULT_AI_TIMEOUT_MS, GEMINI_MODEL, aiErrorResponse, getGemini } from '@/lib/ai';
@@ -173,7 +173,7 @@ ${FOOD_COACHING_RULES}`;
         functionResult = 'Erro: nome do alimento ou calorias ausentes. Peça mais detalhes ao usuário.';
       } else {
         try {
-          const { data, error } = await supabase.from('food_logs').insert({
+          const [data] = await insertInto('food_logs', {
             user_id: user.id,
             food_name: foodName,
             meal_type: mealType,
@@ -183,9 +183,8 @@ ${FOOD_COACHING_RULES}`;
             fat: optionalNumber(args.fat),
             // Diary days follow the Brazil calendar, not UTC.
             log_date: brazilToday(),
-          }).select().single();
-          if (error) console.error('[chat] food_logs insert error:', error.message);
-          else insertedRow = data as Record<string, unknown>;
+          }, { returning: '*' });
+          insertedRow = data;
         } catch (e) {
           console.error('[chat] food_logs insert failed:', e);
         }
