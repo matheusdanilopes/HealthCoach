@@ -3,15 +3,16 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat, Brain } from 'lucide-react';
+import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat, Brain, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const BODY_PATHS = ['/body-metrics', '/body-measurements'];
+const BODY_PATHS = ['/body-metrics', '/body-measurements', '/treinos'];
 const SAUDE_PATHS = ['/diary', '/history', '/marmitas', '/coach'];
 
 const BODY_SUB_ITEMS = [
   { href: '/body-metrics',      icon: Scale,  label: 'Pesagem',  desc: 'Peso e composição' },
   { href: '/body-measurements', icon: Ruler,  label: 'Medidas',  desc: 'Circunferências'   },
+  { href: '/treinos',           icon: Dumbbell, label: 'Treinos IA', desc: 'Plano semanal'   },
 ];
 
 const SAUDE_SUB_ITEMS = [
