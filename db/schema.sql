@@ -16,8 +16,12 @@ CREATE TABLE IF NOT EXISTS users (
   target_water_ml integer,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  target_protein_g numeric(5,1)
+  target_protein_g numeric(5,1),
+  custom_tmb integer
 );
+
+-- TMB informada manualmente no Perfil (NULL = calculada pela fórmula com o peso atual).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_tmb integer;
 
 CREATE TABLE IF NOT EXISTS food_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

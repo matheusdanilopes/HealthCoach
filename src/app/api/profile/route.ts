@@ -7,6 +7,7 @@ import {
   calculateTDEE,
   calculateTargetCalories,
   calculateWaterTarget,
+  normalizeActivityLevel,
 } from '@/lib/calculations';
 
 export async function PUT(req: Request) {
@@ -30,12 +31,16 @@ export async function PUT(req: Request) {
   const age = calculateAge(birthDate);
   const effectiveSex: 'male' | 'female' = sex === 'female' ? 'female' : 'male';
 
+  const level = normalizeActivityLevel(activityLevel);
   const formulaTmb = calculateTMB(w, h, age, effectiveSex);
-  const effectiveTmb =
-    customTmb != null && Number.isFinite(Number(customTmb))
+  // The screen always sends the TMB field; it only counts as manual when it
+  // differs from the formula (same > 3 kcal threshold the screen uses).
+  const manualTmb =
+    customTmb != null && Number.isFinite(Number(customTmb)) && Math.abs(Math.round(Number(customTmb)) - formulaTmb) > 3
       ? Math.round(Number(customTmb))
-      : formulaTmb;
-  const tdee = calculateTDEE(effectiveTmb, activityLevel);
+      : null;
+  const effectiveTmb = manualTmb ?? formulaTmb;
+  const tdee = calculateTDEE(effectiveTmb, level);
   const formulaTarget = calculateTargetCalories(tdee);
   const targetCal =
     customTargetCalories != null && Number.isFinite(Number(customTargetCalories))
@@ -57,7 +62,8 @@ export async function PUT(req: Request) {
       current_weight: w,
       height_cm: h,
       sex: effectiveSex,
-      activity_level: activityLevel,
+      activity_level: level,
+      custom_tmb: manualTmb,
       tdee,
       target_calories: targetCal,
       target_water_ml: targetWater,

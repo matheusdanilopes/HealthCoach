@@ -28,6 +28,9 @@ import {
   calculateTargetCalories,
   calculateAge,
   calculateProteinTarget,
+  normalizeActivityLevel,
+  ACTIVITY_MULTIPLIERS,
+  type ActivityLevel,
 } from '@/lib/calculations';
 import type { Profile } from '@/types';
 
@@ -43,11 +46,7 @@ const ACTIVITY_OPTIONS = [
   { value: 'active', label: 'Ativo', desc: '6–7×/semana', icon: '🏃' },
 ];
 
-const MULTIPLIERS: Record<string, number> = {
-  sedentary: 1.2,
-  moderate: 1.55,
-  active: 1.725,
-};
+const MULTIPLIERS: Record<string, number> = ACTIVITY_MULTIPLIERS;
 
 // Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
 function deriveInitialCalcState(profile: Profile | null) {
@@ -71,7 +70,7 @@ function deriveInitialCalcState(profile: Profile | null) {
     const tmb = calculateTMB(w, h, calculateAge(bd!), s!);
     const meta = profile?.target_calories
       ? savedMeta
-      : String(calculateTargetCalories(calculateTDEE(tmb, (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active')));
+      : String(calculateTargetCalories(calculateTDEE(tmb, profile?.activity_level)));
     return { tmb: String(tmb), isManual: false, meta };
   }
 
@@ -102,8 +101,8 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
   // Physical metrics
   const [weight, setWeight] = useState(String(profile?.current_weight ?? ''));
   const [height, setHeight] = useState(String(profile?.height_cm ?? ''));
-  const [activityLevel, setActivityLevel] = useState<'sedentary' | 'moderate' | 'active'>(
-    (profile?.activity_level ?? 'sedentary') as 'sedentary' | 'moderate' | 'active'
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel>(
+    normalizeActivityLevel(profile?.activity_level)
   );
 
   // Caloric goals — TMB initialized from profile to preserve manual values

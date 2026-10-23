@@ -8,17 +8,25 @@ export function calculateTMB(
   return Math.round(sex === 'male' ? base + 5 : base - 161);
 }
 
-const ACTIVITY_MULTIPLIERS = {
+export type ActivityLevel = 'sedentary' | 'moderate' | 'active';
+
+export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
   moderate: 1.55,
   active: 1.725,
 };
 
-export function calculateTDEE(
-  tmb: number,
-  activityLevel: 'sedentary' | 'moderate' | 'active'
-): number {
-  return Math.round(tmb * ACTIVITY_MULTIPLIERS[activityLevel]);
+// The users table still accepts the legacy 'light' and 'very_active' values.
+// The app only offers the three levels above, so map anything else onto them
+// (light → sedentary, the conservative side) instead of producing NaN.
+export function normalizeActivityLevel(level: unknown): ActivityLevel {
+  if (level === 'moderate' || level === 'active' || level === 'sedentary') return level;
+  if (level === 'very_active') return 'active';
+  return 'sedentary';
+}
+
+export function calculateTDEE(tmb: number, activityLevel: ActivityLevel | string | null | undefined): number {
+  return Math.round(tmb * ACTIVITY_MULTIPLIERS[normalizeActivityLevel(activityLevel)]);
 }
 
 export function calculateTargetCalories(tdee: number): number {
