@@ -189,10 +189,12 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
     const out: string[] = [];
     if (metrics.length < 2 || !latest) return out;
 
-    const cutoff30 = format(subDays(new Date(), 30), 'yyyy-MM-dd');
-    const before30 = metrics.filter(m => m.date <= cutoff30);
-    if (before30.length > 0) {
-      const wChange = latest.weight - before30[0].weight;
+    /* Mesma janela do gráfico de 30d: compara com a pesagem mais antiga dentro dela */
+    const cutoff30 = cutoffStr(30)!;
+    const within30 = metrics.filter(m => m.date >= cutoff30);
+    const first30  = within30[within30.length - 1];
+    if (first30 && first30.id !== latest.id) {
+      const wChange = latest.weight - first30.weight;
       if (Math.abs(wChange) >= 0.5) {
         out.push(wChange < 0
           ? `Você perdeu ${Math.abs(wChange).toFixed(1)}kg nos últimos 30 dias`
@@ -444,8 +446,8 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
                           d.good === false ? 'text-red-500'                           :
                           'text-zinc-400 dark:text-zinc-500',
                         )}>
-                          {d.good === true  ? <TrendingDown size={11} /> :
-                           d.good === false ? <TrendingUp size={11} />   :
+                          {d.sign === '+' ? <TrendingUp size={11} />   :
+                           d.value.startsWith('-') ? <TrendingDown size={11} /> :
                            <Minus size={11} />}
                           {d.sign}{d.value}{cfg.unit}
                         </p>
@@ -517,7 +519,7 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={185}>
-                <AreaChart data={chartData} margin={{ top: 6, right: 4, bottom: 0, left: -22 }}>
+                <AreaChart data={chartData} margin={{ top: 6, right: 4, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor={activeColor} stopOpacity={0.18} />
@@ -537,7 +539,8 @@ export default function BodyMetricsClient({ initialMetrics }: Props) {
                     tick={{ fontSize: 10, fill: tickColor }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={v => `${v}${METRIC_CONFIGS[activeMetric].unit}`}
+                    width={48}
+                    tickFormatter={v => `${Number(Number(v).toFixed(1))}${METRIC_CONFIGS[activeMetric].unit}`}
                   />
                   <Tooltip
                     content={<CustomTooltip unit={METRIC_CONFIGS[activeMetric].unit} />}
