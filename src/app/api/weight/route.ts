@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { insertInto, sql } from '@/lib/db';
+import { insertInto } from '@/lib/db';
+import { saveWeightAndRecalculateTargets } from '@/lib/energy-targets';
 import { brazilToday } from '@/lib/timezone';
 
 export async function POST(req: Request) {
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 
-  await sql`UPDATE users SET current_weight = ${weight}, updated_at = ${now} WHERE id = ${session.user.id}`;
+  await saveWeightAndRecalculateTargets(session.user.id, weight);
 
   return NextResponse.json({ ok: true });
 }

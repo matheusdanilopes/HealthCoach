@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const tmb = calculateTMB(w, h, age, sex);
-    const tdee = calculateTDEE(tmb, activityLevel as 'sedentary' | 'moderate' | 'active');
+    const tdee = calculateTDEE(tmb, activityLevel);
     const targetCal = calculateTargetCalories(tdee);
     const targetWater = calculateWaterTarget(w);
     const today = new Date().toISOString().split('T')[0];
