@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Check,
   Download,
-  RefreshCw,
   Pencil,
   Calculator,
   RotateCcw,
@@ -48,33 +47,79 @@ const ACTIVITY_OPTIONS = [
 
 const MULTIPLIERS: Record<string, number> = ACTIVITY_MULTIPLIERS;
 
-// Derive initial TMB — prioritizes TDEE-reverse to preserve any previously saved manual value
+function formulaTmbFor(weight: string, height: string, birthDate: string, sex: 'male' | 'female') {
+  const w = parseFloat(weight);
+  const h = parseFloat(height);
+  if (!w || !h || !birthDate) return null;
+  return calculateTMB(w, h, calculateAge(birthDate), sex);
+}
+
+// TMB and calorie target each start as automatic or manual, matching how the
+// API saves them: custom_tmb holds a manual TMB and a target equal to
+// TDEE − 500 is the automatic one.
 function deriveInitialCalcState(profile: Profile | null) {
-  const w = parseFloat(String(profile?.current_weight ?? ''));
-  const h = parseFloat(String(profile?.height_cm ?? ''));
-  const bd = profile?.birth_date;
-  const s = profile?.sex;
-  const hasFormulaInputs = !!(w && h && bd && s);
-  const savedMeta = String(profile?.target_calories ?? '');
+  const formulaTmb = profile?.sex
+    ? formulaTmbFor(String(profile.current_weight ?? ''), String(profile.height_cm ?? ''), profile.birth_date ?? '', profile.sex)
+    : null;
+  const level = profile?.activity_level;
 
-  if (profile?.tdee && profile?.activity_level && MULTIPLIERS[profile.activity_level]) {
-    const reversed = Math.round(profile.tdee / MULTIPLIERS[profile.activity_level]);
-    // Threshold > 3 avoids false positives from rounding
-    const isManual = hasFormulaInputs
-      ? Math.abs(reversed - calculateTMB(w, h, calculateAge(bd!), s!)) > 3
-      : false;
-    return { tmb: String(reversed), isManual, meta: savedMeta };
+  let tmb = '';
+  let isTmbManual = false;
+  if (profile?.custom_tmb != null) {
+    tmb = String(profile.custom_tmb);
+    isTmbManual = true;
+  } else if (profile?.tdee && level && MULTIPLIERS[level]) {
+    // Profiles saved before custom_tmb existed: recover the TMB from the TDEE.
+    // Threshold > 3 avoids false positives from rounding.
+    const reversed = Math.round(profile.tdee / MULTIPLIERS[level]);
+    tmb = String(reversed);
+    isTmbManual = formulaTmb != null && Math.abs(reversed - formulaTmb) > 3;
+  } else if (formulaTmb != null) {
+    tmb = String(formulaTmb);
   }
 
-  if (hasFormulaInputs) {
-    const tmb = calculateTMB(w, h, calculateAge(bd!), s!);
-    const meta = profile?.target_calories
-      ? savedMeta
-      : String(calculateTargetCalories(calculateTDEE(tmb, profile?.activity_level)));
-    return { tmb: String(tmb), isManual: false, meta };
-  }
+  const target = profile?.target_calories;
+  const isMetaManual =
+    target != null && (profile?.tdee == null || target !== calculateTargetCalories(profile.tdee));
 
-  return { tmb: '', isManual: false, meta: savedMeta };
+  return { tmb, isTmbManual, meta: target != null ? String(target) : '', isMetaManual };
+}
+
+function ModeControls({ manual, onReset }: { manual: boolean; onReset: () => void }) {
+  if (!manual) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40">
+        <Calculator size={8} />
+        Automático
+      </span>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
+        <Pencil size={8} />
+        Manual
+      </span>
+      <button
+        type="button"
+        onClick={onReset}
+        className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+      >
+        <RotateCcw size={9} />
+        Usar automático
+      </button>
+    </div>
+  );
+}
+
+function calcInputClass(manual: boolean) {
+  return cn(
+    'h-11 w-full rounded-xl px-3.5 text-sm tabular-nums transition-all duration-150',
+    'focus:outline-none focus:ring-2',
+    manual
+      ? 'bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/80 dark:border-amber-800/30 text-zinc-900 dark:text-zinc-100 focus:ring-amber-400/25 focus:border-amber-400/80'
+      : 'bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:ring-emerald-500/25 focus:border-emerald-400/80'
+  );
 }
 
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
@@ -105,11 +150,14 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     normalizeActivityLevel(profile?.activity_level)
   );
 
-  // Caloric goals — TMB initialized from profile to preserve manual values
-  const initialCalc = deriveInitialCalcState(profile);
+  // Caloric goals — each value is either automatic (follows the inputs above
+  // it) or manual (kept as typed); a manual TMB still drives TDEE and an
+  // automatic target, and a manual target doesn't block an automatic TMB.
+  const [initialCalc] = useState(() => deriveInitialCalcState(profile));
   const [customTmb, setCustomTmb] = useState(initialCalc.tmb);
-  const [isTmbManual, setIsTmbManual] = useState(initialCalc.isManual);
+  const [isTmbManual, setIsTmbManual] = useState(initialCalc.isTmbManual);
   const [customMeta, setCustomMeta] = useState(initialCalc.meta);
+  const [isMetaManual, setIsMetaManual] = useState(initialCalc.isMetaManual);
   const [targetProtein, setTargetProtein] = useState(
     profile?.target_protein_g != null ? String(Math.round(Number(profile.target_protein_g))) : ''
   );
@@ -164,22 +212,23 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     return () => window.removeEventListener('pwa-install-ready', onReady);
   }, []);
 
+  // Without the formula inputs, an automatic TMB keeps the last known value.
+  const formulaTmb = formulaTmbFor(weight, height, birthDate, sex);
+  const tmbValue = isTmbManual ? customTmb : formulaTmb != null ? String(formulaTmb) : initialCalc.tmb;
+  const tmbNum = Number(tmbValue);
+  const tdeePreview = tmbNum > 0 ? calculateTDEE(tmbNum, activityLevel) : null;
+  const formulaMeta = tdeePreview ? calculateTargetCalories(tdeePreview) : null;
+  const metaValue = isMetaManual ? customMeta : formulaMeta != null ? String(formulaMeta) : customMeta;
+  const metaNum = Number(metaValue);
+
   function handleTmbChange(value: string) {
     setCustomTmb(value);
     setIsTmbManual(true);
   }
 
-  function handleRecalculate() {
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
-    if (!w || !h || !birthDate) return;
-    const age = calculateAge(birthDate);
-    const tmb = calculateTMB(w, h, age, sex);
-    const tdee = calculateTDEE(tmb, activityLevel);
-    const meta = calculateTargetCalories(tdee);
-    setCustomTmb(String(tmb));
-    setCustomMeta(String(meta));
-    setIsTmbManual(false);
+  function handleMetaChange(value: string) {
+    setCustomMeta(value);
+    setIsMetaManual(true);
   }
 
   async function handleSave(e: FormEvent) {
@@ -195,9 +244,10 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         height,
         sex,
         activityLevel,
-        customTmb: customTmb ? Number(customTmb) : null,
+        customTmb: tmbNum > 0 ? tmbNum : null,
         tmbManual: isTmbManual,
-        customTargetCalories: customMeta ? Number(customMeta) : null,
+        // null lets the API use TDEE − 500 for the TDEE it computes.
+        customTargetCalories: isMetaManual && metaNum > 0 ? metaNum : null,
         targetProtein: targetProtein ? Number(targetProtein) : null,
       }),
     });
@@ -217,9 +267,6 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
 
-  const tmbNum = Number(customTmb);
-  const metaNum = Number(customMeta);
-  const tdeePreview = tmbNum ? calculateTDEE(tmbNum, activityLevel) : null;
   const weightNum = parseFloat(weight);
   const proteinSuggestion = weightNum > 0 ? calculateProteinTarget(weightNum) : null;
 
@@ -392,49 +439,21 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                 TMB (kcal/dia)
               </label>
-              <div className="flex items-center gap-2">
-                {isTmbManual ? (
-                  <>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
-                      <Pencil size={8} />
-                      Manual
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleRecalculate}
-                      className="flex items-center gap-1 text-[10px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                    >
-                      <RotateCcw size={9} />
-                      Usar automático
-                    </button>
-                  </>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40">
-                    <Calculator size={8} />
-                    Automático
-                  </span>
-                )}
-              </div>
+              <ModeControls manual={isTmbManual} onReset={() => setIsTmbManual(false)} />
             </div>
 
             <input
               type="number"
-              value={customTmb}
+              value={tmbValue}
               onChange={(e) => handleTmbChange(e.target.value)}
               min={500}
               max={5000}
-              className={cn(
-                'h-11 w-full rounded-xl px-3.5 text-sm tabular-nums transition-all duration-150',
-                'focus:outline-none focus:ring-2',
-                isTmbManual
-                  ? 'bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/80 dark:border-amber-800/30 text-zinc-900 dark:text-zinc-100 focus:ring-amber-400/25 focus:border-amber-400/80'
-                  : 'bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:ring-emerald-500/25 focus:border-emerald-400/80'
-              )}
+              className={calcInputClass(isTmbManual)}
             />
 
             <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
               {isTmbManual
-                ? 'Valor manual salvo — o sistema não irá sobrescrevê-lo automaticamente.'
+                ? 'Valor manual — não muda com peso, altura ou idade. TDEE e meta continuam sendo calculados a partir dele.'
                 : 'Calculado pela fórmula de Harris-Benedict. Edite o campo para definir um valor manual.'}
             </p>
           </div>
@@ -460,26 +479,21 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
               <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                 Meta calórica (kcal/dia)
               </span>
-              {!isTmbManual && (
-                <button
-                  type="button"
-                  onClick={handleRecalculate}
-                  className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
-                >
-                  <RefreshCw size={9} />
-                  Recalcular
-                </button>
-              )}
+              <ModeControls manual={isMetaManual} onReset={() => setIsMetaManual(false)} />
             </div>
             <input
               type="number"
-              value={customMeta}
-              onChange={(e) => setCustomMeta(e.target.value)}
+              value={metaValue}
+              onChange={(e) => handleMetaChange(e.target.value)}
               min={1200}
               max={9999}
-              className="h-11 w-full rounded-xl px-3.5 text-sm tabular-nums bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 transition-all duration-150"
+              className={calcInputClass(isMetaManual)}
             />
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Mínimo de 1.200 kcal/dia.</p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              {isMetaManual
+                ? 'Valor manual — não acompanha mudanças no TDEE. Mínimo de 1.200 kcal/dia.'
+                : 'TDEE − 500 kcal (mínimo de 1.200). Edite o campo para definir um valor manual.'}
+            </p>
           </div>
 
           {/* Meta de proteína */}
