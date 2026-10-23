@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { updateWhere } from '@/lib/db';
+import { sql, updateWhere } from '@/lib/db';
 import {
   calculateAge,
   calculateTMB,
@@ -22,6 +22,7 @@ export async function PUT(req: Request) {
     sex,
     activityLevel,
     customTmb,
+    tmbManual,
     customTargetCalories,
     targetProtein,
   } = await req.json();
@@ -33,19 +34,36 @@ export async function PUT(req: Request) {
 
   const level = normalizeActivityLevel(activityLevel);
   const formulaTmb = calculateTMB(w, h, age, effectiveSex);
-  // The screen always sends the TMB field; it only counts as manual when it
-  // differs from the formula (same > 3 kcal threshold the screen uses).
+  const tmbValue =
+    customTmb != null && Number.isFinite(Number(customTmb)) ? Math.round(Number(customTmb)) : null;
+  // The screen says whether the TMB is manual. Older clients don't, so fall
+  // back to comparing with the formula (same > 3 kcal threshold the screen uses).
   const manualTmb =
-    customTmb != null && Number.isFinite(Number(customTmb)) && Math.abs(Math.round(Number(customTmb)) - formulaTmb) > 3
-      ? Math.round(Number(customTmb))
-      : null;
+    tmbValue == null
+      ? null
+      : typeof tmbManual === 'boolean'
+        ? (tmbManual ? tmbValue : null)
+        : (Math.abs(tmbValue - formulaTmb) > 3 ? tmbValue : null);
   const effectiveTmb = manualTmb ?? formulaTmb;
   const tdee = calculateTDEE(effectiveTmb, level);
   const formulaTarget = calculateTargetCalories(tdee);
-  const targetCal =
+
+  // The screen always sends the target it shows. When that is still the
+  // automatic target saved before (TDEE − 500) and wasn't edited, follow the
+  // new TDEE instead of freezing the old value as a manual target.
+  const [prev] = await sql`SELECT tdee, target_calories FROM users WHERE id = ${session.user.id}`;
+  const prevTdee = prev?.tdee != null ? Number(prev.tdee) : null;
+  const prevTarget = prev?.target_calories != null ? Number(prev.target_calories) : null;
+  const prevTargetWasFormula =
+    prevTdee != null && prevTarget != null && prevTarget === calculateTargetCalories(prevTdee);
+  const customTarget =
     customTargetCalories != null && Number.isFinite(Number(customTargetCalories))
       ? Math.max(Math.round(Number(customTargetCalories)), 1200)
-      : formulaTarget;
+      : null;
+  const targetCal =
+    customTarget == null || (prevTargetWasFormula && customTarget === prevTarget)
+      ? formulaTarget
+      : customTarget;
   const targetWater = calculateWaterTarget(w);
   // Optional: empty clears the goal; omitted (older clients) keeps it.
   const proteinNum = Number(targetProtein);

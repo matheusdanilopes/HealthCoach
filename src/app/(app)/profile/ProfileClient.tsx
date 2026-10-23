@@ -196,6 +196,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         sex,
         activityLevel,
         customTmb: customTmb ? Number(customTmb) : null,
+        tmbManual: isTmbManual,
         customTargetCalories: customMeta ? Number(customMeta) : null,
         targetProtein: targetProtein ? Number(targetProtein) : null,
       }),
