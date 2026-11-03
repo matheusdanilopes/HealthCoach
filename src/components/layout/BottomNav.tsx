@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat, Brain, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -79,7 +79,6 @@ function SubMenu({
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
   const [saudeOpen, setSaudeOpen] = useState(false);
   const [bodyOpen,  setBodyOpen]  = useState(false);
   const saudeRef = useRef<HTMLDivElement>(null);
@@ -95,20 +94,6 @@ export default function BottomNav() {
     setSaudeOpen(false);
     setBodyOpen(false);
   }
-
-  // Sub-menu links only exist while a menu is open, so Next.js can't prefetch
-  // them on its own. Warm every tab once the browser is idle so switching
-  // screens shows the skeleton (or the page) instantly.
-  useEffect(() => {
-    const hrefs = [...SAUDE_SUB_ITEMS, ...BODY_SUB_ITEMS].map((i) => i.href);
-    const run = () => hrefs.forEach((href) => router.prefetch(href));
-    if ('requestIdleCallback' in window) {
-      const id = window.requestIdleCallback(run, { timeout: 4000 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const t = setTimeout(run, 2000);
-    return () => clearTimeout(t);
-  }, [router]);
 
   useEffect(() => {
     if (!saudeOpen && !bodyOpen) return;

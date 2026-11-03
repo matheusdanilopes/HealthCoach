@@ -4,7 +4,7 @@ function Skel({ className }: { className?: string }) {
 
 export default function HistoryLoading() {
   return (
-    <div className="flex flex-col gap-4 pt-7 pb-8">
+    <div aria-busy="true" className="flex flex-col gap-4 pt-7 pb-8">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-2">

@@ -1,23 +1,17 @@
-import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getSession, getUserRow } from '@/lib/session';
 import BottomNav from '@/components/layout/BottomNav';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { LogoIcon } from '@/components/ui/Logo';
 
-// Runs inside a Suspense boundary so the app shell (header, nav and the
-// route's loading skeleton) streams immediately instead of waiting on the
-// database — the slowest part of a cold start. The same cached query is
-// reused by pages that need the full user row.
-async function OnboardingGuard({ userId }: { userId: string }) {
-  const user = await getUserRow(userId);
-  if (user?.target_calories == null) redirect('/register');
-  return null;
-}
-
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session?.user) redirect('/login');
+
+  // Layout and page render in parallel, and getUserRow is memoized per
+  // request, so pages that need the user row reuse this same query.
+  const user = await getUserRow(session.user.id);
+  if (user?.target_calories == null) redirect('/register');
 
   return (
     <div className="min-h-screen bg-[#f4f4f6] dark:bg-[#0c0c0e]">
@@ -44,10 +38,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
 
       <BottomNav />
-
-      <Suspense fallback={null}>
-        <OnboardingGuard userId={session.user.id} />
-      </Suspense>
     </div>
   );
 }

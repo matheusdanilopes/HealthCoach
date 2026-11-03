@@ -4,7 +4,7 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function ProfileLoading() {
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-8">
+    <div aria-busy="true" className="flex flex-col gap-4 pt-6 pb-8">
       {/* Avatar + name */}
       <div className="flex items-center gap-4 px-1">
         <Skeleton className="h-14 w-14 rounded-2xl flex-shrink-0" />

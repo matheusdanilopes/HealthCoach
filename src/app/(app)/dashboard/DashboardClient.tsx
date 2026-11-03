@@ -176,7 +176,10 @@ export default function DashboardClient({
         onSelect={navigateTo}
       />
 
-      <div className={cn('stagger flex flex-col gap-4 transition-opacity duration-200', loadingDate && 'opacity-50')}>
+      <div
+        className={cn('stagger flex flex-col gap-4 transition-opacity duration-200', loadingDate && 'opacity-50')}
+        style={{ '--stagger-offset': '0.1s' } as React.CSSProperties}
+      >
         <DailySummaryCard
           consumed={stats.calories}
           burned={workoutBurned}
