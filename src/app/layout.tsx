@@ -19,7 +19,7 @@ const inter = Inter({
 // and captures the PWA install prompt.
 const BOOT_SCRIPT = `(function(){var d=document.documentElement;
 try{var t=localStorage.getItem('theme');var p=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';if((t||p)==='dark')d.classList.add('dark');}catch(e){}
-try{if(sessionStorage.getItem('hc-splash')||matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('no-splash');}else{sessionStorage.setItem('hc-splash','1');d.classList.add('splash');setTimeout(function(){d.classList.remove('splash');},1400);}}catch(e){d.classList.add('no-splash');}
+try{if(sessionStorage.getItem('hc-splash')||matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('no-splash');}else{sessionStorage.setItem('hc-splash','1');d.classList.add('splash');setTimeout(function(){d.classList.remove('splash');},1000);}}catch(e){d.classList.add('no-splash');}
 try{window.__pwaInstallEvent=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallEvent=e;dispatchEvent(new Event('pwa-install-ready'));});}catch(e){}
 })();`;
 
