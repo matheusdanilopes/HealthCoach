@@ -1,4 +1,4 @@
-const CACHE = 'hc-v8';
+const CACHE = 'hc-v9';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 

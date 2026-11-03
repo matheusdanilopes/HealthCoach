@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { getSession } from '@/lib/session';
 import { buildCoachSnapshot } from '@/lib/coach-data';
 import CoachClient from './CoachClient';
 
 export default async function CoachPage() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect('/login');
 
   // Only the user's own numbers are loaded here — the AI is called from the

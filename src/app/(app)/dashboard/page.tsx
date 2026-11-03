@@ -1,25 +1,25 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { getSession, getUserRow } from '@/lib/session';
 import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { getLatestWeight } from '@/lib/weight';
 import DashboardClient from './DashboardClient';
-import type { Profile, FoodLog, WaterLogEntry } from '@/types';
+import type { FoodLog, WaterLogEntry } from '@/types';
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect('/login');
 
   const today = brazilToday();
   const userId = session.user.id;
 
   const [
-    [profile],
+    profile,
     lastWeight,
     waterData,
     foodData,
   ] = await Promise.all([
-    sql`SELECT * FROM users WHERE id = ${userId}`,
+    getUserRow(userId),
     getLatestWeight(userId),
     sql`
       SELECT amount_ml, created_at FROM water_logs
@@ -35,13 +35,13 @@ export default async function DashboardPage() {
     `,
   ]);
 
-  const latestWeight = lastWeight ?? (parseFloat(String((profile as Profile | null)?.current_weight ?? 0)) || 0);
+  const latestWeight = lastWeight ?? (parseFloat(String(profile?.current_weight ?? 0)) || 0);
 
   const initialWaterLogs = waterData as WaterLogEntry[];
 
   return (
     <DashboardClient
-      profile={(profile as Profile & { id: string }) ?? null}
+      profile={profile}
       serverDate={today}
       latestWeight={latestWeight}
       userId={userId}

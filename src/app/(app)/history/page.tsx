@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { getSession } from '@/lib/session';
 import { sql } from '@/lib/db';
 import { subDays } from 'date-fns';
 import { formatDate } from '@/lib/utils';
 import HistoryClient from './HistoryClient';
 
 export default async function HistoryPage() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
