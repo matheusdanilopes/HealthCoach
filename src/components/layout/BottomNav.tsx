@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat, Brain, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,7 +33,7 @@ function SubMenu({
 }) {
   return (
     <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden min-w-[210px]">
+      <div className="submenu-stagger bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden min-w-[210px]">
         {items.map(({ href, icon: Icon, label, desc }) => {
           const active = pathname === href;
           return (
@@ -42,7 +42,7 @@ function SubMenu({
               href={href}
               onClick={onClose}
               className={cn(
-                'flex items-center gap-3 px-4 py-3 transition-colors duration-150',
+                'flex items-center gap-3 px-4 py-3 transition-[background-color,transform] duration-150 active:scale-[0.98]',
                 active
                   ? 'bg-emerald-50 dark:bg-emerald-950/20'
                   : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
@@ -79,6 +79,7 @@ function SubMenu({
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [saudeOpen, setSaudeOpen] = useState(false);
   const [bodyOpen,  setBodyOpen]  = useState(false);
   const saudeRef = useRef<HTMLDivElement>(null);
@@ -94,6 +95,20 @@ export default function BottomNav() {
     setSaudeOpen(false);
     setBodyOpen(false);
   }
+
+  // Sub-menu links only exist while a menu is open, so Next.js can't prefetch
+  // them on its own. Warm every tab once the browser is idle so switching
+  // screens shows the skeleton (or the page) instantly.
+  useEffect(() => {
+    const hrefs = [...SAUDE_SUB_ITEMS, ...BODY_SUB_ITEMS].map((i) => i.href);
+    const run = () => hrefs.forEach((href) => router.prefetch(href));
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(run, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(run, 2000);
+    return () => clearTimeout(t);
+  }, [router]);
 
   useEffect(() => {
     if (!saudeOpen && !bodyOpen) return;
@@ -116,16 +131,16 @@ export default function BottomNav() {
         <Link
           href="/dashboard"
           className={cn(
-            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5',
+            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
             pathname === '/dashboard'
               ? 'text-emerald-600 dark:text-emerald-400'
               : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
           )}
         >
           {pathname === '/dashboard' && (
-            <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
           )}
-          <LayoutDashboard size={20} strokeWidth={pathname === '/dashboard' ? 2.25 : 1.75} className="transition-all duration-200" />
+          <LayoutDashboard size={20} strokeWidth={pathname === '/dashboard' ? 2.25 : 1.75} className={cn('transition-all duration-200', (pathname === '/dashboard') && 'nav-icon-active')} />
           <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', pathname === '/dashboard' ? 'opacity-100' : 'opacity-55')}>
             Início
           </span>
@@ -139,16 +154,16 @@ export default function BottomNav() {
           <button
             onClick={() => { setSaudeOpen((v) => !v); setBodyOpen(false); }}
             className={cn(
-              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5',
+              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
               isSaudeActive || saudeOpen
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
             )}
           >
             {(isSaudeActive || saudeOpen) && (
-              <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+              <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             )}
-            <HeartPulse size={20} strokeWidth={isSaudeActive || saudeOpen ? 2.25 : 1.75} className="transition-all duration-200" />
+            <HeartPulse size={20} strokeWidth={isSaudeActive || saudeOpen ? 2.25 : 1.75} className={cn('transition-all duration-200', (isSaudeActive || saudeOpen) && 'nav-icon-active')} />
             <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', isSaudeActive || saudeOpen ? 'opacity-100' : 'opacity-55')}>
               Saúde
             </span>
@@ -163,16 +178,16 @@ export default function BottomNav() {
           <button
             onClick={() => { setBodyOpen((v) => !v); setSaudeOpen(false); }}
             className={cn(
-              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5',
+              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
               isBodyActive || bodyOpen
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
             )}
           >
             {(isBodyActive || bodyOpen) && (
-              <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+              <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             )}
-            <Scale size={20} strokeWidth={isBodyActive || bodyOpen ? 2.25 : 1.75} className="transition-all duration-200" />
+            <Scale size={20} strokeWidth={isBodyActive || bodyOpen ? 2.25 : 1.75} className={cn('transition-all duration-200', (isBodyActive || bodyOpen) && 'nav-icon-active')} />
             <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', isBodyActive || bodyOpen ? 'opacity-100' : 'opacity-55')}>
               Corpo
             </span>
@@ -183,16 +198,16 @@ export default function BottomNav() {
         <Link
           href="/profile"
           className={cn(
-            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5',
+            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
             pathname === '/profile'
               ? 'text-emerald-600 dark:text-emerald-400'
               : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
           )}
         >
           {pathname === '/profile' && (
-            <span className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
           )}
-          <User size={20} strokeWidth={pathname === '/profile' ? 2.25 : 1.75} className="transition-all duration-200" />
+          <User size={20} strokeWidth={pathname === '/profile' ? 2.25 : 1.75} className={cn('transition-all duration-200', (pathname === '/profile') && 'nav-icon-active')} />
           <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', pathname === '/profile' ? 'opacity-100' : 'opacity-55')}>
             Perfil
           </span>

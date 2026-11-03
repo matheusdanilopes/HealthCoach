@@ -22,7 +22,7 @@ html.dark {
 body {
   background: #f4f4f6;
   color: #09090b;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -279,4 +279,219 @@ html.dark .animate-shimmer {
 /* ─── Touch feedback ─── */
 .touch-highlight {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Opening (splash) animation
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Extra delay for entrance animations while the splash is on screen */
+  --enter-base: 0s;
+}
+html.splash {
+  --enter-base: 0.55s;
+}
+
+#hc-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #f4f4f6;
+  pointer-events: none;
+  animation: splash-out 0.32s ease-in 0.62s forwards;
+}
+html.dark #hc-splash {
+  background: #0c0c0e;
+}
+html.no-splash #hc-splash {
+  display: none;
+}
+
+.hc-splash-glow {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(16 185 129 / 0.22) 0%, transparent 65%);
+  animation: splash-glow 0.9s var(--ease-out-expo) both;
+}
+
+.hc-splash-mark {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  box-shadow: 0 12px 32px -8px rgb(5 150 105 / 0.55);
+  animation: splash-pop 0.5s var(--ease-spring) both;
+}
+
+.hc-splash-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  border: 2px solid rgb(16 185 129 / 0.55);
+  animation: splash-ring 0.75s ease-out 0.22s both;
+}
+
+.hc-splash-pillar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: splash-pillar 0.4s var(--ease-out-expo) 0.08s both;
+}
+
+.hc-splash-ecg {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: splash-draw 0.42s ease-out 0.2s forwards;
+}
+
+.hc-splash-name {
+  position: relative;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #18181b;
+  animation: splash-name 0.4s var(--ease-out-expo) 0.18s both;
+}
+html.dark .hc-splash-name {
+  color: #f4f4f5;
+}
+
+@keyframes splash-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes splash-glow {
+  from { transform: scale(0.4); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+@keyframes splash-pop {
+  from { transform: scale(0.6) rotate(-8deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0);       opacity: 1; }
+}
+@keyframes splash-ring {
+  from { transform: scale(1);    opacity: 0.9; }
+  to   { transform: scale(1.65); opacity: 0; }
+}
+@keyframes splash-pillar {
+  from { transform: scaleY(0.2); opacity: 0; }
+  to   { transform: scaleY(1);   opacity: 1; }
+}
+@keyframes splash-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes splash-name {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Screen transitions
+   Only `backwards` fill: once finished, no transform is left on the
+   wrapper, so position: fixed children (modals, chat button) keep
+   using the viewport as their containing block.
+   ═══════════════════════════════════════════════════════════════ */
+
+.page-transition {
+  animation-fill-mode: backwards;
+  animation-delay: var(--enter-base);
+}
+.page-enter-initial {
+  animation-name: page-rise;
+  animation-duration: 0.5s;
+  animation-timing-function: var(--ease-out-expo);
+}
+.page-enter-forward {
+  animation-name: page-in-right;
+  animation-duration: 0.38s;
+  animation-timing-function: var(--ease-out-expo);
+}
+.page-enter-back {
+  animation-name: page-in-left;
+  animation-duration: 0.38s;
+  animation-timing-function: var(--ease-out-expo);
+}
+.page-enter-fade {
+  animation-name: page-fade;
+  animation-duration: 0.3s;
+  animation-timing-function: ease-out;
+}
+
+@keyframes page-rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.99); }
+}
+@keyframes page-in-right {
+  from { opacity: 0; transform: translate3d(32px, 0, 0); }
+}
+@keyframes page-in-left {
+  from { opacity: 0; transform: translate3d(-32px, 0, 0); }
+}
+@keyframes page-fade {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+}
+
+/* Staggered entrance for a list of cards */
+.stagger > * {
+  animation: stagger-rise 0.55s var(--ease-out-expo) backwards;
+}
+.stagger > :nth-child(1) { animation-delay: calc(var(--enter-base) + 0.06s); }
+.stagger > :nth-child(2) { animation-delay: calc(var(--enter-base) + 0.12s); }
+.stagger > :nth-child(3) { animation-delay: calc(var(--enter-base) + 0.18s); }
+.stagger > :nth-child(4) { animation-delay: calc(var(--enter-base) + 0.24s); }
+.stagger > :nth-child(5) { animation-delay: calc(var(--enter-base) + 0.30s); }
+.stagger > :nth-child(n + 6) { animation-delay: calc(var(--enter-base) + 0.36s); }
+
+@keyframes stagger-rise {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+}
+
+/* Bottom navigation feedback */
+.nav-indicator {
+  animation: nav-indicator-in 0.4s var(--ease-spring) both;
+}
+.nav-icon-active {
+  animation: nav-icon-bounce 0.45s var(--ease-spring);
+}
+
+/* Tailwind v4 positions the pill with the `translate` property, so the
+   keyframes only touch `transform` and both compose. */
+@keyframes nav-indicator-in {
+  from { transform: scaleX(0); opacity: 0; }
+  to   { transform: scaleX(1); opacity: 1; }
+}
+@keyframes nav-icon-bounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18) translateY(-1px); }
+  100% { transform: scale(1); }
+}
+
+/* Submenu items cascade in */
+.submenu-stagger > * {
+  animation: stagger-rise 0.32s var(--ease-out-expo) backwards;
+}
+.submenu-stagger > :nth-child(2) { animation-delay: 0.035s; }
+.submenu-stagger > :nth-child(3) { animation-delay: 0.07s; }
+.submenu-stagger > :nth-child(4) { animation-delay: 0.105s; }
+
+/* ─── Reduced motion: keep the app, drop the movement ─── */
+@media (prefers-reduced-motion: reduce) {
+  #hc-splash { display: none; }
+  .page-transition,
+  .stagger > *,
+  .submenu-stagger > *,
+  .nav-indicator,
+  .nav-icon-active {
+    animation: none !important;
+  }
 }
