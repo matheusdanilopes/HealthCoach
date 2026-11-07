@@ -176,7 +176,7 @@ export default function NotificationsClient() {
   }
 
   const morningHour = prefs ? clamp(prefs.quiet_end, 5, 11) : 7;
-  const eveningHour = prefs ? clamp(prefs.quiet_start - 1, 18, 23) : 21;
+  const eveningHour = prefs ? clamp(prefs.quiet_start - 1, 18, 23) : 22;
 
   return (
     <div className="py-6 space-y-5">
@@ -299,7 +299,7 @@ export default function NotificationsClient() {
                       <span className="flex-1 min-w-0">
                         <span className="block text-[13px] font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
                         <span className="block text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                          {key === 'goals' ? `Bom dia às ${morningHour}h e fechamento às ${eveningHour}h` : hint}
+                          {key === 'goals' ? `Bom dia às ${morningHour}h e fechamento às ${eveningHour}h30` : hint}
                         </span>
                       </span>
                       <div className={`h-5 w-9 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
