@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { brazilToday, brazilHour, brazilNDaysAgo } from '@/lib/timezone';
+import { brazilToday, brazilHour, brazilMinute, brazilNDaysAgo } from '@/lib/timezone';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { isTelegramConfigured, openAppButton, waterButtons } from '@/lib/telegram';
 import { cleanupExpiredMessages } from '@/lib/telegram-messages';
@@ -31,14 +31,15 @@ import {
 } from '@/lib/notification-messages';
 import { generateEveningClosing } from '@/lib/evening-closing';
 
-// Hourly scheduler (Supabase pg_cron → GET /api/notifications/run).
+// Half-hourly scheduler (Supabase pg_cron at :00 and :30 → GET /api/notifications/run).
+// The :00 run handles every notification below; the :30 run only the evening wrap-up.
 //
 // Each user gets, at most:
 //   • morning brief at the end of their quiet hours (yesterday recap + today's goals)
 //   • up to 3 pace-based hydration nudges (only when behind the expected curve)
 //   • a reminder per main meal not yet logged (10h, 14h, 20h)
 //   • a workout nudge at 18h after 2+ days without training
-//   • an evening wrap-up the hour before quiet hours start (AI-written closing
+//   • an evening wrap-up 30 minutes before quiet hours start (AI-written closing
 //     when the water or calorie goal was missed)
 // and never more than MAX_PER_RUN messages in the same hour.
 
@@ -68,7 +69,8 @@ type UserCtx = {
 
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
-// Morning brief fires at the user's wake hour; the wrap-up one hour before bed.
+// Morning brief fires at the user's wake hour; the wrap-up at eveningHour:30,
+// i.e. 30 minutes before quiet hours start.
 function dayWindow(prefs: NotificationPreferences) {
   return {
     morningHour: clamp(prefs.quiet_end, 5, 11),
@@ -114,9 +116,22 @@ function hydrationNudge(ctx: UserCtx, day: DayStatus, hour: number, today: strin
   };
 }
 
-async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<OutgoingNotification[]> {
+async function planForUser(ctx: UserCtx, hour: number, halfSlot: boolean, today: string): Promise<OutgoingNotification[]> {
   const { prefs, userId, targets } = ctx;
   const { morningHour, eveningHour } = dayWindow(prefs);
+
+  // The :30 run only sends the evening wrap-up.
+  if (halfSlot) {
+    if (hour !== eveningHour || alreadySent(ctx, 'evening') || !isCategoryEnabled(prefs, 'goal')) return [];
+    const day = await getDayStatus(userId, today);
+    return [{
+      category: 'goal',
+      ref:      'evening',
+      html:     buildEveningMessage(targets, day, await generateEveningClosing(userId, targets, day)),
+      keyboard: () => [openAppButton('📊 Abrir o app', '/dashboard')],
+    }];
+  }
+
   const out: OutgoingNotification[] = [];
   const day = await getDayStatus(userId, today);
 
@@ -131,17 +146,7 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     });
   }
 
-  // 2. Evening wrap-up (AI-written closing when water or calories were missed)
-  if (hour === eveningHour && !alreadySent(ctx, 'evening') && isCategoryEnabled(prefs, 'goal')) {
-    out.push({
-      category: 'goal',
-      ref:      'evening',
-      html:     buildEveningMessage(targets, day, await generateEveningClosing(userId, targets, day)),
-      keyboard: () => [openAppButton('📊 Abrir o app', '/dashboard')],
-    });
-  }
-
-  // 3. Meal not logged (breakfast only when nothing was logged at all — some people skip it)
+  // 2. Meal not logged (breakfast only when nothing was logged at all — some people skip it)
   const mealSlot = MEAL_HOURS.find((m) => m.hour === hour && m.hour < eveningHour);
   if (mealSlot && !alreadySent(ctx, `meal:${mealSlot.meal}`)) {
     const missing = mealSlot.meal === 'breakfast' ? day.consumedKcal === 0 : !day.meals.has(mealSlot.meal);
@@ -155,7 +160,7 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     }
   }
 
-  // 4. Workout nudge
+  // 3. Workout nudge
   if (hour === WORKOUT_HOUR && !day.hasWorkout && !alreadySent(ctx, 'workout')) {
     const days = await daysSinceLastWorkout(userId, today);
     if (days >= WORKOUT_MIN_GAP_DAYS) {
@@ -168,7 +173,7 @@ async function planForUser(ctx: UserCtx, hour: number, today: string): Promise<O
     }
   }
 
-  // 5. Hydration
+  // 4. Hydration
   const hyd = hydrationNudge(ctx, day, hour, today);
   if (hyd) out.push(hyd);
 
@@ -183,13 +188,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: true, reason: 'telegram_not_configured' });
   }
 
-  const hour  = brazilHour();
-  const today = brazilToday();
+  const hour     = brazilHour();
+  const halfSlot = brazilMinute() >= 30;
+  const today    = brazilToday();
 
   const linked = (await sql`
     SELECT user_id, chat_id FROM telegram_links WHERE chat_id IS NOT NULL
   `) as Array<{ user_id: string; chat_id: number }>;
-  if (linked.length === 0) return NextResponse.json({ hour, users: 0 });
+  if (linked.length === 0) return NextResponse.json({ hour, halfSlot, users: 0 });
 
   const userIds = linked.map((l) => l.user_id);
   const [profiles, prefRows, logRows] = await Promise.all([
@@ -228,7 +234,7 @@ export async function GET(req: Request) {
         prefs,
         todayLogs: logs.filter((l) => l.user_id === userId),
       };
-      for (const notif of await planForUser(ctx, hour, today)) {
+      for (const notif of await planForUser(ctx, hour, halfSlot, today)) {
         const result = await sendTelegramNotification(userId, chatId, notif);
         counts[result]++;
         if (result === 'gone') break;
@@ -242,6 +248,6 @@ export async function GET(req: Request) {
   // Removes summaries replaced in this run and anything else past its expiry.
   const cleanup = await cleanupExpiredMessages();
 
-  console.info(`[cron-run] brazilHour=${hour}`, counts, { cleanup });
-  return NextResponse.json({ hour, ...counts, cleanup });
+  console.info(`[cron-run] brazilHour=${hour} halfSlot=${halfSlot}`, counts, { cleanup });
+  return NextResponse.json({ hour, halfSlot, ...counts, cleanup });
 }
