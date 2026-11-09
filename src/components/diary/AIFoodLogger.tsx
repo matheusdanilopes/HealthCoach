@@ -7,6 +7,17 @@ import { cn, suggestMealType } from '@/lib/utils';
 import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets, Mic, Square } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
+import { FoodSourceBadge, ReviewBadge, ValidationNotes } from '@/components/diary/FoodSourceBadge';
+import LabelForm, { type SavedCustomFood } from '@/components/diary/LabelForm';
+import { nutrientsFor, round1 } from '@/lib/nutrition/calc';
+import { gramsFromName } from '@/lib/nutrition/normalize';
+import {
+  needsReviewFor,
+  validateFoodEntry,
+  type FoodReference,
+  type FoodSource,
+  type ValidationResult,
+} from '@/lib/nutrition/validation';
 import type { FoodLog, MealType } from '@/types';
 
 interface FoodItem {
@@ -18,6 +29,44 @@ interface FoodItem {
   fat: number;
   hydration_ml?: number;        // ml that counts toward hydration (0 = not a beverage)
   hydration_confidence?: string;
+  // Origem do cálculo (ver src/lib/nutrition/foods.ts)
+  grams?: number | null;
+  source?: FoodSource;
+  taco_food_id?: number | null;
+  custom_food_id?: string | null;
+  reference?: FoodReference | null;
+  validation?: ValidationResult;
+  needs_review?: boolean;
+  ask_label?: boolean;
+}
+
+/** Revalida o item (mesma função pura do servidor). */
+function revalidate(item: FoodItem): FoodItem {
+  const validation = validateFoodEntry({
+    calories: Number(item.calories) || 0,
+    protein: item.protein, carbs: item.carbs, fat: item.fat,
+    quantity_g: item.grams ?? null,
+    reference: item.reference ?? null,
+  });
+  return { ...item, validation, needs_review: needsReviewFor(item.source, validation) };
+}
+
+/**
+ * Novas gramas: com referência (TACO/rótulo) recalcula pela tabela; sem ela,
+ * ajusta a estimativa na mesma proporção.
+ */
+function withGrams(item: FoodItem, grams: number | null): FoodItem {
+  if (!grams || grams <= 0) return { ...item, grams: null };
+  if (item.reference) {
+    const v = nutrientsFor(grams, item.reference);
+    return { ...item, grams, source: item.reference.source, calories: v.calories, protein: v.protein ?? 0, carbs: v.carbs ?? 0, fat: v.fat ?? 0 };
+  }
+  const old = item.grams ?? 0;
+  if (old > 0) {
+    const k = grams / old;
+    return { ...item, grams, calories: Math.round(item.calories * k), protein: round1(item.protein * k), carbs: round1(item.carbs * k), fat: round1(item.fat * k) };
+  }
+  return { ...item, grams };
 }
 
 interface AnalysisResult {
@@ -135,6 +184,7 @@ function AIFoodLoggerModal({
   const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedIndices, setSavedIndices] = useState<Set<number>>(new Set());
+  const [labelIndex, setLabelIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -146,7 +196,7 @@ function AIFoodLoggerModal({
   if (result !== prevResult) {
     setPrevResult(result);
     if (result) {
-      setEditedFoods(result.foods.map((f) => ({
+      setEditedFoods(result.foods.map((f) => revalidate({
         ...f,
         hydration_ml: resolveItemHydration(f),
       })));
@@ -197,7 +247,7 @@ function AIFoodLoggerModal({
   function commitEdit() {
     if (editingIndex !== null && editBuffer !== null) {
       setEditedFoods((prev) =>
-        prev.map((f, i) => (i === editingIndex ? { ...editBuffer } : f))
+        prev.map((f, i) => (i === editingIndex ? revalidate({ ...editBuffer }) : f))
       );
       // Values changed since the last save — this item needs to be re-submitted.
       setSavedIndices((prev) => {
@@ -219,6 +269,20 @@ function AIFoodLoggerModal({
     setBufferError(null);
   }
 
+  // Rótulo salvo: o item passa a ser calculado por ele (e os próximos lançamentos também).
+  function applyLabel(i: number, food: SavedCustomFood) {
+    setEditedFoods((prev) => prev.map((f, k) => {
+      if (k !== i) return f;
+      const grams = f.grams && f.grams > 0 ? f.grams : food.porcao_g;
+      const v = nutrientsFor(grams, food.reference);
+      return revalidate({
+        ...f, grams, source: 'rotulo', custom_food_id: food.id, taco_food_id: null, reference: food.reference,
+        calories: v.calories, protein: v.protein ?? 0, carbs: v.carbs ?? 0, fat: v.fat ?? 0, ask_label: false,
+      });
+    }));
+    setLabelIndex(null);
+  }
+
   async function reanalyzeBuffer() {
     if (!editBuffer) return;
     setBufferAnalyzing(true);
@@ -236,6 +300,9 @@ function AIFoodLoggerModal({
       if (!res.ok) throw new Error(data?.error ?? 'Erro');
       const aiHydration = data.foods?.[0]?.hydration_ml;
       const localHydration = detectBeverage(description).estimatedMl;
+      const foods = (data.foods ?? []) as FoodItem[];
+      const single = foods.length === 1 ? foods[0] : null;
+      const totalGrams = foods.reduce((s, f) => s + (Number(f.grams) || 0), 0);
       setEditBuffer((prev) =>
         prev
           ? {
@@ -245,6 +312,13 @@ function AIFoodLoggerModal({
               carbs: +(data.totalCarbs ?? prev.carbs).toFixed(1),
               fat: +(data.totalFat ?? prev.fat).toFixed(1),
               hydration_ml: typeof aiHydration === 'number' ? aiHydration : localHydration,
+              // Um alimento só: herda a origem; vários somados viram estimativa.
+              grams: single ? single.grams ?? null : totalGrams || null,
+              source: single?.source ?? 'estimado',
+              taco_food_id: single?.taco_food_id ?? null,
+              custom_food_id: single?.custom_food_id ?? null,
+              reference: single?.reference ?? null,
+              ask_label: single ? single.ask_label : false,
             }
           : null
       );
@@ -346,6 +420,8 @@ function AIFoodLoggerModal({
       carbs: Number(manualCarbs) || 0,
       fat: Number(manualFat) || 0,
       hydration_ml: 0,
+      grams: gramsFromName(manualQuantity)?.grams ?? null,
+      source: 'manual',
     };
     setError(null);
     setResult({
@@ -447,6 +523,10 @@ function AIFoodLoggerModal({
         hydration_ml: food.hydration_ml ?? 0,
         hydration_source: (food.hydration_ml ?? 0) > 0 ? 'meal' : null,
         hydration_confidence: food.hydration_confidence ?? null,
+        quantity_g: food.grams ?? null,
+        source: food.source ?? null,
+        taco_food_id: food.taco_food_id ?? null,
+        custom_food_id: food.custom_food_id ?? null,
       }),
     });
     const data = await res.json().catch(() => null);
@@ -459,6 +539,11 @@ function AIFoodLoggerModal({
     if (!result || editedFoods.length === 0) return;
     if (!mealType) {
       setMealError(true);
+      return;
+    }
+    // ERRO de validação (ex.: kcal/g > 9) bloqueia: corrigir antes de salvar.
+    if (editedFoods.some((f, i) => !savedIndices.has(i) && f.validation?.blocked)) {
+      setError('Há item com valores impossíveis (em vermelho). Corrija as gramas ou as kcal antes de salvar.');
       return;
     }
     setSaving(true);
@@ -477,12 +562,14 @@ function AIFoodLoggerModal({
 
     const newSaved = new Set(savedIndices);
     let failCount = 0;
+    let firstFailure: string | null = null;
     for (const outcome of outcomes) {
       if (outcome.status === 'fulfilled') {
         newSaved.add(outcome.value.index);
         onAdded(outcome.value.log);
       } else {
         failCount++;
+        firstFailure ??= outcome.reason instanceof Error ? outcome.reason.message : null;
       }
     }
     setSavedIndices(newSaved);
@@ -494,7 +581,7 @@ function AIFoodLoggerModal({
       setError(
         savedNow > 0
           ? `${savedNow} de ${outcomes.length} alimentos salvos. ${failCount} ${failCount === 1 ? 'falhou' : 'falharam'} — tente novamente.`
-          : 'Não foi possível salvar. Verifique sua conexão e tente novamente.'
+          : firstFailure ?? 'Não foi possível salvar. Verifique sua conexão e tente novamente.'
       );
     }
     setSaving(false);
@@ -829,6 +916,8 @@ function AIFoodLoggerModal({
                     key={i}
                     className={cn(
                       'bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-4 py-3 border border-zinc-100 dark:border-zinc-700/40',
+                      food.needs_review && 'border-amber-200 dark:border-amber-800/60',
+                      food.validation?.blocked && 'border-red-300 dark:border-red-800/70 bg-red-50/60 dark:bg-red-950/20',
                       savedIndices.has(i) && 'opacity-60'
                     )}
                   >
@@ -874,6 +963,19 @@ function AIFoodLoggerModal({
                           </button>
                         </div>
 
+                        {/* Gramas: recalcula pela TACO/rótulo */}
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
+                            Gramas{editBuffer.reference ? ` · recalcula ${editBuffer.reference.source === 'taco' ? 'pela TACO' : 'pelo rótulo'}` : ''}
+                          </span>
+                          <input
+                            type="number" min={0} step={1}
+                            value={editBuffer.grams ?? ''}
+                            onChange={(e) => setEditBuffer((p) => p ? withGrams(p, e.target.value === '' ? null : Number(e.target.value)) : null)}
+                            className={inputCls}
+                          />
+                        </label>
+
                         {/* Kcal + macros */}
                         <div className="grid grid-cols-2 gap-2">
                           <label className="flex flex-col gap-0.5">
@@ -881,7 +983,7 @@ function AIFoodLoggerModal({
                             <input
                               type="number" min={0}
                               value={editBuffer.calories}
-                              onChange={(e) => setEditBuffer((p) => p ? { ...p, calories: Number(e.target.value) || 0 } : null)}
+                              onChange={(e) => setEditBuffer((p) => p ? { ...p, calories: Number(e.target.value) || 0, source: 'manual' } : null)}
                               className={inputCls}
                             />
                           </label>
@@ -890,7 +992,7 @@ function AIFoodLoggerModal({
                             <input
                               type="number" min={0} step={0.1}
                               value={editBuffer.protein}
-                              onChange={(e) => setEditBuffer((p) => p ? { ...p, protein: Number(e.target.value) || 0 } : null)}
+                              onChange={(e) => setEditBuffer((p) => p ? { ...p, protein: Number(e.target.value) || 0, source: 'manual' } : null)}
                               className={inputCls}
                             />
                           </label>
@@ -899,7 +1001,7 @@ function AIFoodLoggerModal({
                             <input
                               type="number" min={0} step={0.1}
                               value={editBuffer.carbs}
-                              onChange={(e) => setEditBuffer((p) => p ? { ...p, carbs: Number(e.target.value) || 0 } : null)}
+                              onChange={(e) => setEditBuffer((p) => p ? { ...p, carbs: Number(e.target.value) || 0, source: 'manual' } : null)}
                               className={inputCls}
                             />
                           </label>
@@ -908,7 +1010,7 @@ function AIFoodLoggerModal({
                             <input
                               type="number" min={0} step={0.1}
                               value={editBuffer.fat}
-                              onChange={(e) => setEditBuffer((p) => p ? { ...p, fat: Number(e.target.value) || 0 } : null)}
+                              onChange={(e) => setEditBuffer((p) => p ? { ...p, fat: Number(e.target.value) || 0, source: 'manual' } : null)}
                               className={inputCls}
                             />
                           </label>
@@ -969,7 +1071,21 @@ function AIFoodLoggerModal({
                                   · {food.quantity}
                                 </span>
                               )}
+                              {food.grams ? (
+                                <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
+                                  · {food.grams} g
+                                </span>
+                              ) : null}
                             </p>
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {food.calories > 0 && <FoodSourceBadge source={food.source} />}
+                              {food.needs_review && !food.validation?.blocked && <ReviewBadge />}
+                              {food.reference && (
+                                <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+                                  {food.reference.nome}
+                                </span>
+                              )}
+                            </div>
                             {(food.hydration_ml ?? 0) > 0 && (
                               <span className="inline-flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 border border-teal-100 dark:border-teal-900/40">
                                 <Droplets size={8} className="text-teal-500" />
@@ -1010,6 +1126,26 @@ function AIFoodLoggerModal({
                             G <span className="font-medium text-zinc-700 dark:text-zinc-300">{food.fat}g</span>
                           </span>
                         </div>
+                        <ValidationNotes issues={food.validation?.issues} />
+                        {!savedIndices.has(i) && food.source === 'estimado' && labelIndex !== i && (
+                          <button
+                            type="button"
+                            onClick={() => setLabelIndex(i)}
+                            className="mt-2 text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:underline"
+                          >
+                            Não achei na TACO — informar o rótulo?
+                          </button>
+                        )}
+                        {labelIndex === i && (
+                          <div className="mt-2">
+                            <LabelForm
+                              initialName={food.name}
+                              initialPortion={food.grams}
+                              onSaved={(f) => applyLabel(i, f)}
+                              onCancel={() => setLabelIndex(null)}
+                            />
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -1053,7 +1189,7 @@ function AIFoodLoggerModal({
               </div>
 
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center -mt-1">
-                Estimativa aproximada baseada na descrição enviada
+                A IA identifica os alimentos e as gramas; as kcal vêm da TACO ou do seu rótulo quando há correspondência
               </p>
 
               {mealError && (

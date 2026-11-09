@@ -28,22 +28,27 @@ export const EMPTY_REPLY = 'Desculpe, não consegui formular uma resposta agora.
 
 export const LOG_FOOD_DECLARATION = {
   name: 'log_food',
-  description: 'Registra um alimento no diário do usuário',
+  description: 'Registra um alimento no diário do usuário. O app calcula kcal e macros pela TACO (ou pelo rótulo salvo pelo usuário) a partir do peso em gramas.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      food_name: { type: Type.STRING, description: 'Nome do alimento ou refeição' },
-      calories: { type: Type.INTEGER, description: 'Calorias estimadas em kcal' },
-      protein: { type: Type.NUMBER, description: 'Proteína em gramas' },
-      carbs: { type: Type.NUMBER, description: 'Carboidratos em gramas' },
-      fat: { type: Type.NUMBER, description: 'Gordura em gramas' },
+      food_name: { type: Type.STRING, description: 'Nome do alimento' },
+      quantity_g: { type: Type.NUMBER, description: 'Peso comestível em gramas (líquidos: ml ≈ g)' },
+      taco_name: {
+        type: Type.STRING,
+        description: 'Descrição exata do alimento na TACO 4ª edição, com o mesmo preparo (ex.: "Arroz, tipo 1, cozido", "Frango, peito, sem pele, grelhado"). Omita se não souber ou se não existir.',
+      },
+      calories: { type: Type.INTEGER, description: 'Estimativa de kcal para esse peso — usada só se o alimento não estiver na TACO' },
+      protein: { type: Type.NUMBER, description: 'Estimativa de proteína em gramas' },
+      carbs: { type: Type.NUMBER, description: 'Estimativa de carboidratos em gramas' },
+      fat: { type: Type.NUMBER, description: 'Estimativa de gordura em gramas' },
       meal_type: {
         type: Type.STRING,
         enum: MEAL_TYPES,
         description: 'Tipo de refeição',
       },
     },
-    required: ['food_name', 'calories', 'meal_type'],
+    required: ['food_name', 'quantity_g', 'calories', 'meal_type'],
   },
 };
 
@@ -58,11 +63,13 @@ const LOG_FOOD_ALIASES: Record<string, string> = {
   carboidratos: 'carbs', carbohydrates: 'carbs', carb: 'carbs',
   gordura: 'fat', fats: 'fat', gorduras: 'fat',
   meal: 'meal_type', mealType: 'meal_type', refeicao: 'meal_type', 'refeição': 'meal_type',
+  grams: 'quantity_g', gramas: 'quantity_g', quantity: 'quantity_g', quantidade: 'quantity_g', peso: 'quantity_g', weight: 'quantity_g',
+  taco: 'taco_name', tacoName: 'taco_name', nome_taco: 'taco_name',
 };
 
 export const FOOD_COACHING_RULES = `INSTRUÇÕES:
-1. Quando o usuário mencionar que comeu algo, use a função log_food para registrar.
-2. Estime calorias e macros com MÁXIMO CONSERVADORISMO (referências TACO):
+1. Quando o usuário mencionar que comeu algo, use a função log_food para registrar — um alimento por chamada, com o peso em gramas (quantity_g) e, se souber, a descrição exata da TACO 4ª ed. (taco_name). O app calcula kcal e macros pela TACO; calories é só a sua estimativa de reserva.
+2. Estime pesos (e a estimativa de calorias) com MÁXIMO CONSERVADORISMO (referências TACO):
    - NUNCA assuma 100g para porções vagas — prefira sempre subestimar
    - "um pedaço" = 20-35g | "um pouco" = 5-15g | "uma colher" = 10-15g (sopa) ou 5g (chá)
    - Proteína PRATO PRINCIPAL: 80-120g | RECHEIO (tapioca, crepioca, wrap): 40-60g
@@ -131,16 +138,43 @@ export interface FoodLogRow {
   user_id: string;
   food_name: string;
   meal_type: string;
-  calories: number;
+  /** Estimativa do modelo — o app recalcula pela TACO/rótulo quando acha o alimento. */
+  calories: number | null;
   protein: number | null;
   carbs: number | null;
   fat: number | null;
+  quantity_g: number | null;
+  taco_name: string | null;
   log_date: string;
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  taco: 'calculado pela TACO',
+  rotulo: 'calculado pelo rótulo salvo',
+  estimado: 'estimado (alimento não encontrado na TACO nem nos rótulos)',
+  manual: 'informado',
+};
+
+/** Texto devolvido ao modelo depois de gravar: valores finais e o que fazer. */
+export function describeLoggedFood(foodName: string, row: Record<string, unknown>): string {
+  const grams = Number(row.quantity_g) > 0 ? ` (${Number(row.quantity_g)} g)` : '';
+  const ref = typeof row.ref_nome === 'string' ? ` — "${row.ref_nome}"` : '';
+  let text = `Registrado: ${foodName}${grams}, ${row.calories} kcal, ${SOURCE_LABEL[String(row.source)] ?? 'informado'}${ref}. Use esses valores na resposta.`;
+  const warnings = (row.warnings as string[] | undefined) ?? [];
+  if (warnings.length) text += ` Ficou marcado para revisão: ${warnings.join(' ')}`;
+  if (row.source === 'estimado') {
+    text += ' Pergunte se o usuário quer informar os dados do rótulo (porção, kcal e macros) pelo diário, para salvar o alimento e usar valores exatos nas próximas vezes.';
+  }
+  return text;
 }
 
 export interface TurnDeps {
   generate: (req: { model: string; contents: Content[]; config: GenerateContentConfig }) => Promise<GenerateContentResponse>;
-  /** Grava o alimento; devolve a linha inserida ou null se falhar. */
+  /**
+   * Calcula (TACO/rótulo), valida e grava o alimento; devolve a linha inserida
+   * ou null se falhar. Lança um erro com name 'FoodValidationError' quando a
+   * validação bloqueia (ex.: kcal/g > 9) — a mensagem volta para o modelo.
+   */
   insertFoodLog: (row: FoodLogRow) => Promise<Record<string, unknown> | null>;
   /** Resposta só em texto quando o Gemini falha. */
   groqReply: (systemInstruction: string, messages: IncomingMessage[]) => Promise<string>;
@@ -263,31 +297,40 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
   const { args, unknown } = normalizeLogFoodArgs((call.args ?? {}) as Record<string, unknown>);
   const foodName = typeof args.food_name === 'string' ? args.food_name.trim().slice(0, 200) : '';
   const calories = optionalNumber(args.calories);
+  const grams = optionalNumber(args.quantity_g);
+  const quantityG = grams !== null && grams > 0 ? grams : null;
+  const tacoName = typeof args.taco_name === 'string' && args.taco_name.trim() ? args.taco_name.trim().slice(0, 200) : null;
   const mealType = MEAL_TYPES.includes(args.meal_type as string) ? (args.meal_type as string) : 'other';
 
   let foodLog: Record<string, unknown> | null = null;
   let functionResult: string;
-  if (!foodName || calories === null) {
-    // Don't insert a row with a blank name or missing calories.
-    functionResult = 'Erro: nome do alimento ou calorias ausentes. Peça mais detalhes ao usuário.';
+  if (!foodName || (calories === null && quantityG === null)) {
+    // Sem nome, ou sem peso e sem estimativa, não há o que gravar.
+    functionResult = 'Erro: nome do alimento ou quantidade em gramas ausentes. Peça mais detalhes ao usuário.';
   } else {
+    let validationError: string | null = null;
     try {
       foodLog = await deps.insertFoodLog({
         user_id: input.userId,
         food_name: foodName,
         meal_type: mealType,
-        calories: Math.round(calories),
+        calories: calories === null ? null : Math.round(calories),
         protein: optionalNumber(args.protein),
         carbs: optionalNumber(args.carbs),
         fat: optionalNumber(args.fat),
+        quantity_g: quantityG,
+        taco_name: tacoName,
         log_date: input.logDate,
       });
     } catch (e) {
-      console.error('[chat] food_logs insert failed:', errorMessage(e));
+      if (e instanceof Error && e.name === 'FoodValidationError') validationError = e.message;
+      else console.error('[chat] food_logs insert failed:', errorMessage(e));
     }
     functionResult = foodLog
-      ? `Registrado: ${foodName}, ${Math.round(calories)} kcal`
-      : 'Erro ao registrar';
+      ? describeLoggedFood(foodName, foodLog)
+      : validationError
+        ? `Erro: não registrado — ${validationError} Peça ao usuário para confirmar o peso e a quantidade.`
+        : 'Erro ao registrar';
   }
   if (unknown.length) functionResult += ` (parâmetros desconhecidos ignorados: ${unknown.join(', ')})`;
   const foodLogged = foodLog !== null;
@@ -334,7 +377,7 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
   if (!assistantMessage.trim()) {
     meta.fallback = 'follow_up';
     assistantMessage = foodLogged
-      ? `✅ Registrei ${foodName} (${Math.round(calories ?? 0)} kcal) no seu diário.`
+      ? `✅ Registrei ${foodName} (${Math.round(Number(foodLog?.calories ?? calories ?? 0))} kcal) no seu diário.`
       : 'Não consegui registrar esse alimento. Pode me dizer o nome e a quantidade?';
   }
 

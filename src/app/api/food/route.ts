@@ -3,8 +3,21 @@ import { auth } from '@/auth';
 import { insertInto, sql, updateWhere } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { detectBeverage } from '@/lib/beverages';
+import { FoodValidationError, checkFoodLog, referenceColumns, type CheckedFoodLog } from '@/lib/nutrition/foods';
 
-const FOOD_FIELDS = 'id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at';
+const FOOD_FIELDS = 'id, food_name, meal_type, calories, protein, carbs, fat, hydration_ml, hydration_source, hydration_confidence, created_at, quantity_g, taco_food_id, custom_food_id, source, needs_review';
+
+// ERRO de validação (ex.: kcal/g > 9): não grava e devolve o motivo para o app pedir correção.
+function validationErrorResponse(err: FoodValidationError) {
+  return NextResponse.json(
+    { error: err.message, validation: err.validation },
+    { status: 422 },
+  );
+}
+
+function withReference(row: Record<string, unknown>, checked: CheckedFoodLog, userId: string) {
+  return { ...row, user_id: userId, ...referenceColumns(checked.reference), validation: checked.validation };
+}
 
 function resolveHydration(
   foodName: string,
@@ -39,6 +52,7 @@ export async function POST(req: Request) {
   const {
     food_name, meal_type, calories, protein, carbs, fat, log_date,
     hydration_ml, hydration_source, hydration_confidence,
+    quantity_g, source, taco_food_id, custom_food_id,
   } = await req.json();
   const date = log_date ?? brazilToday();
 
@@ -56,9 +70,17 @@ export async function POST(req: Request) {
   };
 
   try {
-    const [row] = await insertInto('food_logs', { ...baseInsert, ...hydration }, { returning: FOOD_FIELDS });
-    return NextResponse.json({ ...row, user_id: session.user.id });
+    const checked = await checkFoodLog(session.user.id, {
+      calories: Number(calories), protein, carbs, fat, quantity_g, source, taco_food_id, custom_food_id,
+    });
+    const [row] = await insertInto(
+      'food_logs',
+      { ...baseInsert, ...hydration, ...checked.fields },
+      { returning: FOOD_FIELDS },
+    );
+    return NextResponse.json(withReference(row, checked, session.user.id));
   } catch (err) {
+    if (err instanceof FoodValidationError) return validationErrorResponse(err);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }
@@ -70,6 +92,7 @@ export async function PATCH(req: Request) {
   const {
     id, meal_type, food_name, calories, protein, carbs, fat,
     hydration_ml, hydration_source, hydration_confidence,
+    quantity_g, source, taco_food_id, custom_food_id,
   } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
@@ -85,15 +108,19 @@ export async function PATCH(req: Request) {
   if (meal_type) baseUpdate.meal_type = meal_type;
 
   try {
+    const checked = await checkFoodLog(session.user.id, {
+      calories: Number(calories), protein, carbs, fat, quantity_g, source, taco_food_id, custom_food_id,
+    });
     const [row] = await updateWhere(
       'food_logs',
-      { ...baseUpdate, ...hydration },
+      { ...baseUpdate, ...hydration, ...checked.fields },
       { id, user_id: session.user.id },
       { returning: FOOD_FIELDS },
     );
     if (!row) return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
-    return NextResponse.json({ ...row, user_id: session.user.id });
+    return NextResponse.json(withReference(row, checked, session.user.id));
   } catch (err) {
+    if (err instanceof FoodValidationError) return validationErrorResponse(err);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

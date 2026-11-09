@@ -28,6 +28,7 @@ import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
 import { formatSSE } from '@/lib/chat/sse';
 import { isUuid, newId } from '@/lib/chat/recovery';
 import { saveAssistantMessage, saveUserMessage } from '@/lib/chat/store';
+import { FoodValidationError, referenceColumns, resolveFood } from '@/lib/nutrition/foods';
 import {
   MAX_REPLY_TOKENS,
   buildSystemInstruction,
@@ -68,9 +69,33 @@ const deps: TurnDeps = {
         config: { ...config, httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS } },
       })
     ),
-  insertFoodLog: async (row) => {
-    const [data] = await insertInto('food_logs', { ...row }, { returning: '*' });
-    return data ?? null;
+  // Rótulo do usuário → TACO → estimativa do modelo; ERRO de validação não grava.
+  insertFoodLog: async ({ quantity_g, taco_name, calories, protein, carbs, fat, ...row }) => {
+    const resolved = await resolveFood(row.user_id, {
+      name: row.food_name,
+      taco_name,
+      grams: quantity_g,
+      estimate: { calories: calories ?? 0, protein, carbs, fat },
+    });
+    if (resolved.validation.blocked) throw new FoodValidationError(resolved.validation);
+    const [data] = await insertInto('food_logs', {
+      ...row,
+      calories: resolved.calories,
+      protein: resolved.protein,
+      carbs: resolved.carbs,
+      fat: resolved.fat,
+      quantity_g: resolved.quantity_g,
+      source: resolved.source,
+      taco_food_id: resolved.taco_food_id,
+      custom_food_id: resolved.custom_food_id,
+      needs_review: resolved.needs_review,
+    }, { returning: '*' });
+    if (!data) return null;
+    return {
+      ...data,
+      ...referenceColumns(resolved.reference),
+      warnings: resolved.validation.issues.map((i) => i.message),
+    };
   },
   groqReply,
 };
