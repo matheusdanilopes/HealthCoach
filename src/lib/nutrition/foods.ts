@@ -130,7 +130,7 @@ export async function resolveFood(userId: string, query: FoodQuery): Promise<Res
 
   let taco: TacoFoodRow | null = null;
   if (!custom) {
-    // O nome no padrão TACO (escolhido pela IA da lista oficial) vem primeiro.
+    // O nome no padrão TACO (escrito pela IA) vem primeiro.
     for (const n of [query.taco_name, query.name]) if (!taco && n?.trim()) taco = await findTacoMatch(n);
   }
 
