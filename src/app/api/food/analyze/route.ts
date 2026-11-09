@@ -22,7 +22,7 @@ CAMPOS DE CADA ITEM:
 • quantity: medida caseira legível ("1 concha", "2 fatias", "200 ml")
 • grams: peso comestível em gramas (número). Líquidos: ml ≈ g
 • calories, protein, carbs, fat: sua estimativa para esse peso — usada SÓ se o alimento não estiver na TACO
-• Produto industrializado de marca (biscoito, barra, iogurte, whey...): name com a marca; taco_name só se houver o genérico equivalente na lista
+• Produto industrializado de marca (biscoito, barra, iogurte, whey...): name com a marca; taco_name com o genérico equivalente da TACO, se houver. Exemplos: Yakult → "Leite, fermentado"; Coca-Cola → "Refrigerante, tipo cola"; Oreo → "Biscoito, doce, recheado com chocolate"; Danone de morango → "Iogurte, sabor morango". Versões zero, diet ou light NÃO equivalem ao genérico comum: use null
 
 HIDRATAÇÃO — campo opcional "hydration_ml" (inteiro) por item:
 • Adicione "hydration_ml" APENAS para bebidas/líquidos hidratantes
