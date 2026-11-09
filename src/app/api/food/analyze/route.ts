@@ -3,7 +3,7 @@ import { auth } from '@/auth';
 import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 import type { GroqPart } from '@/lib/groq';
 import { isNonBeverageFood } from '@/lib/beverages';
-import { resolveFood, tacoNames } from '@/lib/nutrition/foods';
+import { resolveFoodSafe, tacoNames } from '@/lib/nutrition/foods';
 
 // A IA só identifica cada alimento e estima as gramas. kcal e macros são
 // calculados pelo app (rótulo salvo pelo usuário → TACO → estimativa da IA,
@@ -204,7 +204,7 @@ type AnalyzedItem = Record<string, unknown> & { name: string };
 async function resolveItems(userId: string, data: Record<string, unknown>) {
   const foods = await Promise.all(
     (data.foods as AnalyzedItem[]).map(async (f) => {
-      const r = await resolveFood(userId, {
+      const r = await resolveFoodSafe(userId, {
         name: f.name,
         taco_name: f.taco_name as string | null,
         grams: f.grams as number | null,

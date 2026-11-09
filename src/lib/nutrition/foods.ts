@@ -158,21 +158,43 @@ export async function resolveFood(userId: string, query: FoodQuery): Promise<Res
     };
   }
 
-  const estimate = {
+  const reference = match ? referenceOf(match) : null;
+  return {
+    ...estimated(query, grams, reference),
+    // Sem gramas não dá para calcular, mas a correspondência fica guardada.
+    taco_food_id: taco && !custom ? taco.id : null,
+    custom_food_id: custom ? custom.id : null,
+    ask_label: !match,
+  };
+}
+
+/** Item como estimativa da IA (sem cálculo pela TACO/rótulo). */
+function estimated(query: FoodQuery, grams: number | null, reference: FoodReference | null): ResolvedFood {
+  const values = {
     calories: Math.round(Number(query.estimate.calories) || 0),
     protein: optional(query.estimate.protein),
     carbs: optional(query.estimate.carbs),
     fat: optional(query.estimate.fat),
   };
-  const reference = match ? referenceOf(match) : null;
-  const validation = validateFoodEntry({ ...estimate, quantity_g: grams, reference });
+  const validation = validateFoodEntry({ ...values, quantity_g: grams, reference });
   return {
-    ...estimate, quantity_g: grams, source: 'estimado',
-    // Sem gramas não dá para calcular, mas a correspondência fica guardada.
-    taco_food_id: taco && !custom ? taco.id : null,
-    custom_food_id: custom ? custom.id : null,
-    reference, validation, needs_review: true, ask_label: !match,
+    ...values, quantity_g: grams, source: 'estimado',
+    taco_food_id: null, custom_food_id: null,
+    reference, validation, needs_review: true, ask_label: true,
   };
+}
+
+/**
+ * Como resolveFood, mas uma falha na busca (banco fora do ar, tabela ausente)
+ * não derruba a análise: o item sai como estimativa da IA e o erro vai para o log.
+ */
+export async function resolveFoodSafe(userId: string, query: FoodQuery): Promise<ResolvedFood> {
+  try {
+    return await resolveFood(userId, query);
+  } catch (err) {
+    console.error('[nutrition] busca TACO/rótulo falhou, usando estimativa:', err instanceof Error ? err.message : err);
+    return estimated(query, cleanGrams(query.grams), null);
+  }
 }
 
 // ── Validação ao salvar ──────────────────────────────────────────────────────
