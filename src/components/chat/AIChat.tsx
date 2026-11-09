@@ -1,15 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react';
-import { X, Send, Loader2, Bot, User, Sparkles, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { X, Send, Loader2, User, ThumbsUp, ThumbsDown, Info, Flame, Beef, Droplets, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { readSSE } from '@/lib/chat/sse';
 import { HistoryUnavailableError, NO_SIGNAL_MS, newId, waitForReply } from '@/lib/chat/recovery';
+import { COACH_CAPABILITIES, COACH_NAME, COACH_ROLE, coachSuggestions } from '@/lib/coach-persona';
 import type { ChatMessage, FoodLog, Profile } from '@/types';
+import CoachAvatar from './CoachAvatar';
+import CoachAboutModal, { CAPABILITY_ICON } from './CoachAboutModal';
 
 interface AIChatProps {
   profile: Profile;
   dailyCalories: number;
+  dailyProtein: number;
   dailyWater: number;
   userId: string;
   onFoodLogged?: (log: FoodLog) => void;
@@ -76,7 +80,7 @@ function Rating({ messageId, value, onRate }: { messageId: string; value: 1 | -1
         </form>
       )}
       {sent && value === -1 && (
-        <span className="basis-full text-[10px] text-zinc-400 dark:text-zinc-500">Obrigado — isso ajuda o Coach a melhorar.</span>
+        <span className="basis-full text-[10px] text-zinc-400 dark:text-zinc-500">Obrigada — isso me ajuda a melhorar.</span>
       )}
     </div>
   );
@@ -86,17 +90,13 @@ const MessageBubble = memo(function MessageBubble({ msg, onRate }: { msg: ChatMe
   const isUser = msg.role === 'user';
   return (
     <div className={cn('flex gap-2 items-end', isUser ? 'flex-row-reverse' : 'flex-row')}>
-      <div className={cn(
-        'h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0',
-        isUser
-          ? 'bg-emerald-100 dark:bg-emerald-900/40'
-          : 'bg-zinc-100 dark:bg-zinc-800'
-      )}>
-        {isUser
-          ? <User size={10} className="text-emerald-600 dark:text-emerald-400" />
-          : <Bot size={10} className="text-zinc-500 dark:text-zinc-400" />
-        }
-      </div>
+      {isUser ? (
+        <div className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-100 dark:bg-emerald-900/40">
+          <User size={10} className="text-emerald-600 dark:text-emerald-400" />
+        </div>
+      ) : (
+        <CoachAvatar size={24} />
+      )}
       <div className={cn(
         'max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed',
         isUser
@@ -112,6 +112,88 @@ const MessageBubble = memo(function MessageBubble({ msg, onRate }: { msg: ChatMe
   );
 });
 
+const fmt = (n: number) => Math.round(n).toLocaleString('pt-BR');
+
+function DayStat({ icon: Icon, tone, value, target, unit, label }: {
+  icon: typeof Flame; tone: string; value: string; target: string | null; unit: string; label: string;
+}) {
+  return (
+    <div className="flex-auto min-w-0 flex items-center gap-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-2 py-1.5" title={label}>
+      <Icon size={12} className={cn('flex-shrink-0', tone)} aria-hidden />
+      <p className="text-[11px] leading-tight text-zinc-500 dark:text-zinc-400 truncate">
+        <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{value}</span>
+        {target && <span className="tabular-nums">/{target}</span>}
+        <span className="sr-only"> {label}</span> {unit}
+      </p>
+    </div>
+  );
+}
+
+/** Resumo do dia no topo do chat: o que a Nina está vendo agora. */
+function DaySummary({ calories, caloriesTarget, protein, proteinTarget, waterMl, waterTargetMl }: {
+  calories: number; caloriesTarget: number | null;
+  protein: number; proteinTarget: number | null;
+  waterMl: number; waterTargetMl: number;
+}) {
+  const liters = (ml: number) => (ml / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  return (
+    <div className="flex gap-1.5 px-3 py-2 border-b border-zinc-100 dark:border-zinc-800/60 flex-shrink-0" aria-label="Resumo de hoje">
+      <DayStat icon={Flame} tone="text-orange-500" label="calorias consumidas"
+        value={fmt(calories)} target={caloriesTarget ? fmt(caloriesTarget) : null} unit="kcal" />
+      <DayStat icon={Beef} tone="text-rose-500" label="proteína"
+        value={fmt(protein)} target={proteinTarget ? fmt(proteinTarget) : null} unit="g" />
+      <DayStat icon={Droplets} tone="text-sky-500" label="água"
+        value={liters(waterMl)} target={liters(waterTargetMl)} unit="L" />
+    </div>
+  );
+}
+
+/** Apresentação da Nina e perguntas prontas, enquanto a conversa não começou. */
+function Intro({ suggestions, onPick, onAbout, disabled }: {
+  suggestions: string[]; onPick: (text: string) => void; onAbout: () => void; disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3 pl-8">
+      <div className="flex flex-wrap gap-1.5">
+        {suggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick(s)}
+            className="text-[12px] rounded-full border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50 transition-colors"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-zinc-100 dark:border-zinc-700/60 bg-white dark:bg-zinc-800 p-3">
+        <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">O que eu faço</p>
+        <ul className="grid grid-cols-2 gap-x-2 gap-y-2">
+          {COACH_CAPABILITIES.map((c) => {
+            const Icon = CAPABILITY_ICON[c.icon];
+            return (
+              <li key={c.title} className="flex items-center gap-2">
+                <span className="h-6 w-6 flex-shrink-0 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
+                  <Icon size={11} className="text-emerald-600 dark:text-emerald-400" />
+                </span>
+                <span className="text-[11px] text-zinc-700 dark:text-zinc-200 leading-tight">{c.title}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          onClick={onAbout}
+          className="mt-2.5 inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+        >
+          Conheça a {COACH_NAME} e dicas de uso <ChevronRight size={11} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const MAX_HISTORY = 10;
 
 /** Mensagem como vem de /api/chat/history. */
@@ -123,11 +205,14 @@ interface HistoryRow {
   food_log?: unknown;
 }
 
-export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
+export default function AIChat({ profile, dailyCalories, dailyProtein, dailyWater, onFoodLogged }: AIChatProps) {
   const [open, setOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  // Hora local em que o chat foi aberto (para sugerir a refeição certa).
+  const [hour, setHour] = useState(12);
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: 'assistant',
-    content: `Olá${profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! Sou seu coach de saúde. Diga o que comeu ou faça perguntas sobre sua dieta.`,
+    content: `Oi${profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! Eu sou a ${COACH_NAME}, sua coach de saúde 🌿\nMe conta o que você comeu ou pergunte o que quiser. Já estou vendo seus números de hoje.`,
   }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -187,9 +272,8 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
     }).catch(() => { /* avaliação é opcional: não atrapalha o chat */ });
   }, []);
 
-  const sendMessage = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
+  const send = useCallback(async (raw: string) => {
+    const text = raw.trim();
     if (!text || loading) return;
 
     const conversationId = (conversationIdRef.current ??= newId());
@@ -293,18 +377,31 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         setLoading(false);
       }
     }
-  }, [input, loading, messages, onFoodLogged]);
+  }, [loading, messages, onFoodLogged]);
+
+  const sendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    send(input);
+  };
+
+  const started = messages.some((m) => m.role === 'user');
+  const suggestions = coachSuggestions({
+    hour,
+    caloriesLeft: profile.target_calories ? profile.target_calories - dailyCalories : null,
+    proteinLeft: profile.target_protein_g ? profile.target_protein_g - dailyProtein : null,
+    waterLeftMl: profile.target_water_ml - dailyWater,
+  });
 
   return (
     <>
       {/* FAB */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-[68px] right-4 z-40 h-12 w-12 rounded-2xl shadow-lg shadow-emerald-600/25 bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center transition-all duration-200 active:scale-95"
-          aria-label="Abrir coach IA"
+          onClick={() => { setHour(new Date().getHours()); setOpen(true); }}
+          className="fixed bottom-[68px] right-4 z-40 h-12 w-12 rounded-full shadow-lg shadow-emerald-600/30 ring-2 ring-white dark:ring-zinc-900 flex items-center justify-center transition-all duration-200 active:scale-95 hover:scale-105"
+          aria-label={`Conversar com a ${COACH_NAME}, sua coach`}
         >
-          <Sparkles size={17} />
+          <CoachAvatar size={48} />
         </button>
       )}
 
@@ -313,39 +410,59 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
         <div className="fixed bottom-[64px] right-0 left-0 sm:left-auto sm:right-4 z-50 sm:w-[380px] animate-slide-up">
           <div
             className="mx-3 sm:mx-0 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/60 flex flex-col overflow-hidden"
-            style={{ maxHeight: '70vh', height: 450 }}
+            style={{ maxHeight: '75vh', height: 520 }}
           >
             {/* Header */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/60 flex-shrink-0">
-              <div className="h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100/80 dark:border-emerald-900/50 flex items-center justify-center">
-                <Sparkles size={13} className="text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
-                  Coach IA
-                </p>
-                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                  Online
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setAboutOpen(true)}
+                className="flex items-center gap-2.5 min-w-0 text-left rounded-xl -m-1 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors"
+                aria-label={`Sobre a ${COACH_NAME}`}
+              >
+                <span className="relative">
+                  <CoachAvatar size={34} />
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900" />
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1 text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
+                    {COACH_NAME}
+                    <Info size={11} className="text-zinc-400 dark:text-zinc-500" />
+                  </span>
+                  <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+                    {COACH_ROLE} · online
+                  </span>
+                </span>
+              </button>
               <button
                 onClick={() => setOpen(false)}
+                aria-label="Fechar chat"
                 className="ml-auto h-7 w-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-400 dark:text-zinc-500 transition-colors"
               >
                 <X size={12} />
               </button>
             </div>
 
+            <DaySummary
+              calories={dailyCalories}
+              caloriesTarget={profile.target_calories}
+              protein={dailyProtein}
+              proteinTarget={profile.target_protein_g}
+              waterMl={dailyWater}
+              waterTargetMl={profile.target_water_ml}
+            />
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-zinc-50/40 dark:bg-zinc-950/40">
               {messages.map((msg, i) => (
                 <MessageBubble key={msg.id ?? i} msg={msg} onRate={rateMessage} />
               ))}
+              {!started && (
+                <Intro suggestions={suggestions} onPick={send} onAbout={() => setAboutOpen(true)} disabled={loading} />
+              )}
               {loading && (
                 <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                    <Bot size={10} className="text-zinc-500 dark:text-zinc-400" />
-                  </div>
+                  <CoachAvatar size={24} />
                   <div className="bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700/60 rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-2">
                     <Loader2 size={11} className="animate-spin text-zinc-400" />
                     {status && <span className="text-[12px] text-zinc-500 dark:text-zinc-400">{status}</span>}
@@ -365,13 +482,15 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Comi 2 ovos e um suco..."
+                placeholder={`Fale com a ${COACH_NAME}…`}
+                aria-label={`Mensagem para a ${COACH_NAME}`}
                 disabled={loading}
                 className="flex-1 h-10 bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 rounded-xl px-3.5 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 disabled:opacity-50 transition-all"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
+                aria-label="Enviar"
                 className="h-10 w-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 flex items-center justify-center text-white transition-all active:scale-95"
               >
                 <Send size={13} />
@@ -380,6 +499,8 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
           </div>
         </div>
       )}
+
+      <CoachAboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </>
   );
 }
