@@ -41,6 +41,26 @@ O app usa Postgres no [Neon](https://neon.tech) via `@neondatabase/serverless` (
 
 - Schema completo: `db/schema.sql` (equivale às migrations 001–018 de `supabase/migrations`, que ficam só como histórico).
 - O Supabase continua sendo usado apenas como agendador (`pg_cron` + `pg_net` chamando as rotas do app, ver abaixo); ele não guarda mais dados do app.
+- Mudanças novas ficam em `db/migrations/` (aditivas, idempotentes), com o rollback de cada uma em `db/rollback/`. Aplique primeiro num branch do Neon e só depois no principal — **antes** de publicar o código que depende delas.
+
+## Calorias pela TACO
+
+A IA só identifica cada alimento e estima as gramas; kcal e macros são calculados pelo app (`kcal = gramas × kcal_100g / 100`, idem macros):
+
+1. **Rótulo** do usuário (`custom_foods`, valores por 100 g, um por nome normalizado e por usuário);
+2. **TACO** 4ª edição (`taco_foods`, 591 alimentos, busca aproximada com `pg_trgm`);
+3. **Estimado** pela IA, quando não há correspondência — salvo com `needs_review = true`, e o app oferece cadastrar o rótulo.
+
+Cada lançamento guarda `quantity_g`, `source` (`taco` | `rotulo` | `estimado` | `manual`), `taco_food_id`/`custom_food_id` e `needs_review`. Registros anteriores ficam com essas colunas vazias.
+
+**Validação** (`src/lib/nutrition/validation.ts`, função pura usada no servidor, no app e na auditoria), só para itens com kcal > 0 e gramas:
+
+- ERRO (não salva): mais de 9 kcal/g;
+- AVISO (salva com `needs_review` e selo "Revisar"): macros informados com `|4·P + 4·C + 9·G − kcal|` acima de 10% das kcal (mín. 2 kcal), ou kcal/100 g mais de 30% fora do alimento correspondente na TACO/rótulo. A regra dos macros não vale para valores calculados pelo app a partir da própria tabela (168 itens da TACO não fecham 4/4/9 por usarem fatores próprios).
+
+**Dados da TACO:** `scripts/taco/build_taco_seed.py` gera `db/migrations/002_taco_foods_seed.sql` e `db/taco/taco_foods.csv` a partir da planilha oficial do NEPA/UNICAMP (o sha256 da planilha fica no cabeçalho do seed). Ficam de fora os 6 itens sem valor de energia na tabela (ex.: "Leite, de vaca, integral", marcado "*"); o nome do item 540 ("Feijoada") vem do PDF oficial, pois a planilha traz só "L".
+
+**Auditoria dos registros antigos** (somente leitura, por usuário): `DATABASE_URL=... npm run audit:food-logs` (`-- --user <id>` para um usuário, `-- --json` para JSON). As gramas vêm do nome quando o app as escreveu lá, e a referência é achada pelo nome — o relatório indica quando foi assim.
 
 ## IA (Gemini)
 
