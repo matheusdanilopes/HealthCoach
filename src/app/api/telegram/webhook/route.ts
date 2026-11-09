@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { COACH_NAME } from '@/lib/coach-persona';
 import { timingSafeEqual } from 'crypto';
 import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
@@ -62,7 +63,7 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
     const linked = await userIdForChat(chat.id);
     await reply(chat.id, linked
       ? `✅ Este chat já está conectado ao HealthCoach.\n\n${HELP}`
-      : '👋 Olá! Para receber suas notificações aqui, abra o app em <b>Notificações → Conectar Telegram</b>.');
+      : `👋 Oi! Eu sou a <b>${COACH_NAME}</b>, sua coach no HealthCoach. Para receber minhas mensagens aqui, abra o app em <b>Notificações → Conectar Telegram</b>.`);
     return;
   }
 
@@ -102,7 +103,7 @@ async function handleStart(chat: TgChat, from: TgUser | undefined, token: string
     [
       `✅ <b>Pronto, ${escapeHtml(targets.firstName)}!</b> Seu HealthCoach está conectado.`,
       '',
-      'Você vai receber aqui: resumo da manhã e da noite, lembretes de água no seu ritmo, refeições não registradas e treino.',
+      `Aqui é a <b>${COACH_NAME}</b>, sua coach de saúde 🌿 Vou te mandar por aqui: resumo da manhã e da noite, lembretes de água no seu ritmo, refeições não registradas e treino. Sempre com os seus números e um próximo passo.`,
       '',
       HELP,
     ].join('\n'),

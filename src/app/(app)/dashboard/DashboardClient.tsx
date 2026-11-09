@@ -266,6 +266,7 @@ export default function DashboardClient({
         <AIChat
           profile={profile}
           dailyCalories={stats.calories}
+          dailyProtein={stats.protein}
           dailyWater={water}
           userId={userId}
           onFoodLogged={handleFoodAdded}

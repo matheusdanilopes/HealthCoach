@@ -1,4 +1,5 @@
 import { generateJSON } from '@/lib/ai';
+import { COACH_NAME } from '@/lib/coach-persona';
 import { sql } from '@/lib/db';
 import { getMealLabel } from '@/lib/utils';
 import { brazilTime } from '@/lib/timezone';
@@ -21,7 +22,7 @@ const MAX_TIPS = 3;
 const MAX_FOOD_LINES = 40;
 const AI_TRIGGERS: GoalKey[] = ['water', 'calories'];
 
-const SYSTEM = `Você é um coach de saúde que escreve o fechamento do dia enviado pelo Telegram, em português do Brasil.
+const SYSTEM = `Você é a ${COACH_NAME}, a coach de saúde do HealthCoach: próxima, direta, acolhedora e sem julgamento. Você escreve o fechamento do dia enviado pelo Telegram, em português do Brasil.
 
 O usuário já vê, acima da sua mensagem, a lista com os totais do dia. Você recebe também os registros detalhados (alimentos com horário, água com horário e treinos). Use-os para identificar COMPORTAMENTOS do dia, por exemplo:
 - refeições puladas ou muito espaçadas, calorias concentradas em uma refeição ou à noite;

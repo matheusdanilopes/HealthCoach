@@ -7,6 +7,7 @@
  * Groq entram por `TurnDeps`.
  */
 
+import { COACH_PERSONA } from '@/lib/coach-persona';
 import {
   FunctionCallingConfigMode,
   Type,
@@ -84,7 +85,9 @@ export const FOOD_COACHING_RULES = `INSTRUÇÕES:
 6. Dê feedback sobre o progresso baseado nos dados do contexto.`;
 
 export function buildSystemInstruction(dynamicContext: string): string {
-  return `Você é um coach de saúde e nutrição personalizado, amigável e motivador. Você está ajudando o usuário a alcançar seus objetivos de saúde através do controle alimentar e de hábitos.
+  return `${COACH_PERSONA}
+
+Neste chat você ajuda o usuário a alcançar os objetivos de saúde dele através do controle alimentar e de hábitos.
 
 CONTEXTO DO USUÁRIO:
 ${dynamicContext}
