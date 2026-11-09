@@ -255,3 +255,27 @@ CREATE TABLE IF NOT EXISTS workout_sets (
 );
 CREATE INDEX IF NOT EXISTS workout_sets_session_idx ON workout_sets (session_id);
 CREATE INDEX IF NOT EXISTS workout_sets_user_exercise_idx ON workout_sets (user_id, exercise_key, created_at DESC);
+
+-- Chat do Coach. Gravado para que a resposta não se perca quando a conexão cai
+-- (o app a busca aqui), e para registrar como cada resposta foi produzida.
+-- meta: { "provider": "gemini", "model": "...", "rounds": 2, "durationMs": 8200,
+--         "usage": { "input": 9100, "output": 420, "thinking": 800 },
+--         "tools": [{ "name": "log_food", "args": {...}, "result": "...", "ms": 40 }],
+--         "intent": "food_logging", "fallback": "follow_up" }
+-- rating: 👍 (1) / 👎 (-1) dado pelo usuário no chat, com comentário opcional.
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conversation_id uuid NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user','assistant'])),
+  content text NOT NULL,
+  food_log_id uuid REFERENCES food_logs(id) ON DELETE SET NULL,
+  meta jsonb,
+  rating smallint CHECK (rating IN (-1, 1)),
+  rating_comment text,
+  rated_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_messages_conversation_idx ON chat_messages (user_id, conversation_id, created_at);
+-- Busca dos 👎 para revisar respostas ruins.
+CREATE INDEX IF NOT EXISTS chat_messages_rated_idx ON chat_messages (rated_at DESC) WHERE rating IS NOT NULL;

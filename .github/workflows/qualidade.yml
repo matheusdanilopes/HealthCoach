@@ -1,0 +1,23 @@
+# Typecheck, lint e testes do app a cada push e pull request.
+# Os testes do chat usam um Gemini simulado e dependências em memória:
+# não precisam de segredo nem gastam cota.
+name: Qualidade
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test

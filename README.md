@@ -42,6 +42,27 @@ O app usa Postgres no [Neon](https://neon.tech) via `@neondatabase/serverless` (
 - Schema completo: `db/schema.sql` (equivale às migrations 001–018 de `supabase/migrations`, que ficam só como histórico).
 - O Supabase continua sendo usado apenas como agendador (`pg_cron` + `pg_net` chamando as rotas do app, ver abaixo); ele não guarda mais dados do app.
 
+## IA (Gemini)
+
+- Modelo: `gemini-3.8-flash` em todas as chamadas (chat, análise de alimentos e treinos, planos, coach). A variável `GEMINI_MODEL` troca sem mudar código — por exemplo `GEMINI_MODEL=gemini-3.5-flash` para voltar ao anterior. Na família 3 o app usa `thinkingLevel` (padrão `low`) e não fixa temperatura; o Groq continua como reserva.
+- Chat do Coach (`/api/chat`): responde em streaming (SSE) com um `ping` a cada 8 s. O turno roda até o fim e grava a pergunta e a resposta em `chat_messages` mesmo se o celular derrubar a conexão; o app busca a resposta em `/api/chat/history` quando isso acontece.
+- Cada resposta guarda em `chat_messages.meta` o modelo, tokens, rodadas, tempo e o que a ferramenta `log_food` gravou. 👍/👎 (com comentário opcional no 👎) ficam em `rating`/`rating_comment` (`/api/chat/feedback`). Para revisar as negativas:
+
+  ```sql
+  SELECT q.content AS pergunta, a.content AS resposta, a.rating_comment, a.meta
+    FROM chat_messages a
+    JOIN LATERAL (SELECT content FROM chat_messages u
+                   WHERE u.conversation_id = a.conversation_id AND u.role = 'user' AND u.created_at <= a.created_at
+                   ORDER BY u.created_at DESC LIMIT 1) q ON true
+   WHERE a.rating = -1 ORDER BY a.rated_at DESC;
+  ```
+
+- Requer a tabela `chat_messages` (final de `db/schema.sql`). Sem ela o chat funciona, mas sem recuperação da resposta nem avaliação.
+
+## Testes
+
+`npm test` roda os testes (sem rede: Gemini simulado) e `npm run typecheck` o TypeScript. O workflow **Qualidade** roda typecheck, lint e testes em todo push/PR.
+
 ## Notificações (Telegram)
 
 As notificações são enviadas por um bot do Telegram, com agendamento de hora em hora via Supabase `pg_cron` (só dispara as chamadas HTTP; os dados ficam no Neon).

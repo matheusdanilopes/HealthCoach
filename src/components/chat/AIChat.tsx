@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react';
-import { X, Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
+import { X, Send, Loader2, Bot, User, Sparkles, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { readSSE } from '@/lib/chat/sse';
+import { HistoryUnavailableError, NO_SIGNAL_MS, newId, waitForReply } from '@/lib/chat/recovery';
 import type { ChatMessage, FoodLog, Profile } from '@/types';
 
 interface AIChatProps {
@@ -13,7 +15,74 @@ interface AIChatProps {
   onFoodLogged?: (log: FoodLog) => void;
 }
 
-const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage }) {
+type Rate = (messageId: string, rating: 1 | -1 | null, comment?: string) => void;
+
+/** 👍/👎 da resposta. O 👎 abre um campo opcional "o que estava errado?". */
+function Rating({ messageId, value, onRate }: { messageId: string; value: 1 | -1 | null | undefined; onRate: Rate }) {
+  const [commenting, setCommenting] = useState(false);
+  const [comment, setComment] = useState('');
+  const [sent, setSent] = useState(false);
+
+  const base = 'inline-flex items-center rounded-full p-1 transition-colors';
+  const idle = 'text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400';
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-0.5">
+      <button
+        type="button"
+        onClick={() => { setCommenting(false); onRate(messageId, value === 1 ? null : 1); }}
+        aria-label={value === 1 ? 'Desfazer avaliação positiva' : 'Resposta útil'}
+        aria-pressed={value === 1}
+        className={cn(base, value === 1 ? 'text-emerald-600 dark:text-emerald-400' : idle)}
+      >
+        <ThumbsUp size={12} />
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const next = value === -1 ? null : -1;
+          setCommenting(next === -1);
+          setSent(false);
+          onRate(messageId, next);
+        }}
+        aria-label={value === -1 ? 'Desfazer avaliação negativa' : 'Resposta com problema'}
+        aria-pressed={value === -1}
+        className={cn(base, value === -1 ? 'text-rose-600 dark:text-rose-400' : idle)}
+      >
+        <ThumbsDown size={12} />
+      </button>
+      {commenting && value === -1 && (
+        <form
+          className="basis-full mt-1 flex items-center gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!comment.trim()) return;
+            onRate(messageId, -1, comment.trim());
+            setSent(true);
+            setCommenting(false);
+          }}
+        >
+          <input
+            autoFocus
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            maxLength={1000}
+            placeholder="O que estava errado? (opcional)"
+            className="flex-1 min-w-0 text-[12px] rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 px-3 py-1.5 text-zinc-700 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          />
+          <button type="submit" className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 px-2 py-1.5">
+            Enviar
+          </button>
+        </form>
+      )}
+      {sent && value === -1 && (
+        <span className="basis-full text-[10px] text-zinc-400 dark:text-zinc-500">Obrigado — isso ajuda o Coach a melhorar.</span>
+      )}
+    </div>
+  );
+}
+
+const MessageBubble = memo(function MessageBubble({ msg, onRate }: { msg: ChatMessage; onRate: Rate }) {
   const isUser = msg.role === 'user';
   return (
     <div className={cn('flex gap-2 items-end', isUser ? 'flex-row-reverse' : 'flex-row')}>
@@ -37,12 +106,22 @@ const MessageBubble = memo(function MessageBubble({ msg }: { msg: ChatMessage })
         {msg.content.split('\n').map((line, i, arr) => (
           <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
         ))}
+        {!isUser && msg.id && <Rating messageId={msg.id} value={msg.rating} onRate={onRate} />}
       </div>
     </div>
   );
 });
 
 const MAX_HISTORY = 10;
+
+/** Mensagem como vem de /api/chat/history. */
+interface HistoryRow {
+  id: string;
+  role: string;
+  content: string;
+  rating?: 1 | -1 | null;
+  food_log?: unknown;
+}
 
 export default function AIChat({ profile, dailyCalories, dailyWater, userId, onFoodLogged }: AIChatProps) {
   const [open, setOpen] = useState(false);
@@ -68,52 +147,151 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
     }
   }, [open]);
 
+  // Conversa desta tela (o chat começa do zero a cada abertura do dashboard):
+  // é por ela, e pelo id da pergunta, que a resposta é achada no histórico.
+  const conversationIdRef = useRef<string | null>(null);
+  // Turno em andamento: hora do último evento recebido (inclui o ping de 8 s)
+  // e pedido de reconexão (o app voltou do segundo plano com o stream parado).
+  const abortRef = useRef<AbortController | null>(null);
+  const lastEventRef = useRef(0);
+  const mountedRef = useRef(true);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  // Voltou para o app com uma resposta em andamento e sem sinal do servidor
+  // há um tempo: a conexão morreu em segundo plano (alguns navegadores deixam
+  // o fetch "pendurado" em vez de falhar). Encerra e vai buscar no histórico.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !abortRef.current) return;
+      if (Date.now() - lastEventRef.current < NO_SIGNAL_MS) return;
+      abortRef.current.abort();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  const rateMessage = useCallback<Rate>((messageId, rating, comment) => {
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, rating } : m)));
+    fetch('/api/chat/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: messageId, rating, comment }),
+    }).catch(() => { /* avaliação é opcional: não atrapalha o chat */ });
+  }, []);
+
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
     if (!text || loading) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: text };
+    const conversationId = (conversationIdRef.current ??= newId());
+    const userMsg: ChatMessage = { id: newId(), role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+    lastEventRef.current = Date.now();
+
+    const addReply = (reply: { id?: string | null; content: string; rating?: 1 | -1 | null; foodLog?: unknown }) => {
+      if (!mountedRef.current) return;
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: reply.content,
+        id: reply.id ?? undefined,
+        rating: reply.rating ?? null,
+      }]);
+      // Optimistic update - no router.refresh() needed
+      if (reply.foodLog && onFoodLogged) onFoodLogged(reply.foodLog as FoodLog);
+    };
+    const addError = (content: string, restoreInput: boolean) => {
+      if (!mountedRef.current) return;
+      // Restore input so the user can resend without retyping
+      if (restoreInput) setInput(text);
+      setMessages((prev) => [...prev, { role: 'assistant', content }]);
+    };
+
     try {
       // Limit history sent to reduce payload size
-      const allMessages = [...messages, userMsg];
-      const trimmed = allMessages.slice(-MAX_HISTORY);
+      const trimmed = [...messages, userMsg].slice(-MAX_HISTORY);
 
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
+          conversation_id: conversationId,
+          message_id: userMsg.id,
           messages: trimmed.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = await res.json();
 
-      if (!res.ok) {
-        // Restore input on transient errors so the user can resend without retyping
-        if (res.status === 503 || res.status === 429) setInput(text);
-        setMessages((prev) => [...prev, {
-          role: 'assistant',
-          content: data.error ?? 'Desculpe, tive um problema. Tente novamente.',
-        }]);
+      if (!res.ok || !res.body || !res.headers.get('content-type')?.includes('text/event-stream')) {
+        const data = await res.json().catch(() => ({}));
+        addError(data.error ?? 'Desculpe, tive um problema. Tente novamente.', res.status === 503 || res.status === 429);
         return;
       }
 
-      if (data.message) setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
-      // Optimistic update - no router.refresh() needed
-      if (data.foodLogged && data.foodLog && onFoodLogged) onFoodLogged(data.foodLog as FoodLog);
+      let finished = false;
+      for await (const event of readSSE(res.body)) {
+        lastEventRef.current = Date.now();
+        if (event.type === 'done') {
+          finished = true;
+          const d = event.data;
+          addReply({
+            id: typeof d.message_id === 'string' ? d.message_id : null,
+            content: typeof d.message === 'string' && d.message ? d.message : 'Desculpe, tive um problema. Tente novamente.',
+            foodLog: d.foodLogged ? d.foodLog : null,
+          });
+        } else if (event.type === 'error') {
+          finished = true;
+          const code = Number(event.data.status);
+          addError(
+            typeof event.data.error === 'string' ? event.data.error : 'Desculpe, tive um problema. Tente novamente.',
+            code === 503 || code === 429
+          );
+        }
+      }
+      // Stream fechado sem "done" nem "error": a conexão caiu no meio.
+      if (!finished) throw new Error('stream interrompido');
     } catch {
-      // Restore input on network errors too
-      setInput(text);
-      setMessages((prev) => [...prev, {
-        role: 'assistant',
-        content: 'Desculpe, tive um problema. Tente novamente.',
-      }]);
+      // A conexão caiu (quase sempre: a pessoa saiu do app no meio da espera).
+      // O servidor termina e grava a resposta mesmo assim — busca no histórico
+      // antes de falar em erro.
+      if (!mountedRef.current) return;
+      setStatus('A conexão caiu — buscando sua resposta…');
+      const reply = await waitForReply<HistoryRow>(
+        async () => {
+          const r = await fetch(`/api/chat/history?conversation_id=${conversationId}`, { cache: 'no-store' });
+          if (r.status === 501) throw new HistoryUnavailableError();
+          if (!r.ok) throw new Error(`history ${r.status}`);
+          const data = await r.json();
+          return Array.isArray(data.messages) ? data.messages : [];
+        },
+        userMsg.id!,
+        () => mountedRef.current,
+        { visible: () => document.visibilityState !== 'hidden' }
+      );
+      if (reply) {
+        addReply({ id: reply.id, content: reply.content, rating: reply.rating, foodLog: reply.food_log });
+      } else {
+        addError('Desculpe, tive um problema. Tente novamente.', true);
+      }
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) abortRef.current = null;
+      if (mountedRef.current) {
+        setStatus(null);
+        setLoading(false);
+      }
     }
   }, [input, loading, messages, onFoodLogged]);
 
@@ -161,15 +339,16 @@ export default function AIChat({ profile, dailyCalories, dailyWater, userId, onF
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-zinc-50/40 dark:bg-zinc-950/40">
               {messages.map((msg, i) => (
-                <MessageBubble key={i} msg={msg} />
+                <MessageBubble key={msg.id ?? i} msg={msg} onRate={rateMessage} />
               ))}
               {loading && (
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                     <Bot size={10} className="text-zinc-500 dark:text-zinc-400" />
                   </div>
-                  <div className="bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700/60 rounded-2xl rounded-bl-sm px-4 py-2.5">
+                  <div className="bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700/60 rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-2">
                     <Loader2 size={11} className="animate-spin text-zinc-400" />
+                    {status && <span className="text-[12px] text-zinc-500 dark:text-zinc-400">{status}</span>}
                   </div>
                 </div>
               )}

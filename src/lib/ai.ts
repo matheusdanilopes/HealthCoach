@@ -1,9 +1,73 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, type GenerateContentConfig, type GenerateContentResponse } from '@google/genai';
 import { withGeminiRetry } from '@/lib/gemini-retry';
 import { callGroq, type GroqPart } from '@/lib/groq';
 
-export const GEMINI_MODEL = 'gemini-3.5-flash';
+// GEMINI_MODEL no ambiente troca o modelo sem mudar código — inclusive para
+// voltar ao anterior (gemini-3.5-flash) se o novo se comportar mal.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
+
+export type ThinkingEffort = 'minimal' | 'low' | 'medium' | 'high';
+
+const THINKING_LEVELS: Record<ThinkingEffort, ThinkingLevel> = {
+  minimal: ThinkingLevel.MINIMAL,
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
+};
+
+// Na família 3 o raciocínio sai do mesmo orçamento de maxOutputTokens e não
+// tem teto em tokens: sem folga, respostas vinham vazias ou cortadas.
+export const GEMINI3_THINKING_HEADROOM = 4096;
+
+export const isGemini3 = (model: string) => /^gemini-3/.test(model);
+
+/**
+ * Configuração de geração por família de modelo.
+ * - Gemini 3: thinkingLevel no lugar de orçamento (mandar os dois é erro) e
+ *   sem temperature — o Google recomenda o padrão (1.0); temperaturas baixas
+ *   podem fazer o modelo entrar em repetição. "low" por padrão: com "medium"
+ *   cada resposta passou a levar 30–60 s.
+ * - Demais: temperatura do chamador, sem mexer no raciocínio.
+ */
+export function geminiGenerationConfig(opts: {
+  model?: string;
+  maxOutputTokens: number;
+  temperature: number;
+  thinking?: ThinkingEffort;
+}): GenerateContentConfig {
+  const model = opts.model ?? GEMINI_MODEL;
+  if (isGemini3(model)) {
+    return {
+      maxOutputTokens: opts.maxOutputTokens + GEMINI3_THINKING_HEADROOM,
+      thinkingConfig: { thinkingLevel: THINKING_LEVELS[opts.thinking ?? 'low'] },
+    };
+  }
+  return { maxOutputTokens: opts.maxOutputTokens, temperature: opts.temperature };
+}
+
+/** Tokens gastos numa chamada (usageMetadata do Gemini). */
+export interface TokenUsage {
+  input: number;
+  output: number;
+  thinking: number;
+}
+
+export function readUsage(response: Pick<GenerateContentResponse, 'usageMetadata'> | null | undefined): TokenUsage | undefined {
+  const u = response?.usageMetadata;
+  if (!u) return undefined;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return { input: n(u.promptTokenCount), output: n(u.candidatesTokenCount), thinking: n(u.thoughtsTokenCount) };
+}
+
+export function addUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUsage | undefined {
+  if (!a && !b) return undefined;
+  return {
+    input: (a?.input ?? 0) + (b?.input ?? 0),
+    output: (a?.output ?? 0) + (b?.output ?? 0),
+    thinking: (a?.thinking ?? 0) + (b?.thinking ?? 0),
+  };
+}
 
 // Per-attempt ceiling so a hung Gemini request fails over to Groq instead of
 // holding the serverless function until the platform kills it.
@@ -66,6 +130,8 @@ export interface GenerateOptions {
   json?: boolean;
   /** Per-attempt timeout; raise it for long outputs. */
   timeoutMs?: number;
+  /** Nível de raciocínio na família Gemini 3 (padrão: low). */
+  thinking?: ThinkingEffort;
 }
 
 async function callGemini(opts: GenerateOptions): Promise<string> {
@@ -75,8 +141,7 @@ async function callGemini(opts: GenerateOptions): Promise<string> {
       contents: [{ role: 'user', parts: opts.parts }],
       config: {
         systemInstruction: opts.system,
-        maxOutputTokens: opts.maxOutputTokens,
-        temperature: opts.temperature,
+        ...geminiGenerationConfig(opts),
         httpOptions: { timeout: opts.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS },
         ...(opts.json ? { responseMimeType: 'application/json' } : {}),
       },
@@ -157,21 +222,20 @@ function isRateLimitError(err: unknown): boolean {
   return msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
 }
 
-// Maps a provider error to a user-facing response. Raw provider messages are
-// only logged — they can be long, in English or mention configuration.
-export function aiErrorResponse(err: unknown, label: string, fallbackMessage: string): NextResponse {
+// Maps a provider error to a user-facing message and status. Raw provider
+// messages are only logged — they can be long, in English or mention configuration.
+export function aiErrorInfo(err: unknown, label: string, fallbackMessage: string): { status: number; error: string } {
   console.error(`[${label}] Error:`, errorMessage(err));
   if (isOverloadError(err)) {
-    return NextResponse.json(
-      { error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' },
-      { status: 503 }
-    );
+    return { status: 503, error: 'O modelo de IA está com alta demanda no momento. Tente novamente em alguns instantes.' };
   }
   if (isRateLimitError(err)) {
-    return NextResponse.json(
-      { error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' },
-      { status: 429 }
-    );
+    return { status: 429, error: 'Limite de requisições atingido. Aguarde alguns segundos e tente novamente.' };
   }
-  return NextResponse.json({ error: fallbackMessage }, { status: 500 });
+  return { status: 500, error: fallbackMessage };
+}
+
+export function aiErrorResponse(err: unknown, label: string, fallbackMessage: string): NextResponse {
+  const { status, error } = aiErrorInfo(err, label, fallbackMessage);
+  return NextResponse.json({ error }, { status });
 }

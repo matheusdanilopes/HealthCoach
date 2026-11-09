@@ -60,6 +60,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;
+  /** Id gravado em chat_messages (pergunta: gerado pelo app; resposta: pelo servidor). */
+  id?: string;
+  /** 👍 (1) / 👎 (-1) dado pelo usuário a uma resposta. */
+  rating?: 1 | -1 | null;
 }
 
 export interface BodyMetrics {
