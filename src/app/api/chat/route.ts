@@ -1,82 +1,47 @@
-import { NextResponse } from 'next/server';
-import { FunctionCallingConfigMode, Type } from '@google/genai';
+/**
+ * POST /api/chat — turno do Coach, em Server-Sent Events.
+ *
+ * Por que SSE: com o Gemini 3 uma resposta pode levar dezenas de segundos, e
+ * no celular a conexão cai quando a pessoa sai do app no meio da espera. O
+ * turno roda desacoplado do stream (registrado com after()), termina e grava
+ * a resposta em chat_messages mesmo com o cliente desconectado; o app a busca
+ * em /api/chat/history quando a conexão cai (ver AIChat).
+ *
+ * Corpo: { conversation_id, message_id, messages }
+ *   conversation_id / message_id: uuids gerados pelo app — é pelo message_id
+ *   da pergunta que o app acha a resposta no histórico.
+ *
+ * Eventos (cada um `event: <tipo>` + `data: <json>`):
+ *   ping  {}                                          sinal de vida a cada 8 s
+ *   done  { message, foodLogged, foodLog, message_id } message_id = id gravado (👍/👎)
+ *   error { error, status }
+ */
+
+import { NextResponse, after } from 'next/server';
 import { auth } from '@/auth';
 import { insertInto } from '@/lib/db';
+import { DEFAULT_AI_TIMEOUT_MS, aiErrorInfo, getGemini } from '@/lib/ai';
 import { withGeminiRetry } from '@/lib/gemini-retry';
 import { callGroq } from '@/lib/groq';
-import { DEFAULT_AI_TIMEOUT_MS, GEMINI_MODEL, aiErrorResponse, getGemini } from '@/lib/ai';
 import { brazilToday } from '@/lib/timezone';
 import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
+import { formatSSE } from '@/lib/chat/sse';
+import { isUuid, newId } from '@/lib/chat/recovery';
+import { saveAssistantMessage, saveUserMessage } from '@/lib/chat/store';
+import {
+  MAX_REPLY_TOKENS,
+  buildSystemInstruction,
+  runChatTurn,
+  sanitizeMessages,
+  type IncomingMessage,
+  type TurnDeps,
+} from '@/lib/chat/turn';
 
-const MEAL_TYPES = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'];
-const MAX_HISTORY = 20;
-const MAX_MESSAGE_CHARS = 4000;
-// Newer models can spend part of the output budget on hidden reasoning; a
-// tight budget left replies empty or cut mid-sentence.
-const MAX_REPLY_TOKENS = 1024;
-const EMPTY_REPLY = 'Desculpe, não consegui formular uma resposta agora. Pode repetir?';
+// O turno (Gemini com retries + follow-up) precisa terminar e gravar mesmo
+// com o cliente fora; o app procura a resposta por até 100 s.
+export const maxDuration = 90;
 
-const LOG_FOOD_DECLARATION = {
-  name: 'log_food',
-  description: 'Registra um alimento no diário do usuário',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      food_name: { type: Type.STRING, description: 'Nome do alimento ou refeição' },
-      calories: { type: Type.INTEGER, description: 'Calorias estimadas em kcal' },
-      protein: { type: Type.NUMBER, description: 'Proteína em gramas' },
-      carbs: { type: Type.NUMBER, description: 'Carboidratos em gramas' },
-      fat: { type: Type.NUMBER, description: 'Gordura em gramas' },
-      meal_type: {
-        type: Type.STRING,
-        enum: MEAL_TYPES,
-        description: 'Tipo de refeição',
-      },
-    },
-    required: ['food_name', 'calories', 'meal_type'],
-  },
-};
-
-interface IncomingMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-const FOOD_COACHING_RULES = `INSTRUÇÕES:
-1. Quando o usuário mencionar que comeu algo, use a função log_food para registrar.
-2. Estime calorias e macros com MÁXIMO CONSERVADORISMO (referências TACO):
-   - NUNCA assuma 100g para porções vagas — prefira sempre subestimar
-   - "um pedaço" = 20-35g | "um pouco" = 5-15g | "uma colher" = 10-15g (sopa) ou 5g (chá)
-   - Proteína PRATO PRINCIPAL: 80-120g | RECHEIO (tapioca, crepioca, wrap): 40-60g
-   - Condimentos (maionese, requeijão, manteiga): 5-10g (1 col. chá), NÃO 1 col. sopa
-   - Frango cozido: 159 kcal/100g | Ovo (1 un ≈ 50g): 74 kcal | Arroz cozido: 128 kcal/100g
-   - Mandioca frita (1 pedaço ≈ 30g): 62 kcal | Batata frita: 180 kcal/100g (porção: 60-80g)
-   - Pão francês (1 un ≈ 50g): 135 kcal | Maionese (5g): 33 kcal | Mussarela (25g): 66 kcal
-   - Pastel pequeno (1 un ≈ 70g): 225 kcal | Amendoim (1 punhado ≈ 20g): 118 kcal
-3. Seja encorajador e use os dados reais para personalizar suas respostas.
-4. Responda sempre em português do Brasil.
-5. Seja conciso — respostas curtas e diretas, com emojis quando apropriado.
-6. Dê feedback sobre o progresso baseado nos dados do contexto.`;
-
-// Keeps only well-formed messages, caps their size and makes the history start
-// with a user turn (the client seeds the chat with an assistant greeting).
-function sanitizeMessages(input: unknown): IncomingMessage[] {
-  if (!Array.isArray(input)) return [];
-  const messages = input
-    .filter((m): m is IncomingMessage =>
-      typeof m === 'object' && m !== null &&
-      (m.role === 'user' || m.role === 'assistant') &&
-      typeof m.content === 'string' && m.content.trim() !== '')
-    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }))
-    .slice(-MAX_HISTORY);
-  while (messages.length && messages[0].role !== 'user') messages.shift();
-  return messages;
-}
-
-function optionalNumber(value: unknown): number | null {
-  const n = Number(value);
-  return value != null && Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null;
-}
+const PING_MS = 8_000;
 
 // Text-only fallback when Gemini is down: Groq gets the conversation as a
 // transcript and is told it cannot log food, so it never claims it did.
@@ -94,147 +59,113 @@ Responda somente à última mensagem do usuário, como Coach, sem prefixo.`,
   );
 }
 
+const deps: TurnDeps = {
+  generate: ({ model, contents, config }) =>
+    withGeminiRetry(() =>
+      getGemini().models.generateContent({
+        model,
+        contents,
+        config: { ...config, httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS } },
+      })
+    ),
+  insertFoodLog: async (row) => {
+    const [data] = await insertInto('food_logs', { ...row }, { returning: '*' });
+    return data ?? null;
+  },
+  groqReply,
+};
+
 export async function POST(req: Request) {
-  try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const user = session.user;
-
-    const body = await req.json().catch(() => null);
-    const messages = sanitizeMessages(body?.messages);
-    if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
-      return NextResponse.json({ error: 'Mensagem inválida.' }, { status: 400 });
-    }
-
-    // Detect intent from the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    const intent = lastUserMsg ? detectIntent(lastUserMsg.content) : 'general_coaching';
-
-    // Build dynamic context — fetches only data relevant to the detected intent
-    const dynamicContext = await buildDynamicContext(user.id, intent);
-
-    console.log(`[chat] intent=${intent} | user=${user.id}`);
-
-    const systemInstruction = `Você é um coach de saúde e nutrição personalizado, amigável e motivador. Você está ajudando o usuário a alcançar seus objetivos de saúde através do controle alimentar e de hábitos.
-
-CONTEXTO DO USUÁRIO:
-${dynamicContext}
-
-${FOOD_COACHING_RULES}`;
-
-    const contents = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
-    let response;
-    try {
-      response = await withGeminiRetry(() =>
-        getGemini().models.generateContent({
-          model: GEMINI_MODEL,
-          contents,
-          config: {
-            systemInstruction,
-            tools: [{ functionDeclarations: [LOG_FOOD_DECLARATION] }],
-            toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-            maxOutputTokens: MAX_REPLY_TOKENS,
-            temperature: 0.7,
-            httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS },
-          },
-        })
-      );
-    } catch (geminiErr) {
-      console.error('[chat] Gemini failed, falling back to Groq:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
-      try {
-        const message = await groqReply(systemInstruction, messages);
-        return NextResponse.json({ message: message.trim() || EMPTY_REPLY, foodLogged: false, foodLog: null });
-      } catch (groqErr) {
-        console.error('[chat] Groq fallback also failed:', groqErr instanceof Error ? groqErr.message : groqErr);
-        throw geminiErr;
-      }
-    }
-
-    let foodLogged = false;
-    let assistantMessage = '';
-    let insertedRow: Record<string, unknown> | null = null;
-
-    const call = response.functionCalls?.find((c) => c.name === 'log_food');
-    if (call) {
-      const args = (call.args ?? {}) as Record<string, unknown>;
-      const foodName = typeof args.food_name === 'string' ? args.food_name.trim().slice(0, 200) : '';
-      const calories = optionalNumber(args.calories);
-      const mealType = MEAL_TYPES.includes(args.meal_type as string) ? (args.meal_type as string) : 'other';
-
-      let functionResult: string;
-      if (!foodName || calories === null) {
-        // Don't insert a row with a blank name or missing calories.
-        functionResult = 'Erro: nome do alimento ou calorias ausentes. Peça mais detalhes ao usuário.';
-      } else {
-        try {
-          const [data] = await insertInto('food_logs', {
-            user_id: user.id,
-            food_name: foodName,
-            meal_type: mealType,
-            calories: Math.round(calories),
-            protein: optionalNumber(args.protein),
-            carbs: optionalNumber(args.carbs),
-            fat: optionalNumber(args.fat),
-            // Diary days follow the Brazil calendar, not UTC.
-            log_date: brazilToday(),
-          }, { returning: '*' });
-          insertedRow = data;
-        } catch (e) {
-          console.error('[chat] food_logs insert failed:', e);
-        }
-        foodLogged = insertedRow !== null;
-        functionResult = foodLogged
-          ? `Registrado: ${foodName}, ${Math.round(calories)} kcal`
-          : 'Erro ao registrar';
-      }
-
-      // The row may already be saved, so a failed follow-up must not turn into
-      // an error response — the user would resend and log the food twice.
-      try {
-        const modelParts = response.candidates?.[0]?.content?.parts ?? [];
-        const followUp = await withGeminiRetry(() =>
-          getGemini().models.generateContent({
-            model: GEMINI_MODEL,
-            contents: [
-              ...contents,
-              { role: 'model', parts: modelParts },
-              {
-                role: 'user',
-                parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
-              },
-            ],
-            config: {
-              systemInstruction,
-              maxOutputTokens: MAX_REPLY_TOKENS,
-              temperature: 0.7,
-              httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS },
-            },
-          })
-        );
-        assistantMessage = followUp.text ?? '';
-      } catch (followErr) {
-        console.error('[chat] follow-up failed:', followErr instanceof Error ? followErr.message : followErr);
-      }
-
-      if (!assistantMessage.trim()) {
-        assistantMessage = foodLogged
-          ? `✅ Registrei ${foodName} (${Math.round(calories ?? 0)} kcal) no seu diário.`
-          : 'Não consegui registrar esse alimento. Pode me dizer o nome e a quantidade?';
-      }
-    } else {
-      assistantMessage = response.text ?? '';
-    }
-
-    if (!assistantMessage.trim()) assistantMessage = EMPTY_REPLY;
-
-    return NextResponse.json({ message: assistantMessage, foodLogged, foodLog: insertedRow ?? null });
-  } catch (error) {
-    return aiErrorResponse(error, 'chat', 'Desculpe, tive um problema. Tente novamente.');
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const userId = session.user.id;
+
+  const body = await req.json().catch(() => null);
+  const messages = sanitizeMessages(body?.messages);
+  if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+    return NextResponse.json({ error: 'Mensagem inválida.' }, { status: 400 });
+  }
+  // Versões antigas do app (PWA em cache) não mandam os ids: o turno funciona,
+  // só não dá para recuperar a resposta se a conexão cair.
+  const conversationId = isUuid(body?.conversation_id) ? body.conversation_id : newId();
+  const questionId = isUuid(body?.message_id) ? body.message_id : newId();
+  const question = messages[messages.length - 1].content;
+
+  const encoder = new TextEncoder();
+  let connected = true;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (type: string, payload: unknown) => {
+        if (!connected) return;
+        try { controller.enqueue(encoder.encode(formatSSE(type, payload))); }
+        catch { connected = false; /* cliente desconectou */ }
+      };
+      // O modelo pode ficar dezenas de segundos sem responder: o app usa o
+      // ping para saber se a conexão ainda está de pé.
+      const ping = setInterval(() => send('ping', {}), PING_MS);
+
+      const turn = (async () => {
+        try {
+          await saveUserMessage({ id: questionId, userId, conversationId, content: question });
+
+          const intent = detectIntent(question);
+          const dynamicContext = await buildDynamicContext(userId, intent);
+          console.log(`[chat] intent=${intent} | user=${userId}`);
+
+          const result = await runChatTurn(
+            {
+              userId,
+              systemInstruction: buildSystemInstruction(dynamicContext),
+              messages,
+              // Diary days follow the Brazil calendar, not UTC.
+              logDate: brazilToday(),
+            },
+            deps
+          );
+
+          // Grava antes do "done": se o cliente caiu, é daqui que ele busca.
+          const messageId = await saveAssistantMessage({
+            userId,
+            conversationId,
+            content: result.message,
+            foodLogId: typeof result.foodLog?.id === 'string' ? result.foodLog.id : null,
+            meta: { ...result.meta, intent },
+          });
+
+          send('done', {
+            message: result.message,
+            foodLogged: result.foodLogged,
+            foodLog: result.foodLog,
+            message_id: messageId,
+          });
+        } catch (err) {
+          send('error', aiErrorInfo(err, 'chat', 'Desculpe, tive um problema. Tente novamente.'));
+        } finally {
+          clearInterval(ping);
+          try { controller.close(); } catch { /* já fechado */ }
+        }
+      })();
+
+      // Mantém a função viva até o turno terminar mesmo se o cliente sair —
+      // senão a resposta nunca era gravada.
+      after(turn);
+    },
+    cancel() {
+      // Cliente desconectou: o turno segue (ver after acima), só para de enviar.
+      connected = false;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      // Evita buffering em proxies (o stream chegaria de uma vez só no fim).
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }
