@@ -75,16 +75,6 @@ export async function getCustomFood(userId: string, id: string): Promise<CustomF
   return rows[0] ? asCustom(rows[0]) : null;
 }
 
-let tacoNamesCache: { at: number; names: string[] } | null = null;
-
-/** Nomes da TACO para a IA escolher (cache de 1 h por instância). */
-export async function tacoNames(): Promise<string[]> {
-  if (tacoNamesCache && Date.now() - tacoNamesCache.at < 3_600_000) return tacoNamesCache.names;
-  const rows = (await sql`SELECT nome FROM taco_foods ORDER BY id`) as { nome: string }[];
-  tacoNamesCache = { at: Date.now(), names: rows.map((r) => r.nome) };
-  return tacoNamesCache.names;
-}
-
 // ── Resolução de um item ─────────────────────────────────────────────────────
 
 export interface FoodQuery {

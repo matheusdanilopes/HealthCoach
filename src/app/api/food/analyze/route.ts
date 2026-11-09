@@ -3,7 +3,7 @@ import { auth } from '@/auth';
 import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 import type { GroqPart } from '@/lib/groq';
 import { isNonBeverageFood } from '@/lib/beverages';
-import { resolveFoodSafe, tacoNames } from '@/lib/nutrition/foods';
+import { resolveFoodSafe } from '@/lib/nutrition/foods';
 
 // A IA só identifica cada alimento e estima as gramas. kcal e macros são
 // calculados pelo app (rótulo salvo pelo usuário → TACO → estimativa da IA,
@@ -18,7 +18,7 @@ Retorne SOMENTE JSON válido sem markdown, sem blocos de código:
 
 CAMPOS DE CADA ITEM:
 • name: nome curto e natural do alimento, como o usuário falaria
-• taco_name: copie EXATAMENTE uma descrição da LISTA TACO no fim destas instruções que seja o mesmo alimento, com o mesmo preparo (cru, cozido, frito, assado, grelhado...). Se não houver um equivalente fiel, use null — NUNCA escolha um preparo diferente (ex.: macarrão cozido ≠ "Macarrão, trigo, cru") nem invente uma descrição
+• taco_name: a descrição do mesmo alimento na TACO 4ª edição, no formato dela ("Alimento, variedade, preparo"), com o mesmo preparo (cru, cozido, frito, assado, grelhado...). Exemplos: "Arroz, tipo 1, cozido", "Feijão, carioca, cozido", "Frango, peito, sem pele, grelhado", "Ovo, de galinha, inteiro, cozido/10minutos", "Pão, trigo, francês", "Banana, prata, crua". Se não tiver certeza de que o alimento existe na TACO, use null — NUNCA troque o preparo (macarrão cozido ≠ "Macarrão, trigo, cru")
 • quantity: medida caseira legível ("1 concha", "2 fatias", "200 ml")
 • grams: peso comestível em gramas (número). Líquidos: ml ≈ g
 • calories, protein, carbs, fat: sua estimativa para esse peso — usada SÓ se o alimento não estiver na TACO
@@ -84,17 +84,6 @@ REGRAS FINAIS:
 3. grams e calories = inteiros; macros com uma casa decimal
 4. Em caso de dúvida → SUBESTIME
 5. NUNCA use aspas duplas (") dentro dos textos de "name", "taco_name" ou "quantity" — isso quebra o JSON. Escreva polegadas, apelidos ou ênfases sem aspas`;
-
-// A lista oficial vai no prompt para a IA copiar a descrição exata.
-async function systemPrompt(): Promise<string> {
-  try {
-    const names = await tacoNames();
-    if (names.length) return `${SYSTEM}\n\nLISTA TACO (uma descrição por linha):\n${names.join('\n')}`;
-  } catch (err) {
-    console.error('[food-analyze] lista TACO indisponível:', err instanceof Error ? err.message : err);
-  }
-  return SYSTEM;
-}
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // decoded size
@@ -289,7 +278,7 @@ export async function POST(req: Request) {
     try {
       data = await generateJSON({
         label: 'food-analyze',
-        system: await systemPrompt(),
+        system: SYSTEM,
         parts,
         // Newer models can spend part of the output budget on hidden reasoning;
         // meals with many items need room for the full foods array or the
