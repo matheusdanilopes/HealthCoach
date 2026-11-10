@@ -19,7 +19,7 @@ const SAUDE_SUB_ITEMS = [
   { href: '/diary',    icon: BookOpen,   label: 'Diário',               desc: 'Refeições e hábitos' },
   { href: '/history',  icon: TrendingUp, label: 'Evolução',             desc: 'Gráficos e progresso' },
   { href: '/marmitas', icon: ChefHat,    label: 'Marmitas IA',          desc: 'Planejamento semanal' },
-  { href: '/coach',    icon: Brain,      label: 'Coach IA',             desc: 'Análise comportamental' },
+  { href: '/coach',    icon: Brain,      label: 'Análise Nina',         desc: 'Análise comportamental' },
 ];
 
 function SubMenu({

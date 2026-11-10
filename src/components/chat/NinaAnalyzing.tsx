@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { COACH_NAME } from '@/lib/coach-persona';
 
-export type NinaAnalyzingVariant = 'meal' | 'workout' | 'steps' | 'reanalyze';
+export type NinaAnalyzingVariant = 'meal' | 'workout' | 'steps' | 'reanalyze' | 'behavior' | 'mealprep';
 
 const MESSAGES: Record<NinaAnalyzingVariant, string[]> = {
   meal: [
@@ -33,6 +33,21 @@ const MESSAGES: Record<NinaAnalyzingVariant, string[]> = {
     'Recalculando calorias e macros…',
     'Só mais um instante…',
   ],
+  behavior: [
+    'Lendo seus registros…',
+    'Identificando padrões de comportamento…',
+    'Comparando com o seu objetivo…',
+    'Montando sua estratégia…',
+    'Só mais um instante…',
+  ],
+  mealprep: [
+    'Escolhendo as proteínas…',
+    'Combinando carboidratos e legumes…',
+    'Ajustando as porções às suas metas…',
+    'Calculando macros e custo…',
+    'Montando a lista de compras…',
+    'Só mais um instante…',
+  ],
 };
 
 const ORBIT: Record<NinaAnalyzingVariant, string[]> = {
@@ -40,9 +55,16 @@ const ORBIT: Record<NinaAnalyzingVariant, string[]> = {
   workout: ['🏋️', '🔥', '⏱️'],
   steps: ['👟', '🔥', '📍'],
   reanalyze: ['🥗', '🍎', '🍗'],
+  behavior: ['📊', '🎯', '💡'],
+  mealprep: ['🍱', '🥦', '🍗'],
 };
 
-const MESSAGE_INTERVAL_MS = 2200;
+/** Tempo em cada mensagem: análises mais longas avançam mais devagar. */
+const MESSAGE_INTERVAL_MS: Partial<Record<NinaAnalyzingVariant, number>> = {
+  behavior: 4000,
+  mealprep: 3500,
+};
+const DEFAULT_INTERVAL_MS = 2200;
 
 interface NinaAnalyzingProps {
   variant: NinaAnalyzingVariant;
@@ -50,6 +72,8 @@ interface NinaAnalyzingProps {
   imageSrc?: string | null;
   /** Versão em linha, para o lugar de um botão (ex.: "Re-analisar com IA"). */
   compact?: boolean;
+  /** Título acima das mensagens (padrão: "Nina está analisando"). */
+  title?: string;
   className?: string;
 }
 
@@ -57,16 +81,18 @@ interface NinaAnalyzingProps {
  * A Nina trabalhando enquanto a IA analisa uma refeição ou um treino:
  * ela flutua, pisca, varre com a lupa e as mensagens mostram cada etapa.
  */
-export default function NinaAnalyzing({ variant, imageSrc, compact, className }: NinaAnalyzingProps) {
+export default function NinaAnalyzing({ variant, imageSrc, compact, title, className }: NinaAnalyzingProps) {
   const messages = MESSAGES[variant];
+  const heading = title ?? `${COACH_NAME} está analisando`;
+  const interval = MESSAGE_INTERVAL_MS[variant] ?? DEFAULT_INTERVAL_MS;
   const [index, setIndex] = useState(0);
 
   // Avança pelas etapas e para na última ("Só mais um instante…").
   useEffect(() => {
     if (index >= messages.length - 1) return;
-    const id = setTimeout(() => setIndex((i) => i + 1), MESSAGE_INTERVAL_MS);
+    const id = setTimeout(() => setIndex((i) => i + 1), interval);
     return () => clearTimeout(id);
-  }, [index, messages.length]);
+  }, [index, messages.length, interval]);
 
   if (compact) {
     return (
@@ -87,8 +113,8 @@ export default function NinaAnalyzing({ variant, imageSrc, compact, className }:
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-            {COACH_NAME} está analisando
+          <span className="truncate text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+            {heading}
           </span>
           <span key={index} className="animate-count-up truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">
             {messages[index]}
@@ -144,8 +170,8 @@ export default function NinaAnalyzing({ variant, imageSrc, compact, className }:
       </div>
 
       <div className="flex flex-col items-center gap-1.5 min-h-[40px]">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-          {COACH_NAME} está analisando
+        <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 text-center">
+          {heading}
         </p>
         <p key={index} className="animate-count-up text-[13px] font-medium text-zinc-700 dark:text-zinc-200 text-center">
           {messages[index]}
