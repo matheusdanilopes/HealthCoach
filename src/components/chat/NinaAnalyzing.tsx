@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { COACH_NAME } from '@/lib/coach-persona';
 
-export type NinaAnalyzingVariant = 'meal' | 'workout' | 'steps' | 'reanalyze' | 'behavior' | 'mealprep';
+export type NinaAnalyzingVariant = 'meal' | 'workout' | 'steps' | 'reanalyze' | 'behavior' | 'mealprep' | 'trainingplan';
 
 const MESSAGES: Record<NinaAnalyzingVariant, string[]> = {
   meal: [
@@ -48,6 +48,14 @@ const MESSAGES: Record<NinaAnalyzingVariant, string[]> = {
     'Montando a lista de compras…',
     'Só mais um instante…',
   ],
+  trainingplan: [
+    'Lendo seu perfil e histórico…',
+    'Escolhendo a divisão da semana…',
+    'Selecionando os exercícios…',
+    'Ajustando séries, repetições e cargas…',
+    'Escrevendo as explicações de execução…',
+    'Só mais um instante…',
+  ],
 };
 
 const ORBIT: Record<NinaAnalyzingVariant, string[]> = {
@@ -57,12 +65,14 @@ const ORBIT: Record<NinaAnalyzingVariant, string[]> = {
   reanalyze: ['🥗', '🍎', '🍗'],
   behavior: ['📊', '🎯', '💡'],
   mealprep: ['🍱', '🥦', '🍗'],
+  trainingplan: ['🏋️', '📅', '💪'],
 };
 
 /** Tempo em cada mensagem: análises mais longas avançam mais devagar. */
 const MESSAGE_INTERVAL_MS: Partial<Record<NinaAnalyzingVariant, number>> = {
   behavior: 4000,
   mealprep: 3500,
+  trainingplan: 6000,
 };
 const DEFAULT_INTERVAL_MS = 2200;
 
