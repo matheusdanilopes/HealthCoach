@@ -5,16 +5,22 @@ const RETRYABLE = [
 ];
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
-function isRetryable(err: unknown): boolean {
+// Falta de saldo (402) também vem como RESOURCE_EXHAUSTED, mas não passa
+// sozinha: repetir só somava ~7 s de espera antes de cair no Groq.
+const BILLING = ['credits are depleted', 'prepayment credits'];
+
+export function isRetryable(err: unknown): boolean {
   // The SDK's ApiError exposes the HTTP status directly.
   const status = (err as { status?: unknown })?.status;
-  if (typeof status === 'number' && RETRYABLE_STATUS.has(status)) return true;
+  if (status === 402) return false;
   const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('"code":402') || BILLING.some((token) => msg.includes(token))) return false;
+  if (typeof status === 'number' && RETRYABLE_STATUS.has(status)) return true;
   return RETRYABLE.some((token) => msg.includes(token));
 }
 
-export async function withGeminiRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
-  let delay = 1000;
+export async function withGeminiRetry<T>(fn: () => Promise<T>, maxAttempts = 4, baseDelayMs = 1000): Promise<T> {
+  let delay = baseDelayMs;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
