@@ -1,10 +1,12 @@
 'use client';
 
+import CoachAvatar from '@/components/chat/CoachAvatar';
+import { COACH_NAME } from '@/lib/coach-persona';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  Brain, Sparkles, RefreshCw, AlertCircle, TriangleAlert, CircleCheck, Lightbulb,
+  Sparkles, RefreshCw, AlertCircle, TriangleAlert, CircleCheck, Lightbulb,
   Compass, ListChecks, Flame, Beef, Dumbbell, Droplets, Scale, CalendarCheck,
   TrendingDown, TrendingUp, Target, Info,
 } from 'lucide-react';
@@ -167,13 +169,11 @@ export default function CoachClient({ userId, snapshot }: { userId: string; snap
 
       {/* ── Header ── */}
       <header className="flex items-center gap-3 px-1">
-        <span className="h-11 w-11 flex-shrink-0 rounded-2xl bg-gradient-to-br from-violet-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-          <Brain className="w-5 h-5 text-white" />
-        </span>
+        <CoachAvatar size={44} className="shadow-lg shadow-emerald-600/20" />
         <div className="min-w-0">
           <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-50 leading-tight tracking-tight">Coach IA</h1>
           <p className="text-[12px] text-zinc-500 dark:text-zinc-400">
-            Análise do seu comportamento para chegar ao seu objetivo
+            A {COACH_NAME} analisa seu comportamento para você chegar ao seu objetivo
           </p>
         </div>
       </header>

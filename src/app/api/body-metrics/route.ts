@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { insertInto, sql } from '@/lib/db';
+import { saveWeightAndRecalculateTargets } from '@/lib/energy-targets';
 
 export async function GET() {
   const session = await auth();
@@ -53,10 +54,7 @@ export async function POST(req: Request) {
   `;
 
   if (latest?.date === date) {
-    await sql`
-      UPDATE users SET current_weight = ${weight}, updated_at = ${new Date().toISOString()}
-      WHERE id = ${session.user.id}
-    `;
+    await saveWeightAndRecalculateTargets(session.user.id, Number(weight));
   }
 
   return NextResponse.json(data);

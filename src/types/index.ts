@@ -7,6 +7,7 @@ export interface Profile {
   height_cm: number | null;
   activity_level: 'sedentary' | 'moderate' | 'active' | null;
   tdee: number | null;
+  custom_tmb?: number | null;
   target_calories: number | null;
   target_protein_g: number | null;
   target_water_ml: number;
@@ -59,6 +60,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;
+  /** Id gravado em chat_messages (pergunta: gerado pelo app; resposta: pelo servidor). */
+  id?: string;
+  /** 👍 (1) / 👎 (-1) dado pelo usuário a uma resposta. */
+  rating?: 1 | -1 | null;
 }
 
 export interface BodyMetrics {

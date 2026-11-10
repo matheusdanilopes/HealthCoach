@@ -1,7 +1,27 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import SplashScreen from '@/components/layout/SplashScreen';
+
+// Self-hosted and preloaded by Next.js: no render-blocking request to
+// Google Fonts and no layout shift when the font swaps in.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-inter',
+});
+
+// Runs before first paint (inline, so no extra request): applies the saved
+// theme, decides whether the opening animation plays (once per app session)
+// and captures the PWA install prompt.
+const BOOT_SCRIPT = `(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('theme');var p=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';if((t||p)==='dark')d.classList.add('dark');}catch(e){}
+try{if(sessionStorage.getItem('hc-splash')||matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('no-splash');}else{sessionStorage.setItem('hc-splash','1');d.classList.add('splash');setTimeout(function(){d.classList.remove('splash');},1000);}}catch(e){d.classList.add('no-splash');}
+try{window.__pwaInstallEvent=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallEvent=e;dispatchEvent(new Event('pwa-install-ready'));});}catch(e){}
+})();`;
 
 export const metadata: Metadata = {
   title: 'HealthCoach AI',
@@ -49,17 +69,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className="h-full">
+    // The boot script toggles classes on <html> before hydration.
+    <html lang="pt-BR" className={`h-full ${inter.variable}`} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
         <link rel="manifest" href="/manifest.json" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-full antialiased">
-        <Script src="/theme-init.js" strategy="beforeInteractive" />
-        <Script src="/pwa-init.js" strategy="beforeInteractive" />
-        <Script src="/sw-register.js" strategy="afterInteractive" />
+        <SplashScreen />
+        {/* Service worker registration doesn't affect the first screen — defer it. */}
+        <Script src="/sw-register.js" strategy="lazyOnload" />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

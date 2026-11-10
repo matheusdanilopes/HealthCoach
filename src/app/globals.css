@@ -22,7 +22,7 @@ html.dark {
 body {
   background: #f4f4f6;
   color: #09090b;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -279,4 +279,152 @@ html.dark .animate-shimmer {
 /* ─── Touch feedback ─── */
 .touch-highlight {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Opening animation
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Lets the first cascade start while the splash is fading, not after */
+  --enter-base: 0s;
+}
+html.splash {
+  --enter-base: 0.18s;
+}
+
+#hc-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Matches the native launch image so the hand-off is seamless */
+  background: linear-gradient(160deg, #079a6a 0%, #05644a 45%, #022c22 100%);
+  pointer-events: none;
+  animation: splash-out 0.45s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
+}
+html.no-splash #hc-splash {
+  display: none;
+}
+
+.hc-splash-mark {
+  width: 86px;
+  height: 86px;
+  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  box-shadow: 0 0 60px 0 rgb(16 185 129 / 0.35);
+  animation: splash-zoom 0.6s cubic-bezier(0.7, 0, 0.3, 1) forwards;
+}
+
+@keyframes splash-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes splash-zoom {
+  0%   { transform: scale(1);    opacity: 1; }
+  30%  { transform: scale(0.88); opacity: 1; }
+  100% { transform: scale(3.2);  opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Screen transitions
+   The skeleton ([aria-busy]) just fades in — it is instant feedback.
+   The real content is what slides in, in the direction of travel
+   along the bottom nav, and its sections cascade in after it.
+   Only `backwards` fill is used: once finished no transform is left
+   behind, so position: fixed children (modals, chat button) keep the
+   viewport as their containing block.
+   ═══════════════════════════════════════════════════════════════ */
+
+.page-transition > [aria-busy] {
+  animation: page-fade 0.2s ease-out backwards;
+}
+.page-enter-forward > :not([aria-busy]) {
+  animation: page-in-right 0.45s var(--ease-out-expo) backwards;
+}
+.page-enter-back > :not([aria-busy]) {
+  animation: page-in-left 0.45s var(--ease-out-expo) backwards;
+}
+.page-enter-fade > :not([aria-busy]) {
+  animation: page-fade 0.3s ease-out backwards;
+}
+
+@keyframes page-in-right {
+  from { opacity: 0; transform: translate3d(56px, 0, 0); }
+}
+@keyframes page-in-left {
+  from { opacity: 0; transform: translate3d(-56px, 0, 0); }
+}
+@keyframes page-fade {
+  from { opacity: 0; }
+}
+
+/* Sections of every screen cascade in (fixed overlays excluded) */
+.page-transition > :not([aria-busy]) > :not(.fixed),
+.stagger > * {
+  animation: stagger-rise 0.6s var(--ease-out-expo) backwards;
+  --stagger-step: 0.06s;
+}
+.page-transition > :not([aria-busy]) > :nth-child(1),
+.stagger > :nth-child(1) { animation-delay: calc(var(--enter-base) + var(--stagger-offset, 0s)); }
+.page-transition > :not([aria-busy]) > :nth-child(2),
+.stagger > :nth-child(2) { animation-delay: calc(var(--enter-base) + var(--stagger-offset, 0s) + var(--stagger-step)); }
+.page-transition > :not([aria-busy]) > :nth-child(3),
+.stagger > :nth-child(3) { animation-delay: calc(var(--enter-base) + var(--stagger-offset, 0s) + var(--stagger-step) * 2); }
+.page-transition > :not([aria-busy]) > :nth-child(4),
+.stagger > :nth-child(4) { animation-delay: calc(var(--enter-base) + var(--stagger-offset, 0s) + var(--stagger-step) * 3); }
+.page-transition > :not([aria-busy]) > :nth-child(5),
+.stagger > :nth-child(5) { animation-delay: calc(var(--enter-base) + var(--stagger-offset, 0s) + var(--stagger-step) * 4); }
+.page-transition > :not([aria-busy]) > :nth-child(n + 6),
+.stagger > :nth-child(n + 6) { animation-delay: calc(var(--enter-base) + var(--stagger-offset, 0s) + var(--stagger-step) * 5); }
+
+@keyframes stagger-rise {
+  from { opacity: 0; transform: translate3d(0, 26px, 0) scale(0.97); }
+}
+
+/* Bottom navigation feedback */
+.nav-indicator {
+  animation: nav-indicator-in 0.45s var(--ease-spring) both;
+}
+.nav-icon-active {
+  animation: nav-icon-bounce 0.5s var(--ease-spring);
+}
+
+/* Tailwind v4 positions the pill with the `translate` property, so the
+   keyframes only touch `transform` and both compose. */
+@keyframes nav-indicator-in {
+  from { transform: scaleX(0); opacity: 0; }
+  to   { transform: scaleX(1); opacity: 1; }
+}
+@keyframes nav-icon-bounce {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.28) translateY(-2px); }
+  100% { transform: scale(1); }
+}
+
+/* Submenu items cascade in */
+.submenu-stagger > * {
+  animation: stagger-rise 0.35s var(--ease-out-expo) backwards;
+}
+.submenu-stagger > :nth-child(2) { animation-delay: 0.04s; }
+.submenu-stagger > :nth-child(3) { animation-delay: 0.08s; }
+.submenu-stagger > :nth-child(4) { animation-delay: 0.12s; }
+
+/* ─── Reduced motion: keep the app, drop the movement ─── */
+@media (prefers-reduced-motion: reduce) {
+  #hc-splash { display: none; }
+  .page-transition > *,
+  .page-transition > * > *,
+  .stagger > *,
+  .submenu-stagger > *,
+  .nav-indicator,
+  .nav-icon-active {
+    animation: none !important;
+  }
 }

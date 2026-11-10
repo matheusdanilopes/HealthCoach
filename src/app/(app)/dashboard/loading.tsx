@@ -4,7 +4,7 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-6">
+    <div aria-busy="true" className="flex flex-col gap-4 pt-6 pb-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-1">
         <div className="flex flex-col gap-2">

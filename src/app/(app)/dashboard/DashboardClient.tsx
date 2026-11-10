@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Scale, Plus, Sparkles, Dumbbell } from 'lucide-react';
@@ -9,12 +10,16 @@ import DailySummaryCard from '@/components/dashboard/DailySummaryCard';
 import MealsOverview from '@/components/dashboard/MealsOverview';
 import WeekStrip from '@/components/dashboard/WeekStrip';
 import WaterTracker from '@/components/dashboard/WaterTracker';
-import AIFoodLogger from '@/components/diary/AIFoodLogger';
-import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
 import AIChat from '@/components/chat/AIChat';
-import WeightLogModal from './WeightLogModal';
 import { cn, todayISO, suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType, Profile, WaterLogEntry } from '@/types';
+
+// The modals are large (camera, voice, AI flows) and are never visible on the
+// first paint, so they are split out of the initial bundle and fetched right
+// after hydration instead of delaying the opening of the app.
+const AIFoodLogger    = dynamic(() => import('@/components/diary/AIFoodLogger'),    { ssr: false });
+const AddWorkoutModal = dynamic(() => import('@/components/diary/AddWorkoutModal'), { ssr: false });
+const WeightLogModal  = dynamic(() => import('./WeightLogModal'),                   { ssr: false });
 
 interface DashboardClientProps {
   profile: Profile | null;
@@ -131,7 +136,7 @@ export default function DashboardClient({
   const suggestedMeal = isToday ? suggestMealType(new Date().getHours()) : null;
 
   return (
-    <div className="flex flex-col gap-4 pt-6 pb-6 animate-fade-in">
+    <div className="flex flex-col gap-4 pt-6 pb-6">
 
       {/* ── Header ── */}
       <header className="flex items-center justify-between gap-3 px-1">
@@ -171,7 +176,10 @@ export default function DashboardClient({
         onSelect={navigateTo}
       />
 
-      <div className={cn('flex flex-col gap-4 transition-opacity duration-200', loadingDate && 'opacity-50')}>
+      <div
+        className={cn('stagger flex flex-col gap-4 transition-opacity duration-200', loadingDate && 'opacity-50')}
+        style={{ '--stagger-offset': '0.1s' } as React.CSSProperties}
+      >
         <DailySummaryCard
           consumed={stats.calories}
           burned={workoutBurned}
@@ -258,6 +266,7 @@ export default function DashboardClient({
         <AIChat
           profile={profile}
           dailyCalories={stats.calories}
+          dailyProtein={stats.protein}
           dailyWater={water}
           userId={userId}
           onFoodLogged={handleFoodAdded}

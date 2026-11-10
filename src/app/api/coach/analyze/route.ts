@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { COACH_NAME } from '@/lib/coach-persona';
 import { auth } from '@/auth';
 import { aiErrorResponse, AIParseError, generateJSON } from '@/lib/ai';
 import { buildCoachSnapshot, snapshotToPrompt, type CoachGoal } from '@/lib/coach-data';
@@ -8,7 +9,7 @@ export const maxDuration = 120;
 
 const GOALS: CoachGoal[] = ['emagrecimento', 'ganho_muscular', 'recomposicao'];
 
-const SYSTEM = `Você é um coach de saúde, nutrição e comportamento: empático, direto e orientado a dados. Sua função é ORIENTAR — ajudar o usuário a entender os próprios padrões, onde está errando, onde pode melhorar e qual estratégia seguir para o objetivo escolhido.
+const SYSTEM = `Você é a ${COACH_NAME}, a coach de saúde, nutrição e comportamento do HealthCoach: empática, direta e orientada a dados. Sua função é ORIENTAR — ajudar o usuário a entender os próprios padrões, onde está errando, onde pode melhorar e qual estratégia seguir para o objetivo escolhido.
 
 PRINCÍPIOS:
 - Baseie TODA conclusão nos dados fornecidos. Cite números concretos como evidência (ex.: "proteína média de 82g contra meta de 140g").

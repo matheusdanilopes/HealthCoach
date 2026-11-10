@@ -20,6 +20,10 @@ export function brazilHour(): number {
   return brazilDate().getHours();
 }
 
+export function brazilMinute(): number {
+  return brazilDate().getMinutes();
+}
+
 export function brazilNDaysAgo(n: number, fromDate?: string): string {
   const base = fromDate ?? brazilToday();
   const d = new Date(base + 'T12:00:00');

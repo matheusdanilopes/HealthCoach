@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { getSession } from '@/lib/session';
 import { sql } from '@/lib/db';
 import BodyMeasurementsClient from './BodyMeasurementsClient';
 import type { BodyMeasurements } from '@/types';
@@ -30,7 +30,7 @@ function parseRow(r: Record<string, unknown>): BodyMeasurements {
 }
 
 export default async function BodyMeasurementsPage() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect('/login');
 
   const data = await sql`

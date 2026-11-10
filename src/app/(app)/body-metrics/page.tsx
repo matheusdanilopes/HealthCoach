@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { getSession } from '@/lib/session';
 import { sql } from '@/lib/db';
 import BodyMetricsClient from './BodyMetricsClient';
 import type { BodyMetrics } from '@/types';
 
 export default async function BodyMetricsPage() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect('/login');
 
   const data = await sql`

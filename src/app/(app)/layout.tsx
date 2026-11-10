@@ -1,17 +1,17 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
-import { sql } from '@/lib/db';
+import { getSession, getUserRow } from '@/lib/session';
 import BottomNav from '@/components/layout/BottomNav';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { LogoIcon } from '@/components/ui/Logo';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect('/login');
 
-  const [data] = await sql`SELECT target_calories FROM users WHERE id = ${session.user.id}`;
-
-  if (data?.target_calories == null) redirect('/register');
+  // Layout and page render in parallel, and getUserRow is memoized per
+  // request, so pages that need the user row reuse this same query.
+  const user = await getUserRow(session.user.id);
+  if (user?.target_calories == null) redirect('/register');
 
   return (
     <div className="min-h-screen bg-[#f4f4f6] dark:bg-[#0c0c0e]">
@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main
-        className="max-w-2xl mx-auto px-4 sm:px-5"
+        className="max-w-2xl mx-auto px-4 sm:px-5 overflow-x-clip"
         style={{ paddingBottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }}
       >
         {children}

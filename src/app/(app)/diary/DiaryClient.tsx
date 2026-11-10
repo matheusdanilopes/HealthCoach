@@ -4,13 +4,16 @@ import { useState, useCallback, useEffect, useMemo, useRef, type FormEvent } fro
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import MealSection from '@/components/diary/MealSection';
-import AIFoodLogger from '@/components/diary/AIFoodLogger';
-import AddWorkoutModal from '@/components/diary/AddWorkoutModal';
-import EditFoodModal from '@/components/diary/EditFoodModal';
+import dynamic from 'next/dynamic';
 import { Dumbbell, Plus, ChevronLeft, ChevronRight, Trash2, Sparkles, Droplets, Clock } from 'lucide-react';
 import { cn, todayISO, suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType, WaterLogEntry } from '@/types';
 import { ALL_MEAL_TYPES } from '@/components/diary/MealTypeSelector';
+
+// Only shown after a tap — keep them out of the initial bundle.
+const AIFoodLogger    = dynamic(() => import('@/components/diary/AIFoodLogger'),    { ssr: false });
+const AddWorkoutModal = dynamic(() => import('@/components/diary/AddWorkoutModal'), { ssr: false });
+const EditFoodModal   = dynamic(() => import('@/components/diary/EditFoodModal'),   { ssr: false });
 
 const MEAL_TYPES: MealType[] = ALL_MEAL_TYPES;
 

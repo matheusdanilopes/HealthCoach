@@ -6,6 +6,7 @@
 // pick() is deterministic: same userId + date + seed → same variant, so headlines
 // rotate day to day without randomness that is hard to debug.
 
+import { COACH_SIGNATURE } from '@/lib/coach-persona';
 import { escapeHtml } from '@/lib/telegram';
 import type { DayStatus, UserTargets } from '@/lib/day-status';
 
@@ -94,7 +95,7 @@ export function buildMorningMessage(t: UserTargets, yesterday: DayStatus, userId
   if (t.calories) goals.push(`🔥 ${int(t.calories)} kcal`);
   if (t.protein) goals.push(`🥩 ${int(t.protein)}g de proteína`);
   lines.push(`<b>Metas de hoje:</b> ${goals.join(' · ')}`);
-  lines.push('Comece com um copo de água agora 👇');
+  lines.push('Comece com um copo de água agora 👇', '', COACH_SIGNATURE);
 
   return lines.join('\n');
 }
@@ -221,6 +222,7 @@ export function buildEveningMessage(
   } else {
     lines.push(`${metrics.length - missed.length} de ${metrics.length} metas batidas. Para amanhã: ${FOCUS_TIP[missed[0].key]}.`);
   }
+  lines.push('', COACH_SIGNATURE);
   return lines.join('\n');
 }
 

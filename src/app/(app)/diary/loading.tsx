@@ -4,7 +4,7 @@ function Skeleton({ className }: { className?: string }) {
 
 export default function DiaryLoading() {
   return (
-    <div className="flex flex-col gap-5 pt-7 pb-6">
+    <div aria-busy="true" className="flex flex-col gap-5 pt-7 pb-6">
       {/* Header */}
       <div className="flex flex-col gap-3">
         <Skeleton className="h-7 w-24 rounded-xl" />
