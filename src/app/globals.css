@@ -416,6 +416,85 @@ html.no-splash #hc-splash {
 .submenu-stagger > :nth-child(3) { animation-delay: 0.08s; }
 .submenu-stagger > :nth-child(4) { animation-delay: 0.12s; }
 
+/* ═══════════════════════════════════════════════════════════════
+   Nina analisando (NinaAnalyzing)
+   ═══════════════════════════════════════════════════════════════ */
+
+.nina-bob,
+.nina-leaf,
+.nina-eyes,
+.nina-blink,
+.nina-lens,
+.nina-sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.nina-bob     { animation: nina-bob 2.4s ease-in-out infinite; transform-box: view-box; }
+.nina-leaf    { animation: nina-leaf 1.8s ease-in-out infinite; transform-origin: 0% 100%; }
+.nina-eyes    { animation: nina-look 2.8s ease-in-out infinite; }
+.nina-blink   { animation: nina-blink 3.6s ease-in-out infinite; }
+.nina-lens    { animation: nina-lens 2.8s ease-in-out infinite; }
+.nina-sparkle { animation: nina-sparkle 1.8s ease-in-out infinite; }
+.nina-halo    { animation: nina-halo 2.4s ease-in-out infinite; }
+.nina-ring    { animation: nina-spin 14s linear infinite; }
+.nina-orbit   { animation: nina-spin 7s linear infinite; }
+.nina-orbit-item { animation: nina-spin 7s linear infinite reverse; }
+.nina-dot     { animation: nina-dot 1s ease-in-out infinite; }
+
+.nina-scan::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 36%;
+  background: linear-gradient(to bottom, transparent, rgb(16 185 129 / 0.45) 85%, rgb(52 211 153 / 0.95));
+  border-bottom: 2px solid #34d399;
+  animation: nina-scan 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes nina-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.6px); }
+}
+@keyframes nina-leaf {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-12deg); }
+}
+@keyframes nina-look {
+  0%, 100% { transform: translate(0, 0); }
+  30%      { transform: translate(1.3px, 0.6px); }
+  60%      { transform: translate(-1.1px, 0.4px); }
+}
+@keyframes nina-blink {
+  0%, 44%, 50%, 100% { transform: scaleY(1); }
+  47%                { transform: scaleY(0.1); }
+}
+@keyframes nina-lens {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30%      { transform: translate(-4px, -5px) rotate(-8deg); }
+  60%      { transform: translate(-9px, 1px) rotate(6deg); }
+}
+@keyframes nina-sparkle {
+  0%, 100% { transform: scale(0.3) rotate(0deg); opacity: 0; }
+  50%      { transform: scale(1.1) rotate(45deg); opacity: 1; }
+}
+@keyframes nina-halo {
+  0%, 100% { transform: scale(0.92); opacity: 0.6; }
+  50%      { transform: scale(1.06); opacity: 1; }
+}
+@keyframes nina-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes nina-dot {
+  0%, 100% { transform: translateY(0);    opacity: 0.4; }
+  50%      { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes nina-scan {
+  from { top: -36%; }
+  to   { top: 100%; }
+}
+
 /* ─── Reduced motion: keep the app, drop the movement ─── */
 @media (prefers-reduced-motion: reduce) {
   #hc-splash { display: none; }
@@ -424,7 +503,18 @@ html.no-splash #hc-splash {
   .stagger > *,
   .submenu-stagger > *,
   .nav-indicator,
-  .nav-icon-active {
+  .nav-icon-active,
+  .nina-bob,
+  .nina-leaf,
+  .nina-eyes,
+  .nina-lens,
+  .nina-halo,
+  .nina-ring,
+  .nina-orbit,
+  .nina-orbit-item,
+  .nina-dot,
+  .nina-scan::after {
     animation: none !important;
   }
+  .nina-scan::after { display: none; }
 }

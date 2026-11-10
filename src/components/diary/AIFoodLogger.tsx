@@ -7,6 +7,7 @@ import { cn, suggestMealType } from '@/lib/utils';
 import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets, Mic, Square } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
 import type { FoodLog, MealType } from '@/types';
 
 interface FoodItem {
@@ -554,7 +555,7 @@ function AIFoodLoggerModal({
           />
 
           {/* Mode tabs */}
-          {!result && (
+          {!result && !analyzing && (
             <div className="flex bg-zinc-100 dark:bg-zinc-800/60 rounded-xl p-1 gap-1">
               {(['text', 'image', 'manual', 'voice'] as const).map((t) => (
                 <button
@@ -575,7 +576,12 @@ function AIFoodLoggerModal({
           )}
 
           {/* Text / Voice input */}
-          {!result && (tab === 'text' || tab === 'voice') && (
+          {/* Nina animada enquanto a IA analisa */}
+          {!result && analyzing && (
+            <NinaAnalyzing variant="meal" imageSrc={tab === 'image' ? imagePreview : null} />
+          )}
+
+          {!result && !analyzing && (tab === 'text' || tab === 'voice') && (
             <div className="flex flex-col gap-3">
               {tab === 'voice' && (
                 <div className="flex flex-col items-center gap-2 py-2">
@@ -702,7 +708,7 @@ function AIFoodLoggerModal({
           )}
 
           {/* Image input */}
-          {!result && tab === 'image' && (
+          {!result && !analyzing && tab === 'image' && (
             <div className="flex flex-col gap-3">
               {!imagePreview ? (
                 <>
