@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Plus, Trash2, ChevronDown, Pencil, Droplets } from 'lucide-react';
 import { getMealLabel, getMealIcon, cn } from '@/lib/utils';
 import type { FoodLog, MealType } from '@/types';
-import { FoodSourceBadge, ReviewBadge } from '@/components/diary/FoodSourceBadge';
 
 interface MealSectionProps {
   mealType: MealType;
@@ -105,20 +104,13 @@ export default function MealSection({ mealType, logs, onAdd, onDelete, onEdit }:
                 {logs.map((log) => (
                   <li
                     key={log.id}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0',
-                      log.needs_review && 'bg-amber-50/70 dark:bg-amber-950/20 border-l-2 border-l-amber-400 dark:border-l-amber-500/70',
-                    )}
+                    className="flex items-center gap-3 px-4 py-3 border-b border-zinc-50 dark:border-zinc-800/40 last:border-0"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-[13px] text-zinc-800 dark:text-zinc-200 truncate font-medium">
                           {log.food_name}
                         </p>
-                        {log.calories > 0 && <FoodSourceBadge source={log.source} />}
-                        {log.needs_review && (
-                          <ReviewBadge title={log.source === 'estimado' ? 'Estimado pela IA — toque em editar para revisar ou informar o rótulo' : 'Valores fora do esperado — toque em editar para conferir'} />
-                        )}
                         {(log.hydration_ml ?? 0) > 0 && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 border border-teal-100 dark:border-teal-900/40 flex-shrink-0">
                             <Droplets size={8} className="text-teal-500" />

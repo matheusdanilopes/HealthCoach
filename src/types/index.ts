@@ -26,19 +26,6 @@ export interface FoodLog {
   hydration_ml: number;
   hydration_source: 'meal' | 'manual' | null;
   hydration_confidence: 'high' | 'medium' | 'low' | null;
-  // Origem do cálculo (NULL nos registros anteriores à TACO).
-  quantity_g?: number | null;
-  taco_food_id?: number | null;
-  custom_food_id?: string | null;
-  source?: 'taco' | 'rotulo' | 'estimado' | 'manual' | null;
-  needs_review?: boolean | null;
-  // Referência usada (TACO ou rótulo), por 100 g.
-  ref_nome?: string | null;
-  ref_source?: 'taco' | 'rotulo' | null;
-  ref_kcal_100g?: number | null;
-  ref_protein_100g?: number | null;
-  ref_carbs_100g?: number | null;
-  ref_fat_100g?: number | null;
 }
 
 export interface WaterLog {
