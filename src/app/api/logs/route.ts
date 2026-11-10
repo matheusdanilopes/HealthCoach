@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
-import { FOOD_LOG_WITH_REF_FROM, FOOD_LOG_WITH_REF_SELECT } from '@/lib/nutrition/foods';
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -12,12 +11,13 @@ export async function GET(req: Request) {
   const date = searchParams.get('date') ?? brazilToday();
 
   const [foodData, waterData] = await Promise.all([
-    sql.query(
-      `SELECT ${FOOD_LOG_WITH_REF_SELECT} FROM ${FOOD_LOG_WITH_REF_FROM}
-       WHERE f.user_id = $1 AND f.log_date = $2
-       ORDER BY f.created_at`,
-      [session.user.id, date],
-    ),
+    sql`
+      SELECT id, user_id, food_name, meal_type, calories, protein, carbs, fat,
+             hydration_ml, hydration_source, hydration_confidence, created_at
+      FROM food_logs
+      WHERE user_id = ${session.user.id} AND log_date = ${date}
+      ORDER BY created_at
+    `,
     sql`
       SELECT id, amount_ml, created_at FROM water_logs
       WHERE user_id = ${session.user.id} AND log_date = ${date}

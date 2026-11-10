@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { FunctionCallingConfigMode, type Content, type GenerateContentConfig, type GenerateContentResponse } from '@google/genai';
 import {
   EMPTY_REPLY,
-  describeLoggedFood,
   normalizeLogFoodArgs,
   runChatTurn,
   sanitizeMessages,
@@ -15,10 +14,7 @@ import { geminiResponse, textResponse } from '@/lib/chat/testing';
 
 type Request = { model: string; contents: Content[]; config: GenerateContentConfig };
 
-function setup(
-  responses: Array<GenerateContentResponse | Error>,
-  opts: { insertFails?: boolean; groq?: string | Error; validationError?: string; saved?: Record<string, unknown> } = {},
-) {
+function setup(responses: Array<GenerateContentResponse | Error>, opts: { insertFails?: boolean; groq?: string | Error } = {}) {
   const requests: Request[] = [];
   const inserted: FoodLogRow[] = [];
   const deps: TurnDeps = {
@@ -31,9 +27,8 @@ function setup(
     },
     insertFoodLog: async (row) => {
       if (opts.insertFails) throw new Error('db down');
-      if (opts.validationError) throw Object.assign(new Error(opts.validationError), { name: 'FoodValidationError' });
       inserted.push(row);
-      return { id: 'f1', ...row, ...opts.saved };
+      return { id: 'f1', ...row };
     },
     groqReply: async () => {
       if (opts.groq instanceof Error) throw opts.groq;
@@ -77,22 +72,17 @@ test('resposta só em texto: uma rodada, ferramenta liberada (AUTO) e uso regist
 
 test('log_food: grava, devolve a thoughtSignature e responde com ferramentas proibidas (NONE)', async () => {
   const { deps, requests, inserted } = setup([
-    logFoodCall({
-      food_name: '2 ovos cozidos', quantity_g: 100, taco_name: 'Ovo, de galinha, inteiro, cozido/10minutos',
-      calories: 148, protein: 12.6, carbs: 1, fat: 10, meal_type: 'breakfast',
-    }),
+    logFoodCall({ food_name: '2 ovos cozidos', calories: 148, protein: 12.6, carbs: 1, fat: 10, meal_type: 'breakfast' }),
     textResponse('✅ Registrado! Ótima proteína no café.'),
-  ], { saved: { calories: 146, source: 'taco', ref_nome: 'Ovo, de galinha, inteiro, cozido/10minutos' } });
+  ]);
   const r = await runChatTurn(input(), deps);
 
   assert.equal(r.foodLogged, true);
   assert.equal(r.message, '✅ Registrado! Ótima proteína no café.');
   assert.deepEqual(inserted, [{
     user_id: 'u1', food_name: '2 ovos cozidos', meal_type: 'breakfast', calories: 148,
-    protein: 12.6, carbs: 1, fat: 10, quantity_g: 100, taco_name: 'Ovo, de galinha, inteiro, cozido/10minutos',
-    log_date: '2026-11-09',
+    protein: 12.6, carbs: 1, fat: 10, log_date: '2026-11-09',
   }]);
-  const expectedResult = 'Registrado: 2 ovos cozidos (100 g), 146 kcal, calculado pela TACO — "Ovo, de galinha, inteiro, cozido/10minutos". Use esses valores na resposta.';
 
   const followUp = requests[1];
   const modelTurn = followUp.contents.at(-2)!;
@@ -100,14 +90,14 @@ test('log_food: grava, devolve a thoughtSignature e responde com ferramentas pro
   assert.equal(modelTurn.parts?.[0].thoughtSignature, 'assinatura-123', 'a assinatura volta na mesma parte');
   const toolTurn = followUp.contents.at(-1)!;
   assert.equal(toolTurn.role, 'user', 'resposta de função vai como "user"');
-  assert.equal(toolTurn.parts?.[0].functionResponse?.response?.result, expectedResult, 'kcal calculadas pelo app, não as do modelo');
+  assert.equal(toolTurn.parts?.[0].functionResponse?.response?.result, 'Registrado: 2 ovos cozidos, 148 kcal');
   assert.ok(followUp.config.tools?.length, 'ferramentas continuam declaradas na rodada final');
   assert.equal(followUp.config.toolConfig?.functionCallingConfig?.mode, FunctionCallingConfigMode.NONE);
 
   assert.equal(r.meta.rounds, 2);
   assert.deepEqual(r.meta.usage, { input: 200, output: 40, thinking: 60 });
   assert.equal(r.meta.tools.length, 1);
-  assert.equal(r.meta.tools[0].result, expectedResult);
+  assert.equal(r.meta.tools[0].result, 'Registrado: 2 ovos cozidos, 148 kcal');
 });
 
 test('rodada final vazia: resposta padrão confirmando o registro', async () => {
@@ -162,7 +152,7 @@ test('normalizeLogFoodArgs: o nome declarado vence o apelido', () => {
   assert.deepEqual(unknown, ['foo']);
 });
 
-test('sem gramas e sem calorias não grava e pede detalhes ao modelo', async () => {
+test('sem calorias não grava e pede detalhes ao modelo', async () => {
   const { deps, requests, inserted } = setup([
     logFoodCall({ food_name: 'Salada', meal_type: 'lunch' }),
     textResponse('Quanto de salada?'),
@@ -170,37 +160,7 @@ test('sem gramas e sem calorias não grava e pede detalhes ao modelo', async () 
   const r = await runChatTurn(input('comi salada'), deps);
   assert.equal(inserted.length, 0);
   assert.equal(r.foodLogged, false);
-  assert.match(requests[1].contents.at(-1)!.parts?.[0].functionResponse?.response?.result as string, /gramas ausentes/);
-});
-
-test('só com gramas (sem estimativa) grava: o app calcula', async () => {
-  const { deps, inserted } = setup([
-    logFoodCall({ food_name: 'Arroz branco cozido', grams: 100, meal_type: 'lunch' }),
-    textResponse('Anotado!'),
-  ], { saved: { calories: 128, source: 'taco' } });
-  const r = await runChatTurn(input('100g de arroz'), deps);
-  assert.equal(r.foodLogged, true);
-  assert.equal(inserted[0].quantity_g, 100, 'apelido grams → quantity_g');
-  assert.equal(inserted[0].calories, null);
-});
-
-test('validação bloqueia (kcal/g > 9): não grava e o modelo recebe o motivo', async () => {
-  const { deps, requests } = setup([
-    logFoodCall({ food_name: 'Biscoito recheado', quantity_g: 30, calories: 672, meal_type: 'afternoon_snack' }),
-    textResponse('Pode confirmar a quantidade?'),
-  ], { validationError: '672 kcal em 30 g dá 22,4 kcal/g — acima de 9 kcal/g.' });
-  const r = await runChatTurn(input('comi biscoito'), deps);
-  assert.equal(r.foodLogged, false);
-  const result = requests[1].contents.at(-1)!.parts?.[0].functionResponse?.response?.result as string;
-  assert.match(result, /não registrado — 672 kcal em 30 g/);
-});
-
-test('alimento estimado: o modelo é orientado a oferecer o cadastro do rótulo', () => {
-  const text = describeLoggedFood('Whey X', { calories: 120, quantity_g: 30, source: 'estimado', warnings: [] });
-  assert.match(text, /estimado/);
-  assert.match(text, /rótulo/);
-  const warned = describeLoggedFood('Frango', { calories: 350, quantity_g: 220, source: 'manual', warnings: ['Os macros somam 207 kcal.'] });
-  assert.match(warned, /marcado para revisão: Os macros somam 207 kcal/);
+  assert.match(requests[1].contents.at(-1)!.parts?.[0].functionResponse?.response?.result as string, /calorias ausentes/);
 });
 
 test('falha ao gravar: avisa o modelo e não diz que registrou', async () => {

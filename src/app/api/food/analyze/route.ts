@@ -3,26 +3,13 @@ import { auth } from '@/auth';
 import { AIParseError, aiErrorResponse, generateJSON } from '@/lib/ai';
 import type { GroqPart } from '@/lib/groq';
 import { isNonBeverageFood } from '@/lib/beverages';
-import { resolveFoodSafe } from '@/lib/nutrition/foods';
 
-// A IA só identifica cada alimento e estima as gramas. kcal e macros são
-// calculados pelo app (rótulo salvo pelo usuário → TACO → estimativa da IA,
-// nessa ordem; ver src/lib/nutrition/foods.ts). A estimativa de kcal da IA só
-// é usada quando o alimento não existe em nenhuma das duas tabelas.
-const SYSTEM = `Você identifica alimentos de uma refeição descrita ou fotografada e estima o PESO de cada um. O app calcula as calorias pela TACO (Tabela Brasileira de Composição de Alimentos, 4ª edição) a partir do peso que você informar — por isso o peso é o dado mais importante.
+const SYSTEM = `Você é nutricionista especializado na TACO (Tabela Brasileira de Composição de Alimentos) e USDA. Analise a refeição descrita ou fotografada com MÁXIMO CONSERVADORISMO nutricional.
 
 PRINCÍPIO FUNDAMENTAL: NUNCA assuma 100g automaticamente para porções vagas. Prefira SEMPRE subestimar — o usuário pode corrigir depois.
 
 Retorne SOMENTE JSON válido sem markdown, sem blocos de código:
-{"foods":[{"name":"Arroz branco cozido","taco_name":"Arroz, tipo 1, cozido","quantity":"4 col. sopa","grams":100,"calories":128,"protein":2.5,"carbs":28.1,"fat":0.2}],"confidence":"medium","portionAssumption":"small"}
-
-CAMPOS DE CADA ITEM:
-• name: nome curto e natural do alimento, como o usuário falaria
-• taco_name: a descrição do mesmo alimento na TACO 4ª edição, no formato dela ("Alimento, variedade, preparo"), com o mesmo preparo (cru, cozido, frito, assado, grelhado...). Exemplos: "Arroz, tipo 1, cozido", "Feijão, carioca, cozido", "Frango, peito, sem pele, grelhado", "Ovo, de galinha, inteiro, cozido/10minutos", "Pão, trigo, francês", "Banana, prata, crua". Se não tiver certeza de que o alimento existe na TACO, use null — NUNCA troque o preparo (macarrão cozido ≠ "Macarrão, trigo, cru")
-• quantity: medida caseira legível ("1 concha", "2 fatias", "200 ml")
-• grams: peso comestível em gramas (número). Líquidos: ml ≈ g
-• calories, protein, carbs, fat: sua estimativa para esse peso — usada SÓ se o alimento não estiver na TACO
-• Produto industrializado de marca (biscoito, barra, iogurte, whey...): name com a marca; taco_name com o genérico equivalente da TACO, se houver. Exemplos: Yakult → "Leite, fermentado"; Coca-Cola → "Refrigerante, tipo cola"; Oreo → "Biscoito, doce, recheado com chocolate"; Danone de morango → "Iogurte, sabor morango". Versões zero, diet ou light NÃO equivalem ao genérico comum: use null
+{"foods":[{"name":"Nome","quantity":"30g","calories":62,"protein":0.2,"carbs":10.0,"fat":2.5}],"totalCalories":62,"totalProtein":0.2,"totalCarbs":10.0,"totalFat":2.5,"confidence":"medium","portionAssumption":"small"}
 
 HIDRATAÇÃO — campo opcional "hydration_ml" (inteiro) por item:
 • Adicione "hydration_ml" APENAS para bebidas/líquidos hidratantes
@@ -48,23 +35,40 @@ TERMOS VAGOS — interprete sempre de forma conservadora:
 • Diminutivos (pedacinho, colherzinha, fatinha) → reduza 40% da estimativa normal
 • Singular sem quantidade explícita → menor porção típica do alimento
 
-PESOS DE REFERÊNCIA:
+PORÇÕES PADRÃO:
 • Proteína PRATO PRINCIPAL (frango, carne, peixe): 80-120g
 • Proteína RECHEIO (tapioca, crepioca, wrap, sanduíche): 40-60g
 • Condimento (maionese, requeijão, manteiga, azeite): 5-10g (1 col. chá), nunca 1 col. sopa inteira
-• Queijo fatiado (1 fatia): 20-25g | Pão francês: 50g | Pão de forma (1 fatia): 25g
-• Ovo inteiro (1 un): 50g | Banana média sem casca: 80g
+• Queijo fatiado (1 fatia): 20-25g
 • Arroz cozido: 4 col. sopa ≈ 100g | Feijão: 1 concha ≈ 86g
-• Tapioca granulada seca: 2 col. sopa ≈ 20g | Milho em conserva: 2 col. sopa ≈ 30g
-• Mandioca frita "um pedaço" ≈ 30g | Batata frita porção restaurante: 60-80g
-• Pastel pequeno: 70g | Amendoim (1 punhado): 20g | Azeitona (5 un): 15g
-• Verduras/salada: volume generoso, peso real baixo
-• Bebidas sem açúcar (chá, café): use o volume em ml como gramas
+• Verduras/salada: volume generoso, calorias conservadoras
+• Bebidas sem açúcar (chá, café): 0-5 kcal
 
 ANÁLISE DE IMAGEM:
 • Não assuma prato cheio automaticamente — estime pelo que é visível
 • Fotos exageram volume; considere profundidade limitada da câmera
 • Prefira estimativa conservadora e indique confidence "medium" ou "low"
+
+ÂNCORAS TACO (calibração obrigatória — não extrapole):
+• Frango cozido/desfiado: 159 kcal/100g → recheio 60g: 95 kcal | P 19g C 0g G 2g
+• Ovo inteiro (1 un ≈ 50g): 74 kcal | P 6.3g C 0.4g G 5g
+• Arroz branco cozido (100g): 128 kcal | P 2.5g C 28g G 0.2g
+• Feijão carioca cozido (100g): 76 kcal | P 4.8g C 13.6g G 0.5g
+• Pão francês (1 un ≈ 50g): 135 kcal | P 4g C 27g G 1g
+• Pão de forma integral (1 fatia ≈ 25g): 61 kcal | P 2.5g C 11g G 1g
+• Mussarela (1 fatia ≈ 25g): 66 kcal | P 5g C 1g G 5g
+• Maionese: 658 kcal/100g → 5g (1 col. chá): 33 kcal | G 3.5g
+• Azeite de oliva (5ml = 1 col. chá): 40 kcal | G 4.5g
+• Tapioca granulada seca (20g = 2 col. sopa): 69 kcal | C 17g
+• Milho em conserva (30g ≈ 2 col. sopa): 17 kcal | P 0.5g C 3.7g G 0.2g
+• Azeitona verde (5 un ≈ 15g): 22 kcal | G 2.3g
+• MANDIOCA FRITA (100g): 207 kcal → "um pedaço" (30g) = 62 kcal | P 0.2g C 10g G 2.5g
+• MANDIOCA cozida (100g): 125 kcal | P 0.6g C 30g G 0g
+• BATATA FRITA (100g): 180 kcal | P 2g C 23g G 9g → porção restaurante: 60-80g
+• BATATA cozida (100g): 87 kcal | P 1.8g C 19g G 0.1g
+• Banana (1 un média ≈ 80g sem casca): 70 kcal | P 1.3g C 17g G 0.1g
+• Pastel pequeno (1 un ≈ 70g): 225 kcal | P 6g C 22g G 12g
+• Amendoim torrado (1 punhado ≈ 20g): 118 kcal | P 5g C 3g G 10g
 
 ALIMENTOS CRÍTICOS (atenção redobrada nas porções): frituras, arroz, massas, doces, fast food, castanhas, molhos, queijos, mandioca, batata frita.
 
@@ -80,10 +84,11 @@ PORTION_ASSUMPTION (obrigatório no JSON):
 
 REGRAS FINAIS:
 1. Liste cada ingrediente individualmente — nunca agrupe componentes distintos
-2. Preparações mistas: discrimine cada componente separadamente (cada um com seu peso)
-3. grams e calories = inteiros; macros com uma casa decimal
-4. Em caso de dúvida → SUBESTIME
-5. NUNCA use aspas duplas (") dentro dos textos de "name", "taco_name" ou "quantity" — isso quebra o JSON. Escreva polegadas, apelidos ou ênfases sem aspas`;
+2. Preparações mistas: discrimine cada componente separadamente
+3. calories = inteiro; macros com uma casa decimal
+4. total* = soma exata dos itens listados
+5. Em caso de dúvida → SUBESTIME
+6. NUNCA use aspas duplas (") dentro dos textos de "name" ou "quantity" — isso quebra o JSON. Escreva polegadas, apelidos ou ênfases sem aspas`;
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // decoded size
@@ -112,9 +117,7 @@ function normalizeFoodResponse(data: Record<string, unknown>): Record<string, un
     .map((f) => {
       const item: Record<string, unknown> = {
         name: String(f.name).trim(),
-        taco_name: typeof f.taco_name === 'string' && f.taco_name.trim() ? f.taco_name.trim() : null,
         quantity: typeof f.quantity === 'string' ? f.quantity.trim() : String(f.quantity ?? ''),
-        grams: toNumber(f.grams) || null,
         calories: Math.round(toNumber(f.calories)),
         protein: round1(toNumber(f.protein)),
         carbs: round1(toNumber(f.carbs)),
@@ -166,9 +169,7 @@ function recoverFoodFields(raw: string): Record<string, unknown> | null {
     if (calories === undefined) continue;
     foods.push({
       name: stringField(chunk, 'name'),
-      taco_name: stringField(chunk, 'taco_name'),
       quantity: stringField(chunk, 'quantity') ?? '',
-      grams: numberField(chunk, 'grams'),
       calories,
       protein: numberField(chunk, 'protein'),
       carbs: numberField(chunk, 'carbs'),
@@ -184,47 +185,6 @@ function recoverFoodFields(raw: string): Record<string, unknown> | null {
     confidence: 'low',
     portionAssumption: portion?.[1],
   });
-}
-
-type AnalyzedItem = Record<string, unknown> & { name: string };
-
-// Troca a estimativa da IA pelo valor calculado (rótulo → TACO → estimado) e
-// anexa a origem e a validação de cada item.
-async function resolveItems(userId: string, data: Record<string, unknown>) {
-  const foods = await Promise.all(
-    (data.foods as AnalyzedItem[]).map(async (f) => {
-      const r = await resolveFoodSafe(userId, {
-        name: f.name,
-        taco_name: f.taco_name as string | null,
-        grams: f.grams as number | null,
-        estimate: { calories: f.calories as number, protein: f.protein as number, carbs: f.carbs as number, fat: f.fat as number },
-      });
-      return {
-        ...f,
-        calories: r.calories,
-        protein: r.protein ?? 0,
-        carbs: r.carbs ?? 0,
-        fat: r.fat ?? 0,
-        grams: r.quantity_g,
-        source: r.source,
-        taco_food_id: r.taco_food_id,
-        custom_food_id: r.custom_food_id,
-        reference: r.reference,
-        validation: r.validation,
-        needs_review: r.needs_review,
-        ask_label: r.ask_label,
-      };
-    }),
-  );
-  const sum = (key: 'calories' | 'protein' | 'carbs' | 'fat') => foods.reduce((acc, f) => acc + (Number(f[key]) || 0), 0);
-  return {
-    ...data,
-    foods,
-    totalCalories: Math.round(sum('calories')),
-    totalProtein: round1(sum('protein')),
-    totalCarbs: round1(sum('carbs')),
-    totalFat: round1(sum('fat')),
-  };
 }
 
 export async function POST(req: Request) {
@@ -300,8 +260,7 @@ export async function POST(req: Request) {
     }
 
     // validate/recover above guarantee this is non-null.
-    const normalized = normalizeFoodResponse(data)!;
-    return NextResponse.json(await resolveItems(session.user.id!, normalized));
+    return NextResponse.json(normalizeFoodResponse(data));
   } catch (err) {
     return aiErrorResponse(err, 'food-analyze', 'Erro ao analisar a refeição. Tente novamente.');
   }

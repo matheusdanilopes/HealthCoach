@@ -1,17 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
 import { Sparkles, AlertTriangle, Droplets } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import type { FoodLog, MealType } from '@/types';
-import { FoodSourceBadge, ValidationNotes } from '@/components/diary/FoodSourceBadge';
-import LabelForm, { type SavedCustomFood } from '@/components/diary/LabelForm';
-import { nutrientsFor } from '@/lib/nutrition/calc';
-import { referenceFromLog } from '@/lib/nutrition/reference';
-import { validateFoodEntry, type FoodReference, type FoodSource } from '@/lib/nutrition/validation';
 
 interface EditFoodModalProps {
   open: boolean;
@@ -62,55 +57,6 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
   const [isDirty, setIsDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [needsReanalysis, setNeedsReanalysis] = useState(false);
-  // Origem do cálculo
-  const [grams, setGrams] = useState<number | null>(log?.quantity_g ?? null);
-  const [source, setSource] = useState<FoodSource | null>(log?.source ?? null);
-  const [tacoFoodId, setTacoFoodId] = useState<number | null>(log?.taco_food_id ?? null);
-  const [customFoodId, setCustomFoodId] = useState<string | null>(log?.custom_food_id ?? null);
-  const [reference, setReference] = useState<FoodReference | null>(log ? referenceFromLog(log) : null);
-  const [showLabel, setShowLabel] = useState(false);
-
-  const validation = useMemo(
-    () => validateFoodEntry({ calories: Number(calories) || 0, protein, carbs, fat, quantity_g: grams, reference }),
-    [calories, protein, carbs, fat, grams, reference],
-  );
-
-  function applyValues(g: number, ref: FoodReference) {
-    const v = nutrientsFor(g, ref);
-    setCalories(v.calories);
-    setProtein(v.protein ?? 0);
-    setCarbs(v.carbs ?? 0);
-    setFat(v.fat ?? 0);
-  }
-
-  // Gramas novas: com referência, recalcula pela TACO/rótulo.
-  function handleGramsChange(value: string) {
-    const g = value === '' ? null : Number(value);
-    setGrams(g);
-    markDirty();
-    if (g && g > 0 && reference) {
-      applyValues(g, reference);
-      setSource(reference.source);
-    }
-  }
-
-  // kcal/macros digitados à mão: origem passa a ser "manual".
-  function touchedNutrition() {
-    markDirty();
-    if (source !== null) setSource('manual');
-  }
-
-  function applyLabel(food: SavedCustomFood) {
-    const g = grams && grams > 0 ? grams : food.porcao_g;
-    setGrams(g);
-    setReference(food.reference);
-    setCustomFoodId(food.id);
-    setTacoFoodId(null);
-    setSource('rotulo');
-    applyValues(g, food.reference);
-    setShowLabel(false);
-    markDirty();
-  }
 
   function markDirty() { setIsDirty(true); }
 
@@ -152,15 +98,6 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
       setCarbs(+(data.totalCarbs ?? 0).toFixed(1));
       setFat(+(data.totalFat ?? 0).toFixed(1));
 
-      // Um alimento só: herda a origem calculada; vários somados viram estimativa.
-      const foods = (data.foods ?? []) as Array<{ grams?: number | null; source?: FoodSource; taco_food_id?: number | null; custom_food_id?: string | null; reference?: FoodReference | null }>;
-      const single = foods.length === 1 ? foods[0] : null;
-      setGrams(single ? single.grams ?? null : foods.reduce((s, f) => s + (Number(f.grams) || 0), 0) || null);
-      setSource(single?.source ?? 'estimado');
-      setTacoFoodId(single?.taco_food_id ?? null);
-      setCustomFoodId(single?.custom_food_id ?? null);
-      setReference(single?.reference ?? null);
-
       // Update hydration from AI or local detection
       const aiHydration = data.foods?.[0]?.hydration_ml;
       if (typeof aiHydration === 'number') {
@@ -186,10 +123,6 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
       setError('Re-analise com IA antes de salvar as alterações.');
       return;
     }
-    if (validation.blocked) {
-      setError('Corrija os valores em vermelho antes de salvar.');
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -207,10 +140,6 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
           hydration_ml: Math.min(Math.max(0, Math.round(Number(hydrationMl) || 0)), 2000),
           hydration_source: hydrationMl > 0 ? (log.hydration_source ?? 'meal') : null,
           hydration_confidence: hydrationMl > 0 ? (log.hydration_confidence ?? 'medium') : null,
-          quantity_g: grams,
-          source,
-          taco_food_id: tacoFoodId,
-          custom_food_id: customFoodId,
         }),
       });
       const data = await res.json();
@@ -296,43 +225,6 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
             {analyzing ? 'Analisando...' : needsReanalysis ? 'Re-analisar com IA (obrigatório)' : 'Re-analisar com IA'}
           </button>
 
-          {/* Origem + gramas */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={labelCls}>Origem</span>
-              {source ? <FoodSourceBadge source={source} /> : <span className="text-[11px] text-zinc-400">registro antigo</span>}
-              {reference && <span className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{reference.nome}</span>}
-            </div>
-            <label className="flex flex-col gap-1">
-              <span className={labelCls}>
-                Quantidade (g){reference ? ` · recalcula ${reference.source === 'taco' ? 'pela TACO' : 'pelo rótulo'}` : ''}
-              </span>
-              <input
-                type="number" min={0} step={1}
-                value={grams ?? ''}
-                onChange={(e) => handleGramsChange(e.target.value)}
-                className={inputCls}
-              />
-            </label>
-            {source === 'estimado' && !showLabel && (
-              <button
-                type="button"
-                onClick={() => setShowLabel(true)}
-                className="self-start text-[12px] font-semibold text-sky-600 dark:text-sky-400 hover:underline"
-              >
-                Informar o rótulo deste alimento
-              </button>
-            )}
-            {showLabel && (
-              <LabelForm
-                initialName={foodName.replace(/\s*\(.*$/, '')}
-                initialPortion={grams}
-                onSaved={applyLabel}
-                onCancel={() => setShowLabel(false)}
-              />
-            )}
-          </div>
-
           {/* Nutritional fields */}
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
@@ -340,7 +232,7 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
               <input
                 type="number" min={0}
                 value={calories}
-                onChange={(e) => { setCalories(Number(e.target.value) || 0); touchedNutrition(); }}
+                onChange={(e) => { setCalories(Number(e.target.value) || 0); markDirty(); }}
                 className={inputCls}
               />
             </label>
@@ -349,7 +241,7 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
               <input
                 type="number" min={0} step={0.1}
                 value={protein}
-                onChange={(e) => { setProtein(Number(e.target.value) || 0); touchedNutrition(); }}
+                onChange={(e) => { setProtein(Number(e.target.value) || 0); markDirty(); }}
                 className={inputCls}
               />
             </label>
@@ -358,7 +250,7 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
               <input
                 type="number" min={0} step={0.1}
                 value={carbs}
-                onChange={(e) => { setCarbs(Number(e.target.value) || 0); touchedNutrition(); }}
+                onChange={(e) => { setCarbs(Number(e.target.value) || 0); markDirty(); }}
                 className={inputCls}
               />
             </label>
@@ -367,7 +259,7 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
               <input
                 type="number" min={0} step={0.1}
                 value={fat}
-                onChange={(e) => { setFat(Number(e.target.value) || 0); touchedNutrition(); }}
+                onChange={(e) => { setFat(Number(e.target.value) || 0); markDirty(); }}
                 className={inputCls}
               />
             </label>
@@ -390,8 +282,6 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
               </p>
             </label>
           )}
-
-          <ValidationNotes issues={validation.issues} />
 
           {error && (
             <p className="text-[12px] text-red-500 dark:text-red-400 text-center -mt-1">{error}</p>
