@@ -8,6 +8,8 @@ import {
   Pencil, Play, RefreshCw, ShieldCheck, Sparkles, Target, Trash2, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import Card from '@/components/ui/Card';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
+import { COACH_NAME } from '@/lib/coach-persona';
 import ExerciseCard from '@/components/training/ExerciseCard';
 import TrainingProfileForm from '@/components/training/TrainingProfileForm';
 import SessionLogger, { loadDraft, newDraft, type SessionDraft } from '@/components/training/SessionLogger';
@@ -39,14 +41,6 @@ const GOAL_OPTS: { value: CoachGoal; label: string; desc: string; icon: typeof T
 const LOCATION_OPTS: { value: TrainingLocation; icon: typeof House; desc: string }[] = [
   { value: 'casa',     icon: House,     desc: 'Peso do corpo e seus equipamentos' },
   { value: 'academia', icon: Building2, desc: 'Máquinas, barras e halteres' },
-];
-
-const LOADING_STEPS = [
-  'Lendo seu perfil e histórico…',
-  'Escolhendo a divisão da semana…',
-  'Selecionando os exercícios…',
-  'Ajustando séries, repetições e cargas…',
-  'Escrevendo as explicações de execução…',
 ];
 
 const goalLabel = (g: CoachGoal) => GOAL_OPTS.find((o) => o.value === g)?.label ?? g;
@@ -177,7 +171,6 @@ export default function TreinosClient({
   const [location, setLocation] = useState<TrainingLocation>(initialPlan?.location ?? 'academia');
   const [notes, setNotes] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [planBusy, setPlanBusy] = useState<string | null>(null);
 
@@ -191,15 +184,8 @@ export default function TreinosClient({
     }
   }, [userId, initialPlan]);
 
-  useEffect(() => {
-    if (!generating) return;
-    const id = setInterval(() => setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1)), 6000);
-    return () => clearInterval(id);
-  }, [generating]);
-
   async function generate() {
     setGenerating(true);
-    setLoadingStep(0);
     setError(null);
     try {
       const res = await fetch('/api/training/plans', {
@@ -566,23 +552,22 @@ export default function TreinosClient({
 
           {error && <ErrorBox message={error} />}
 
-          <button
-            type="button"
-            onClick={generate}
-            disabled={generating}
-            className="flex items-center justify-center gap-2 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold shadow-lg shadow-emerald-600/25 transition-all duration-200 active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none"
-          >
-            {generating ? (
-              <>
-                <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                {LOADING_STEPS[loadingStep]}
-              </>
-            ) : plan ? (
-              <><RefreshCw className="w-4 h-4" /> Gerar novo plano</>
-            ) : (
-              <><Sparkles className="w-4 h-4" /> Gerar plano semanal</>
-            )}
-          </button>
+          {/* A Nina aparece no lugar do botão enquanto a IA monta o plano */}
+          {generating ? (
+            <NinaAnalyzing variant="trainingplan" title={`${COACH_NAME} está montando seu treino`} />
+          ) : (
+            <button
+              type="button"
+              onClick={generate}
+              className="flex items-center justify-center gap-2 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold shadow-lg shadow-emerald-600/25 transition-all duration-200 active:scale-[0.98]"
+            >
+              {plan ? (
+                <><RefreshCw className="w-4 h-4" /> Gerar novo plano</>
+              ) : (
+                <><Sparkles className="w-4 h-4" /> Gerar plano semanal</>
+              )}
+            </button>
+          )}
 
           <p className="text-[10.5px] leading-relaxed text-zinc-400 dark:text-zinc-500 text-center">
             As orientações são educativas e não substituem a avaliação de um educador físico ou médico.

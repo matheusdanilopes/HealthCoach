@@ -107,7 +107,7 @@ Tela **Corpo → Treinos IA** (`/treinos`). Gera um plano semanal de treino com 
 
 - **Perfil de treino** (salvo uma vez): nível, dias por semana, tempo por treino, equipamentos em casa e lesões/limitações.
 - **Plano semanal**: sessões A/B/C… com aquecimento, exercícios e desaquecimento. Gerar um novo plano mantém os anteriores no histórico.
-- **Registro do treino**: marca cada série com repetições (ou segundos) e carga; tem timer de descanso e o treino em andamento fica salvo no aparelho. Ao finalizar, o gasto calórico (MET × peso × duração) entra no diário como `🏋️ Musculação`, então dashboard, Coach IA e Telegram passam a contar o treino.
+- **Registro do treino**: marca cada série com repetições (ou segundos) e carga; tem timer de descanso e o treino em andamento fica salvo no aparelho. Ao finalizar, o gasto calórico (MET × peso × duração) entra no diário como `🏋️ Musculação`, então dashboard, Análise Nina e Telegram passam a contar o treino.
 - **Progressão**: dupla progressão — quando todas as séries chegam ao topo da faixa, o app sugere subir a carga. O histórico de cargas também vai para a IA ao gerar o próximo plano.
 
 As tabelas de treino já fazem parte de `db/schema.sql`.

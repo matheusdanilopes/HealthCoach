@@ -1,6 +1,7 @@
 'use client';
 
 import CoachAvatar from '@/components/chat/CoachAvatar';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
 import { COACH_NAME } from '@/lib/coach-persona';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
@@ -32,13 +33,6 @@ const IMPACT_STYLE: Record<CoachImpact, { label: string; className: string }> = 
   medio: { label: 'Impacto médio', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' },
   baixo: { label: 'Impacto baixo', className: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400' },
 };
-
-const LOADING_STEPS = [
-  'Lendo seus registros…',
-  'Identificando padrões de comportamento…',
-  'Comparando com o seu objetivo…',
-  'Montando sua estratégia…',
-];
 
 const storageKey = (userId: string) => `healthcoach:coach-analysis:${userId}`;
 
@@ -95,7 +89,6 @@ export default function CoachClient({ userId, snapshot }: { userId: string; snap
   const [goal, setGoal] = useState<CoachGoal>(snapshot.suggestedGoal);
   const [result, setResult] = useState<StoredAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // The last analysis is kept on the device so reopening the screen doesn't
@@ -116,15 +109,8 @@ export default function CoachClient({ userId, snapshot }: { userId: string; snap
     }
   }, [userId]);
 
-  useEffect(() => {
-    if (!loading) return;
-    const id = setInterval(() => setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1)), 3500);
-    return () => clearInterval(id);
-  }, [loading]);
-
   async function runAnalysis() {
     setLoading(true);
-    setLoadingStep(0);
     setError(null);
     try {
       const res = await fetch('/api/coach/analyze', {
@@ -171,7 +157,7 @@ export default function CoachClient({ userId, snapshot }: { userId: string; snap
       <header className="flex items-center gap-3 px-1">
         <CoachAvatar size={44} className="shadow-lg shadow-emerald-600/20" />
         <div className="min-w-0">
-          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-50 leading-tight tracking-tight">Coach IA</h1>
+          <h1 className="text-[22px] font-bold text-zinc-900 dark:text-zinc-50 leading-tight tracking-tight">Análise {COACH_NAME}</h1>
           <p className="text-[12px] text-zinc-500 dark:text-zinc-400">
             A {COACH_NAME} analisa seu comportamento para você chegar ao seu objetivo
           </p>
@@ -381,23 +367,22 @@ export default function CoachClient({ userId, snapshot }: { userId: string; snap
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={runAnalysis}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold shadow-lg shadow-emerald-600/25 transition-all duration-200 active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none"
-        >
-          {loading ? (
-            <>
-              <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              {LOADING_STEPS[loadingStep]}
-            </>
-          ) : analysis ? (
-            <><RefreshCw className="w-4 h-4" /> Analisar novamente</>
-          ) : (
-            <><Sparkles className="w-4 h-4" /> Analisar meu comportamento</>
-          )}
-        </button>
+        {/* A Nina aparece no lugar do botão enquanto a IA analisa */}
+        {loading ? (
+          <NinaAnalyzing variant="behavior" title={`${COACH_NAME} está analisando seus hábitos`} />
+        ) : (
+          <button
+            type="button"
+            onClick={runAnalysis}
+            className="flex items-center justify-center gap-2 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold shadow-lg shadow-emerald-600/25 transition-all duration-200 active:scale-[0.98]"
+          >
+            {analysis ? (
+              <><RefreshCw className="w-4 h-4" /> Analisar novamente</>
+            ) : (
+              <><Sparkles className="w-4 h-4" /> Analisar meu comportamento</>
+            )}
+          </button>
+        )}
 
         <p className="text-[10.5px] leading-relaxed text-zinc-400 dark:text-zinc-500 text-center">
           A IA só é consultada quando você toca no botão. As orientações são educativas e não substituem

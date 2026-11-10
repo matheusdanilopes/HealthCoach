@@ -7,6 +7,7 @@ import { cn, suggestMealType } from '@/lib/utils';
 import { Camera, ImagePlus, X, Sparkles, CheckCircle2, RotateCcw, Pencil, Check, AlertTriangle, Droplets, Mic, Square } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
 import type { FoodLog, MealType } from '@/types';
 
 interface FoodItem {
@@ -554,7 +555,7 @@ function AIFoodLoggerModal({
           />
 
           {/* Mode tabs */}
-          {!result && (
+          {!result && !analyzing && (
             <div className="flex bg-zinc-100 dark:bg-zinc-800/60 rounded-xl p-1 gap-1">
               {(['text', 'image', 'manual', 'voice'] as const).map((t) => (
                 <button
@@ -575,7 +576,12 @@ function AIFoodLoggerModal({
           )}
 
           {/* Text / Voice input */}
-          {!result && (tab === 'text' || tab === 'voice') && (
+          {/* Nina animada enquanto a IA analisa */}
+          {!result && analyzing && (
+            <NinaAnalyzing variant="meal" imageSrc={tab === 'image' ? imagePreview : null} />
+          )}
+
+          {!result && !analyzing && (tab === 'text' || tab === 'voice') && (
             <div className="flex flex-col gap-3">
               {tab === 'voice' && (
                 <div className="flex flex-col items-center gap-2 py-2">
@@ -702,7 +708,7 @@ function AIFoodLoggerModal({
           )}
 
           {/* Image input */}
-          {!result && tab === 'image' && (
+          {!result && !analyzing && tab === 'image' && (
             <div className="flex flex-col gap-3">
               {!imagePreview ? (
                 <>
@@ -866,13 +872,13 @@ function AIFoodLoggerModal({
                                 : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
                             }`}
                           >
-                            {bufferAnalyzing
-                              ? <span className="h-3 w-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-                              : <Sparkles size={11} />
-                            }
-                            Re-analisar
+                            <Sparkles size={11} />
+                            {bufferAnalyzing ? 'Analisando…' : 'Re-analisar'}
                           </button>
                         </div>
+
+                        {/* Nina animada enquanto reanalisa */}
+                        {bufferAnalyzing && <NinaAnalyzing variant="reanalyze" compact />}
 
                         {/* Kcal + macros */}
                         <div className="grid grid-cols-2 gap-2">

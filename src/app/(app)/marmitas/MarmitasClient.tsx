@@ -9,6 +9,8 @@ import {
 import { cn } from '@/lib/utils';
 import RecipeModal, { type RecipeModalData } from '@/components/meal-prep/RecipeModal';
 import MealPrepHistory from '@/components/meal-prep/MealPrepHistory';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
+import { COACH_NAME } from '@/lib/coach-persona';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -147,26 +149,7 @@ function OptionButton<T extends string>({
 }
 
 function LoadingCard({ label }: { label: string }) {
-  return (
-    <div className="border border-zinc-100 dark:border-zinc-700/60 rounded-2xl p-4 animate-pulse">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="h-5 w-14 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
-        <div className="h-4 w-32 bg-zinc-100 dark:bg-zinc-800 rounded-lg" />
-      </div>
-      <div className="space-y-2 mb-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg" style={{ width: `${65 + i * 8}%` }} />
-        ))}
-      </div>
-      <div className="flex gap-2 mb-3">
-        {[1, 2, 3, 4].map((i) => <div key={i} className="flex-1 h-14 bg-zinc-100 dark:bg-zinc-800 rounded-xl" />)}
-      </div>
-      <div className="flex items-center justify-center gap-2 text-[12px] text-zinc-400 dark:text-zinc-500 py-2">
-        <Loader2 size={14} className="animate-spin text-emerald-500" />
-        Gerando Opção {label}…
-      </div>
-    </div>
-  );
+  return <NinaAnalyzing variant="mealprep" title={`${COACH_NAME} está montando a Opção ${label}`} />;
 }
 
 function PlanCard({
@@ -849,11 +832,9 @@ export default function MarmitasClient() {
               </div>
             )}
 
-            {addingNew && (
-              <div className="flex items-center justify-center gap-2 py-3 text-[12px] text-zinc-400 dark:text-zinc-500">
-                <Loader2 size={13} className="animate-spin text-emerald-500" />
-                Gerando nova opção…
-              </div>
+            {/* Nova opção após aprovar (ao rejeitar, o card de carregamento já mostra a Nina) */}
+            {addingNew && !plans.some((p) => p.isLoading) && (
+              <NinaAnalyzing variant="mealprep" compact title={`${COACH_NAME} está montando nova opção`} />
             )}
 
             {canGoShopping && (

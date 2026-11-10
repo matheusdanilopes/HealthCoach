@@ -9,6 +9,7 @@ import {
   ChevronRight, ChevronLeft,
   Plus, Minus, AlertTriangle,
 } from 'lucide-react';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
 import type { FoodLog } from '@/types';
 
 const WORKOUT_TYPES = [
@@ -700,19 +701,7 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
         {step === 3 && (
           <div className="animate-fade-in flex flex-col gap-3">
             {analyzing ? (
-              <div className="flex flex-col gap-3">
-                <div className="h-6 w-2/3 rounded-xl animate-shimmer" />
-                <div className="h-[110px] rounded-2xl animate-shimmer" />
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="h-[64px] rounded-xl animate-shimmer" />
-                  <div className="h-[64px] rounded-xl animate-shimmer" />
-                  <div className="h-[64px] rounded-xl animate-shimmer" />
-                </div>
-                <div className="h-16 rounded-xl animate-shimmer" />
-                <p className="text-[12px] text-zinc-400 dark:text-zinc-500 text-center animate-pulse">
-                  {isSteps ? 'Calculando...' : 'Analisando com IA...'}
-                </p>
-              </div>
+              <NinaAnalyzing variant={isSteps ? 'steps' : 'workout'} />
             ) : stepsResult ? (
               <>
                 <div>

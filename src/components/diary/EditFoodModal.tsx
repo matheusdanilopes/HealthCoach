@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import MealTypeSelector from '@/components/diary/MealTypeSelector';
+import NinaAnalyzing from '@/components/chat/NinaAnalyzing';
 import { Sparkles, AlertTriangle, Droplets } from 'lucide-react';
 import { detectBeverage } from '@/lib/beverages';
 import type { FoodLog, MealType } from '@/types';
@@ -207,23 +208,24 @@ function EditFoodModalBody({ open, onClose, log, onUpdated }: EditFoodModalProps
             />
           </div>
 
-          {/* Re-analyze */}
-          <button
-            type="button"
-            onClick={handleReanalyze}
-            disabled={analyzing || !foodName.trim()}
-            className={`flex items-center justify-center gap-2 h-10 rounded-xl border text-[13px] font-semibold transition-all disabled:opacity-50 disabled:pointer-events-none ${
-              needsReanalysis
-                ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-400/40'
-                : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-            }`}
-          >
-            {analyzing
-              ? <span className="h-3.5 w-3.5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-              : <Sparkles size={13} />
-            }
-            {analyzing ? 'Analisando...' : needsReanalysis ? 'Re-analisar com IA (obrigatório)' : 'Re-analisar com IA'}
-          </button>
+          {/* Re-analyze (a Nina aparece no lugar do botão enquanto analisa) */}
+          {analyzing ? (
+            <NinaAnalyzing variant="reanalyze" compact />
+          ) : (
+            <button
+              type="button"
+              onClick={handleReanalyze}
+              disabled={analyzing || !foodName.trim()}
+              className={`flex items-center justify-center gap-2 h-10 rounded-xl border text-[13px] font-semibold transition-all disabled:opacity-50 disabled:pointer-events-none ${
+                needsReanalysis
+                  ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-400/40'
+                  : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+              }`}
+            >
+              <Sparkles size={13} />
+              {needsReanalysis ? 'Re-analisar com IA (obrigatório)' : 'Re-analisar com IA'}
+            </button>
+          )}
 
           {/* Nutritional fields */}
           <div className="grid grid-cols-2 gap-3">
