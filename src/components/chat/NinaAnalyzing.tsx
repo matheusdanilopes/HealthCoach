@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { COACH_NAME } from '@/lib/coach-persona';
 
-export type NinaAnalyzingVariant = 'meal' | 'workout' | 'steps';
+export type NinaAnalyzingVariant = 'meal' | 'workout' | 'steps' | 'reanalyze';
 
 const MESSAGES: Record<NinaAnalyzingVariant, string[]> = {
   meal: [
@@ -26,12 +26,20 @@ const MESSAGES: Record<NinaAnalyzingVariant, string[]> = {
     'Contando os seus passos…',
     'Calculando o gasto calórico…',
   ],
+  reanalyze: [
+    'Reavaliando o alimento…',
+    'Estimando a porção…',
+    'Consultando a tabela TACO…',
+    'Recalculando calorias e macros…',
+    'Só mais um instante…',
+  ],
 };
 
 const ORBIT: Record<NinaAnalyzingVariant, string[]> = {
   meal: ['🥗', '🍎', '🍗'],
   workout: ['🏋️', '🔥', '⏱️'],
   steps: ['👟', '🔥', '📍'],
+  reanalyze: ['🥗', '🍎', '🍗'],
 };
 
 const MESSAGE_INTERVAL_MS = 2200;
@@ -40,6 +48,8 @@ interface NinaAnalyzingProps {
   variant: NinaAnalyzingVariant;
   /** Foto sendo analisada (aparece com uma linha de varredura). */
   imageSrc?: string | null;
+  /** Versão em linha, para o lugar de um botão (ex.: "Re-analisar com IA"). */
+  compact?: boolean;
   className?: string;
 }
 
@@ -47,7 +57,7 @@ interface NinaAnalyzingProps {
  * A Nina trabalhando enquanto a IA analisa uma refeição ou um treino:
  * ela flutua, pisca, varre com a lupa e as mensagens mostram cada etapa.
  */
-export default function NinaAnalyzing({ variant, imageSrc, className }: NinaAnalyzingProps) {
+export default function NinaAnalyzing({ variant, imageSrc, compact, className }: NinaAnalyzingProps) {
   const messages = MESSAGES[variant];
   const [index, setIndex] = useState(0);
 
@@ -57,6 +67,37 @@ export default function NinaAnalyzing({ variant, imageSrc, className }: NinaAnal
     const id = setTimeout(() => setIndex((i) => i + 1), MESSAGE_INTERVAL_MS);
     return () => clearTimeout(id);
   }, [index, messages.length]);
+
+  if (compact) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          'animate-fade-in flex items-center gap-3 rounded-xl px-3 py-2',
+          'bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 border border-emerald-200',
+          'dark:from-emerald-950/40 dark:via-green-950/30 dark:to-teal-950/20 dark:border-emerald-800/60',
+          className
+        )}
+      >
+        <div className="relative h-10 w-10 flex-shrink-0" aria-hidden="true">
+          <div className="nina-halo absolute -inset-0.5 rounded-full bg-emerald-300/40 dark:bg-emerald-500/25 blur-[3px]" />
+          <div className="absolute inset-0">
+            <NinaFigure />
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+            {COACH_NAME} está analisando
+          </span>
+          <span key={index} className="animate-count-up truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">
+            {messages[index]}
+          </span>
+        </div>
+        <Dots />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -111,15 +152,21 @@ export default function NinaAnalyzing({ variant, imageSrc, className }: NinaAnal
         </p>
       </div>
 
-      <div className="flex gap-1" aria-hidden="true">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="nina-dot h-1.5 w-1.5 rounded-full bg-emerald-500"
-            style={{ animationDelay: `${i * 0.15}s` }}
-          />
-        ))}
-      </div>
+      <Dots />
+    </div>
+  );
+}
+
+function Dots() {
+  return (
+    <div className="flex flex-shrink-0 gap-1" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="nina-dot h-1.5 w-1.5 rounded-full bg-emerald-500"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
     </div>
   );
 }

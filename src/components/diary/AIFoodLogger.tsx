@@ -872,13 +872,13 @@ function AIFoodLoggerModal({
                                 : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
                             }`}
                           >
-                            {bufferAnalyzing
-                              ? <span className="h-3 w-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-                              : <Sparkles size={11} />
-                            }
-                            Re-analisar
+                            <Sparkles size={11} />
+                            {bufferAnalyzing ? 'Analisando…' : 'Re-analisar'}
                           </button>
                         </div>
+
+                        {/* Nina animada enquanto reanalisa */}
+                        {bufferAnalyzing && <NinaAnalyzing variant="reanalyze" compact />}
 
                         {/* Kcal + macros */}
                         <div className="grid grid-cols-2 gap-2">
