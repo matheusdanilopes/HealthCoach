@@ -44,6 +44,8 @@ const ANALYZE_TIMEOUT_MS = 45_000;
 
 interface WorkoutAnalysis {
   estimatedCalories: number;
+  caloriesMin: number | null;
+  caloriesMax: number | null;
   intensity: string;
   trainingLoad: string;
   confidence: 'alta' | 'média' | 'baixa';
@@ -796,6 +798,11 @@ function AddWorkoutModalBody({ open, onClose, date, onAdded }: AddWorkoutModalPr
                     </span>
                     <span className="text-[16px] font-medium text-emerald-500 dark:text-emerald-400">kcal</span>
                   </div>
+                  {result.caloriesMin && result.caloriesMax ? (
+                    <p className="text-[12px] text-emerald-600/80 dark:text-emerald-400/70 mt-2 tabular-nums">
+                      Faixa provável: {result.caloriesMin.toLocaleString('pt-BR')}–{result.caloriesMax.toLocaleString('pt-BR')} kcal
+                    </p>
+                  ) : null}
                 </div>
 
                 {/* Badges */}
