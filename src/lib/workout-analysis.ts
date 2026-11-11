@@ -214,10 +214,10 @@ export function normalizeRange(
 }
 
 // Meia-largura da faixa em relação à estimativa.
-export const CONFIDENCE_THRESHOLDS = { alta: 0.12, média: 0.25 } as const;
+export const CONFIDENCE_THRESHOLDS = { alta: 0.10, média: 0.20 } as const;
 
 /**
- * Confiança derivada da faixa de incerteza: até ±12% alta, até ±25% média,
+ * Confiança derivada da faixa de incerteza: até ±10% alta, até ±20% média,
  * acima disso baixa. Contradições detectadas pelo servidor limitam a média.
  */
 export function confidenceFromRange(

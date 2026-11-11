@@ -45,10 +45,11 @@ test('RPE a 2 níveis e velocidade impossível são contradições', () => {
   assert.equal(facts.contradictions.length, 2);
 });
 
-test('confiança pela faixa: ±12% alta, ±25% média, acima baixa', () => {
-  assert.equal(confidenceFromRange(500, { min: 440, max: 560 }), 'alta');
-  assert.equal(confidenceFromRange(500, { min: 420, max: 580 }), 'média');
-  assert.equal(confidenceFromRange(500, { min: 300, max: 700 }), 'baixa');
+test('confiança pela faixa: ±10% alta, ±20% média, acima baixa', () => {
+  assert.equal(confidenceFromRange(500, { min: 450, max: 550 }), 'alta');
+  assert.equal(confidenceFromRange(500, { min: 440, max: 560 }), 'média');
+  assert.equal(confidenceFromRange(500, { min: 400, max: 600 }), 'média');
+  assert.equal(confidenceFromRange(500, { min: 390, max: 610 }), 'baixa');
   assert.equal(confidenceFromRange(500, { min: 450, max: 550 }, ['x']), 'média');
   assert.equal(confidenceFromRange(500, null), 'média');
 });

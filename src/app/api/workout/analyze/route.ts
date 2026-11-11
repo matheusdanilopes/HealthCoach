@@ -35,15 +35,15 @@ METs (tabela ACSM conservadora; já consideram as pausas típicas — não apliq
 
 FAIXA DE INCERTEZA (caloriesMin / caloriesMax):
 A largura da faixa reflete a QUALIDADE dos dados, não a quantidade de campos preenchidos. Escolha a primeira situação que se aplica:
-- ±8-10%: há dado medido (estimativa pela FC ou kcal do smartwatch) coerente com o MET, ou MET pelo ritmo de corrida/caminhada.
-- ±10-12%: atividade bem especificada — modalidade com MET tabelado + formato ou contexto (ex.: tênis simples recreativo, pilates no aparelho, musculação com carga informada, ciclismo com velocidade) + intensidade declarada + RPE coerente.
-- ±13-18%: modalidade com MET tabelado e intensidade declarada, mas sem formato/contexto ou sem RPE.
-- ±18-25%: tipo genérico (esportes, cardio, funcional, outro) sem detalhes na descrição.
-- ±30-40%: dados contraditórios (o servidor sinaliza com "Atenção" ou "contradiz") ou descrição vaga.
+- ±7-9%: há dado medido (estimativa pela FC ou kcal do smartwatch) coerente com o MET, ou MET pelo ritmo de corrida/caminhada.
+- ±9-10%: atividade bem especificada — modalidade com MET tabelado + formato ou contexto (ex.: tênis simples recreativo, pilates no aparelho, musculação com carga informada, ciclismo com velocidade) + intensidade declarada + RPE coerente.
+- ±12-15%: modalidade com MET tabelado e intensidade declarada, mas sem formato/contexto ou sem RPE.
+- ±16-20%: tipo genérico (esportes, cardio, funcional, outro) sem detalhes na descrição.
+- ±25-35%: dados contraditórios (o servidor sinaliza com "Atenção" ou "contradiz") ou descrição vaga.
 estimatedCalories deve ficar dentro da faixa.
 
 Retorne SOMENTE JSON válido sem markdown, sem texto adicional:
-{"estimatedCalories":420,"caloriesMin":375,"caloriesMax":465,"intensity":"moderada","trainingLoad":"moderada","metValue":5.5,"summary":"Descrição objetiva em até 80 caracteres"}
+{"estimatedCalories":420,"caloriesMin":380,"caloriesMax":460,"intensity":"moderada","trainingLoad":"moderada","metValue":5.5,"summary":"Descrição objetiva em até 80 caracteres"}
 
 Campos obrigatórios:
 - estimatedCalories: inteiro positivo realista
