@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (user?.target_calories == null) redirect('/register');
 
   return (
-    <div className="min-h-screen bg-[#f4f4f6] dark:bg-[#0c0c0e]">
+    <div className="min-h-dvh bg-[#f4f4f6] dark:bg-[#0c0c0e]">
       {/* Header */}
       <header className="sticky top-0 z-30 h-[56px] bg-white/90 dark:bg-[#141416]/95 backdrop-blur-xl border-b border-zinc-200/50 dark:border-zinc-800/40">
         <div className="max-w-2xl mx-auto px-5 h-full flex items-center justify-between">
