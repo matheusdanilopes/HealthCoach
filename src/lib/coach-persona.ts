@@ -47,8 +47,8 @@ export const COACH_CAPABILITIES: CoachCapability[] = [
   {
     icon: 'chart',
     title: 'Mostro como está o seu dia',
-    description: 'Calorias, proteína, água e treino comparados com as suas metas.',
-    example: 'Quanto falta de proteína hoje?',
+    description: 'Calorias, proteína, água, treino e peso de hoje ou de qualquer período, comparados com as suas metas.',
+    example: 'Como foi minha semana?',
   },
   {
     icon: 'lightbulb',

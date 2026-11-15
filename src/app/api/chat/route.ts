@@ -28,6 +28,7 @@ import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
 import { formatSSE } from '@/lib/chat/sse';
 import { isUuid, newId } from '@/lib/chat/recovery';
 import { saveAssistantMessage, saveUserMessage } from '@/lib/chat/store';
+import { queryHistory } from '@/lib/chat/history';
 import {
   MAX_REPLY_TOKENS,
   buildSystemInstruction,
@@ -73,6 +74,7 @@ const deps: TurnDeps = {
     return data ?? null;
   },
   groqReply,
+  queryHistory,
 };
 
 export async function POST(req: Request) {
@@ -112,7 +114,7 @@ export async function POST(req: Request) {
           await saveUserMessage({ id: questionId, userId, conversationId, content: question });
 
           const intent = detectIntent(question);
-          const dynamicContext = await buildDynamicContext(userId, intent);
+          const dynamicContext = await buildDynamicContext(userId, intent, conversationId);
           console.log(`[chat] intent=${intent} | user=${userId}`);
 
           const result = await runChatTurn(

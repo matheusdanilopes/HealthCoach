@@ -3,16 +3,18 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, Fragment } from 'react';
 import {
   ArrowUp, ThumbsUp, ThumbsDown, Info, Flame, Beef, Droplets, ChevronRight, ChevronDown,
-  SquarePen, CircleCheck, RotateCcw, Sparkles,
+  SquarePen, CircleCheck, RotateCcw, Sparkles, History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { readSSE } from '@/lib/chat/sse';
 import { parseRichText } from '@/lib/chat/rich-text';
-import { HistoryUnavailableError, NO_SIGNAL_MS, newId, waitForReply } from '@/lib/chat/recovery';
+import { HistoryUnavailableError, NO_SIGNAL_MS, RECOVERY_MS, newId, waitForReply } from '@/lib/chat/recovery';
 import { COACH_CAPABILITIES, COACH_NAME, COACH_ROLE, coachSuggestions } from '@/lib/coach-persona';
 import type { ChatMessage, FoodLog, Profile } from '@/types';
 import CoachAvatar from './CoachAvatar';
 import CoachAboutModal, { CAPABILITY_ICON } from './CoachAboutModal';
+import ConversationsSheet from './ConversationsSheet';
+import { dayDivider, sameLocalDay } from './chat-dates';
 
 /* ─── Tipos e persistência ─────────────────────────────────────────────── */
 
@@ -33,38 +35,31 @@ interface UiMessage extends ChatMessage {
   retryText?: string;
 }
 
-/** Conversa guardada na aba: navegar pelo app e voltar não apaga a conversa. */
-interface StoredChat {
-  day: string;
-  conversationId: string | null;
-  messages: UiMessage[];
-  /** Pergunta sem resposta quando a tela foi fechada: a resposta é buscada ao voltar. */
-  pending: { questionId: string; text: string } | null;
+/** Mensagem gravada em chat_messages, como vem do servidor. */
+export interface SavedMessage {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+  rating?: 1 | -1 | null;
+  food_log?: unknown;
 }
 
-const storageKey = (userId: string) => `hc:nina-chat:${userId}`;
-
-function loadChat(userId: string, day: string): StoredChat | null {
-  try {
-    const raw = sessionStorage.getItem(storageKey(userId));
-    if (!raw) return null;
-    const data = JSON.parse(raw) as StoredChat;
-    // Conversa de outro dia: os números mudaram, começa de novo.
-    if (data.day !== day || !Array.isArray(data.messages)) return null;
-    return data;
-  } catch {
-    return null;
-  }
+export interface SavedConversation {
+  id: string;
+  messages: SavedMessage[];
 }
 
-function saveChat(userId: string, chat: StoredChat) {
-  try {
-    sessionStorage.setItem(storageKey(userId), JSON.stringify({ ...chat, messages: chat.messages.slice(-60) }));
-  } catch { /* sem storage (aba anônima, cota): a conversa só não sobrevive à navegação */ }
-}
-
-function clearChat(userId: string) {
-  try { sessionStorage.removeItem(storageKey(userId)); } catch { /* idem */ }
+function fromSaved(m: SavedMessage): UiMessage {
+  return {
+    key: m.id,
+    id: m.id,
+    role: m.role === 'user' ? 'user' : 'assistant',
+    content: m.content,
+    rating: m.rating ?? null,
+    timestamp: m.created_at,
+    foodLog: m.role === 'assistant' ? toLoggedFood(m.food_log) : null,
+  };
 }
 
 function toLoggedFood(raw: unknown): LoggedFood | null {
@@ -445,21 +440,23 @@ interface HistoryRow {
 }
 
 interface NinaChatProps {
-  userId: string;
-  /** Dia (Brasil) dos totais: a conversa guardada é descartada quando o dia vira. */
-  day: string;
   profile: Profile;
+  /** Conversa mais recente: o chat abre nela. */
+  initialConversation: SavedConversation | null;
   initialCalories: number;
   initialProtein: number;
   initialWater: number;
 }
 
-export default function NinaChat({ userId, day, profile, initialCalories, initialProtein, initialWater }: NinaChatProps) {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [pending, setPending] = useState<StoredChat['pending']>(null);
+export default function NinaChat({ profile, initialConversation, initialCalories, initialProtein, initialWater }: NinaChatProps) {
+  const [messages, setMessages] = useState<UiMessage[]>(() => initialConversation?.messages.map(fromSaved) ?? []);
   const [hydrated, setHydrated] = useState(false);
   // Mensagens já na tela ao abrir não animam de novo; só as novas.
-  const [animateFrom, setAnimateFrom] = useState(0);
+  const [animateFrom, setAnimateFrom] = useState(() => initialConversation?.messages.length ?? 0);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  // Muda quando outra conversa é aberta: rola direto para o fim dela.
+  const [scrollKey, setScrollKey] = useState(0);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -471,12 +468,14 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const conversationIdRef = useRef<string | null>(null);
+  const conversationIdRef = useRef<string | null>(initialConversation?.id ?? null);
+  // Espelho do ref para o render (a lista destaca a conversa aberta).
+  const [currentConversation, setCurrentConversation] = useState<string | null>(initialConversation?.id ?? null);
   // Turno em andamento: hora do último evento recebido (inclui o ping de 8 s).
   const abortRef = useRef<AbortController | null>(null);
   const lastEventRef = useRef(0);
   const mountedRef = useRef(true);
-  const messagesRef = useRef<UiMessage[]>([]);
+  const messagesRef = useRef<UiMessage[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const firstName = profile.full_name?.split(' ')[0] ?? null;
@@ -511,6 +510,7 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
       content: reply.content,
       id: reply.id ?? undefined,
       rating: reply.rating ?? null,
+      timestamp: new Date().toISOString(),
       foodLog: food,
     }]);
     if (food && food.calories > 0) {
@@ -520,12 +520,12 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
 
   const addError = useCallback((content: string, retryText?: string) => {
     if (!mountedRef.current) return;
-    setMessages((prev) => [...prev, { key: newId(), role: 'assistant', content, error: true, retryText }]);
+    setMessages((prev) => [...prev, { key: newId(), role: 'assistant', content, error: true, retryText, timestamp: new Date().toISOString() }]);
   }, []);
 
   /** A conexão caiu: o servidor termina e grava a resposta — busca no histórico. */
   const recover = useCallback(async (conversationId: string, questionId: string, text: string) => {
-    setStatus('A conexão caiu — buscando sua resposta…');
+    setStatus('Buscando sua resposta…');
     const reply = await waitForReply<HistoryRow>(
       async () => {
         const r = await fetch(`/api/chat/history?conversation_id=${conversationId}`, { cache: 'no-store' });
@@ -543,45 +543,31 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
     else addError(GENERIC_ERROR, text);
   }, [addReply, addError]);
 
-  // Restaura a conversa da aba (e busca a resposta que ficou pendente).
+  // Hora local só no cliente; e, se a tela foi fechada esperando a Nina
+  // (a última mensagem é uma pergunta recente), busca a resposta.
   useEffect(() => {
-    const saved = loadChat(userId, day);
-    /* eslint-disable react-hooks/set-state-in-effect -- sessionStorage e a hora
-       local só existem no cliente: ler no render quebraria a hidratação. */
+    /* eslint-disable react-hooks/set-state-in-effect -- a hora local só existe
+       no cliente: ler no render quebraria a hidratação. */
     setHour(new Date().getHours());
-    if (saved) {
-      conversationIdRef.current = saved.conversationId;
-      setMessages(saved.messages);
-      setAnimateFrom(saved.messages.length);
-      if (saved.pending && saved.conversationId) {
-        const { questionId, text } = saved.pending;
-        setPending(saved.pending);
-        setLoading(true);
-        recover(saved.conversationId, questionId, text).finally(() => {
-          if (!mountedRef.current) return;
-          setPending(null);
-          setStatus(null);
-          setLoading(false);
-        });
-      }
-    }
     setHydrated(true);
+    const last = initialConversation?.messages.at(-1);
+    if (initialConversation && last?.role === 'user' && Date.now() - Date.parse(last.created_at) < RECOVERY_MS) {
+      setLoading(true);
+      recover(initialConversation.id, last.id, last.content).finally(() => {
+        if (!mountedRef.current) return;
+        setStatus(null);
+        setLoading(false);
+      });
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Guarda a conversa a cada mudança.
-  useEffect(() => {
-    if (!hydrated) return;
-    if (messages.length === 0 && !pending) { clearChat(userId); return; }
-    saveChat(userId, { day, conversationId: conversationIdRef.current, messages, pending });
-  }, [hydrated, messages, pending, userId, day]);
 
   // Ao abrir, vai direto para o fim; depois, segue as novas mensagens.
   useLayoutEffect(() => {
     if (hydrated && messages.length > 0) scrollToBottom(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, scrollToBottom]);
+  }, [hydrated, scrollKey, scrollToBottom]);
 
   useEffect(() => {
     if (!hydrated || messages.length === 0) return;
@@ -624,11 +610,11 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
     if (!text || loading) return;
 
     const conversationId = (conversationIdRef.current ??= newId());
+    setCurrentConversation(conversationId);
     const questionId = newId();
-    const userMsg: UiMessage = { key: newId(), id: questionId, role: 'user', content: text };
+    const userMsg: UiMessage = { key: newId(), id: questionId, role: 'user', content: text, timestamp: new Date().toISOString() };
     const history = [...(base ?? messagesRef.current), userMsg];
     setMessages(history);
-    setPending({ questionId, text });
     setInput('');
     setLoading(true);
 
@@ -682,7 +668,6 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       if (mountedRef.current) {
-        setPending(null);
         setStatus(null);
         setLoading(false);
       }
@@ -702,14 +687,40 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
 
   const newConversation = () => {
     if (loading) return;
-    abortRef.current?.abort();
     conversationIdRef.current = null;
+    setCurrentConversation(null);
     setMessages([]);
     setAnimateFrom(0);
-    setPending(null);
     setInput('');
-    clearChat(userId);
     inputRef.current?.focus();
+  };
+
+  /** Reabre uma conversa salva; as próximas mensagens continuam nela. */
+  const openConversation = async (id: string) => {
+    setHistoryOpen(false);
+    if (loading || id === conversationIdRef.current) return;
+    setSwitching(true);
+    try {
+      const r = await fetch(`/api/chat/history?conversation_id=${id}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`history ${r.status}`);
+      const data = await r.json();
+      const list = (Array.isArray(data.messages) ? data.messages : []).map(fromSaved);
+      if (!mountedRef.current) return;
+      conversationIdRef.current = id;
+      setCurrentConversation(id);
+      setMessages(list);
+      setAnimateFrom(list.length);
+      setScrollKey((k) => k + 1);
+    } catch {
+      addError('Não consegui abrir essa conversa. Tente de novo.');
+    } finally {
+      if (mountedRef.current) setSwitching(false);
+    }
+  };
+
+  /** Conversa apagada na lista: se era a aberta, começa uma nova. */
+  const onConversationDeleted = (id: string) => {
+    if (id === conversationIdRef.current) newConversation();
   };
 
   const onSubmit = (e: React.FormEvent) => {
@@ -770,16 +781,28 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
             </span>
           </span>
         </button>
-        <button
-          type="button"
-          onClick={newConversation}
-          disabled={!started || loading}
-          aria-label="Nova conversa"
-          title="Nova conversa"
-          className="ml-auto h-9 w-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 dark:text-zinc-400 transition-[background-color,transform,opacity] active:scale-90 disabled:opacity-30"
-        >
-          <SquarePen size={15} />
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            disabled={loading}
+            aria-label="Conversas anteriores"
+            title="Conversas anteriores"
+            className="h-9 w-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 dark:text-zinc-400 transition-[background-color,transform,opacity] active:scale-90 disabled:opacity-30"
+          >
+            <History size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={newConversation}
+            disabled={!started || loading}
+            aria-label="Nova conversa"
+            title="Nova conversa"
+            className="h-9 w-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 dark:text-zinc-400 transition-[background-color,transform,opacity] active:scale-90 disabled:opacity-30"
+          >
+            <SquarePen size={15} />
+          </button>
+        </div>
       </div>
 
       <DaySummary
@@ -810,8 +833,21 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
           )}
           {messages.map((msg, i) => {
             const next = messages[i + 1];
+            const prev = messages[i - 1];
+            // Separador quando o dia muda (e no topo de conversas de outro dia).
+            const divider = hydrated && msg.timestamp && (!prev?.timestamp || !sameLocalDay(prev.timestamp, msg.timestamp))
+              && (prev || !sameLocalDay(msg.timestamp, new Date().toISOString()))
+              ? dayDivider(msg.timestamp)
+              : null;
             return (
-              <div key={msg.key} className={cn(i > 0 && messages[i - 1].role !== msg.role && 'mt-2')}>
+              <div key={msg.key} className={cn(i > 0 && prev.role !== msg.role && 'mt-2')}>
+                {divider && (
+                  <div className="flex items-center gap-3 py-2" role="separator">
+                    <span className="h-px flex-1 bg-zinc-200/80 dark:bg-zinc-800" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{divider}</span>
+                    <span className="h-px flex-1 bg-zinc-200/80 dark:bg-zinc-800" />
+                  </div>
+                )}
                 <MessageRow
                   msg={msg}
                   // Avatar e "rabinho" só na última bolha de uma sequência.
@@ -825,6 +861,16 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
           })}
           {loading && <div className="mt-2"><Typing status={status} /></div>}
         </div>
+
+        {switching && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#f4f4f6]/70 dark:bg-[#0c0c0e]/70 backdrop-blur-[1px] animate-fade-in" aria-busy>
+            <span className="flex items-center gap-1" aria-label="Abrindo conversa">
+              {[0, 0.15, 0.3].map((d) => (
+                <span key={d} className="nina-dot h-2 w-2 rounded-full bg-emerald-500" style={{ animationDelay: `${d}s` }} />
+              ))}
+            </span>
+          </div>
+        )}
 
         {/* Voltar ao fim */}
         <button
@@ -877,6 +923,14 @@ export default function NinaChat({ userId, day, profile, initialCalories, initia
       </form>
 
       <CoachAboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <ConversationsSheet
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        currentId={currentConversation}
+        onOpen={openConversation}
+        onDeleted={onConversationDeleted}
+        onNew={() => { setHistoryOpen(false); newConversation(); }}
+      />
     </div>
   );
 }

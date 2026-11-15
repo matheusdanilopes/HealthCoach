@@ -1,6 +1,6 @@
 /**
- * Um turno do chat do Coach: Gemini com a ferramenta log_food, Groq (só texto)
- * como reserva quando o Gemini cai.
+ * Um turno do chat do Coach: Gemini com as ferramentas log_food e
+ * consultar_historico, Groq (só texto) como reserva quando o Gemini cai.
  *
  * Isolado da rota (src/app/api/chat/route.ts) e com as dependências injetadas
  * para ser testado sem rede nem banco: o modelo, a gravação do alimento e o
@@ -17,6 +17,7 @@ import {
   type Part,
 } from '@google/genai';
 import { GEMINI_MODEL, addUsage, geminiGenerationConfig, readUsage, type TokenUsage } from '@/lib/ai';
+import { HISTORY_DECLARATION, HISTORY_TOOL_NAME } from '@/lib/chat/history';
 
 export const MEAL_TYPES = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'];
 export const MAX_HISTORY = 20;
@@ -25,6 +26,8 @@ export const MAX_MESSAGE_CHARS = 4000;
 // tight budget left replies empty or cut mid-sentence.
 export const MAX_REPLY_TOKENS = 1024;
 const CHAT_TEMPERATURE = 0.7;
+/** Rodadas no modelo por mensagem (consultas ao histórico + resposta). */
+export const MAX_ROUNDS = 4;
 export const EMPTY_REPLY = 'Desculpe, não consegui formular uma resposta agora. Pode repetir?';
 
 export const LOG_FOOD_DECLARATION = {
@@ -160,6 +163,8 @@ export interface TurnDeps {
   insertFoodLog: (row: FoodLogRow) => Promise<Record<string, unknown> | null>;
   /** Resposta só em texto quando o Gemini falha. */
   groqReply: (systemInstruction: string, messages: IncomingMessage[]) => Promise<string>;
+  /** Ferramenta consultar_historico; sem ela, o modelo só tem o contexto. */
+  queryHistory?: (userId: string, args: Record<string, unknown>) => Promise<string>;
   now?: () => number;
 }
 
@@ -220,7 +225,9 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
   const started = now();
   const model = input.model ?? GEMINI_MODEL;
   const { systemInstruction, messages } = input;
-  const tools = [{ functionDeclarations: [LOG_FOOD_DECLARATION] }];
+  const tools = [{
+    functionDeclarations: deps.queryHistory ? [LOG_FOOD_DECLARATION, HISTORY_DECLARATION] : [LOG_FOOD_DECLARATION],
+  }];
   const generation = geminiGenerationConfig({
     model,
     maxOutputTokens: MAX_REPLY_TOKENS,
@@ -243,7 +250,7 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
   try {
     response = await deps.generate({
       model,
-      contents,
+      contents: [...contents],
       config: {
         systemInstruction,
         tools,
@@ -268,24 +275,108 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
     }
   }
 
-  const call = response.functionCalls?.find((c) => c.name === 'log_food');
-  if (!call) {
-    const text = replyText(response);
-    if (!text.trim()) meta.fallback = 'empty';
-    return finish(text.trim() ? text : EMPTY_REPLY, false, null);
+  // Rodadas de ferramenta: consultas ao histórico (quantas o modelo precisar,
+  // até MAX_ROUNDS) e no máximo um log_food. Depois do log_food a rodada
+  // seguinte proíbe ferramentas, para não registrar o mesmo alimento duas vezes.
+  let foodLog: Record<string, unknown> | null = null;
+  let logAttempt: { foodName: string; calories: number | null } | null = null;
+  let mode: FunctionCallingConfigMode = FunctionCallingConfigMode.AUTO;
+
+  while (true) {
+    const calls = response.functionCalls ?? [];
+    if (calls.length === 0) break;
+    if (mode === FunctionCallingConfigMode.NONE) {
+      // Pedido de ferramenta na rodada proibida é ignorado (não grava de novo).
+      meta.ignoredToolCalls = (meta.ignoredToolCalls ?? 0) + calls.length;
+      break;
+    }
+
+    const responseParts: Part[] = [];
+    for (const call of calls) {
+      const toolStarted = now();
+      let result: string;
+      if (call.name === 'log_food') {
+        if (logAttempt) {
+          result = 'Ignorado: só um registro por mensagem. Os outros alimentos o usuário pode mandar em seguida.';
+        } else {
+          const r = await runLogFood(input, deps, (call.args ?? {}) as Record<string, unknown>);
+          logAttempt = { foodName: r.foodName, calories: r.calories };
+          foodLog = r.foodLog;
+          result = r.result;
+        }
+      } else if (call.name === HISTORY_TOOL_NAME && deps.queryHistory) {
+        try {
+          result = await deps.queryHistory(input.userId, (call.args ?? {}) as Record<string, unknown>);
+        } catch (e) {
+          console.error('[chat] history query failed:', errorMessage(e));
+          result = 'Erro ao consultar o histórico. Responda com o que está no contexto e avise que não conseguiu ver o período.';
+        }
+      } else {
+        result = `Ferramenta desconhecida: ${call.name}`;
+      }
+      meta.tools.push({ name: call.name ?? '?', args: call.args ?? {}, result, ms: now() - toolStarted });
+      responseParts.push({ functionResponse: { name: call.name, response: { result } } });
+    }
+
+    // As partes do modelo voltam intactas: na família Gemini 3 a chamada de
+    // ferramenta traz uma thoughtSignature que PRECISA voltar na mesma parte,
+    // senão a API recusa a requisição.
+    const modelParts: Part[] = response.candidates?.[0]?.content?.parts ?? calls.map((c) => ({ functionCall: c }));
+    contents.push({ role: 'model', parts: modelParts }, { role: 'user', parts: responseParts });
+    mode = logAttempt || meta.rounds + 1 >= MAX_ROUNDS ? FunctionCallingConfigMode.NONE : FunctionCallingConfigMode.AUTO;
+
+    try {
+      response = await deps.generate({
+        model,
+        contents: [...contents],
+        config: {
+          systemInstruction,
+          // No Gemini 3, tirar as ferramentas de uma conversa que já tem
+          // chamadas fazia o modelo devolver vazio. Elas continuam declaradas,
+          // e na rodada final ficam proibidas (mode NONE).
+          tools,
+          toolConfig: { functionCallingConfig: { mode } },
+          ...generation,
+        },
+      });
+      meta.rounds++;
+      meta.usage = addUsage(meta.usage, readUsage(response));
+    } catch (followErr) {
+      // O alimento pode já estar gravado: falhar aqui faria o usuário reenviar
+      // e registrar duas vezes. Só com consultas, o erro sobe (reenviar é seguro).
+      if (!logAttempt) throw followErr;
+      console.error('[chat] follow-up failed:', errorMessage(followErr));
+      return finish(fallbackAfterLog(meta, logAttempt, foodLog !== null), foodLog !== null, foodLog);
+    }
   }
 
-  const toolStarted = now();
-  const { args, unknown } = normalizeLogFoodArgs((call.args ?? {}) as Record<string, unknown>);
+  const text = replyText(response);
+  if (text.trim()) return finish(text, foodLog !== null, foodLog);
+  if (logAttempt) return finish(fallbackAfterLog(meta, logAttempt, foodLog !== null), foodLog !== null, foodLog);
+  meta.fallback = 'empty';
+  return finish(EMPTY_REPLY, false, null);
+}
+
+/** Resposta padrão quando o modelo não escreve nada depois do log_food. */
+function fallbackAfterLog(meta: TurnMeta, attempt: { foodName: string; calories: number | null }, logged: boolean): string {
+  meta.fallback = 'follow_up';
+  return logged
+    ? `✅ Registrei ${attempt.foodName} (${Math.round(attempt.calories ?? 0)} kcal) no seu diário.`
+    : 'Não consegui registrar esse alimento. Pode me dizer o nome e a quantidade?';
+}
+
+/** Valida os argumentos do log_food e grava; devolve o texto para o modelo. */
+async function runLogFood(input: TurnInput, deps: TurnDeps, raw: Record<string, unknown>) {
+  const { args, unknown } = normalizeLogFoodArgs(raw);
   const foodName = typeof args.food_name === 'string' ? args.food_name.trim().slice(0, 200) : '';
   const calories = optionalNumber(args.calories);
   const mealType = MEAL_TYPES.includes(args.meal_type as string) ? (args.meal_type as string) : 'other';
 
   let foodLog: Record<string, unknown> | null = null;
-  let functionResult: string;
+  let result: string;
   if (!foodName || calories === null) {
     // Don't insert a row with a blank name or missing calories.
-    functionResult = 'Erro: nome do alimento ou calorias ausentes. Peça mais detalhes ao usuário.';
+    result = 'Erro: nome do alimento ou calorias ausentes. Peça mais detalhes ao usuário.';
   } else {
     try {
       foodLog = await deps.insertFoodLog({
@@ -301,58 +392,8 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
     } catch (e) {
       console.error('[chat] food_logs insert failed:', errorMessage(e));
     }
-    functionResult = foodLog
-      ? `Registrado: ${foodName}, ${Math.round(calories)} kcal`
-      : 'Erro ao registrar';
+    result = foodLog ? `Registrado: ${foodName}, ${Math.round(calories)} kcal` : 'Erro ao registrar';
   }
-  if (unknown.length) functionResult += ` (parâmetros desconhecidos ignorados: ${unknown.join(', ')})`;
-  const foodLogged = foodLog !== null;
-  meta.tools.push({ name: 'log_food', args: call.args ?? {}, result: functionResult, ms: now() - toolStarted });
-
-  // The row may already be saved, so a failed follow-up must not turn into
-  // an error response — the user would resend and log the food twice.
-  let assistantMessage = '';
-  try {
-    // As partes do modelo voltam intactas: na família Gemini 3 a chamada de
-    // ferramenta traz uma thoughtSignature que PRECISA voltar na mesma parte,
-    // senão a API recusa a requisição.
-    const modelParts: Part[] = response.candidates?.[0]?.content?.parts ?? [{ functionCall: call }];
-    const followUp = await deps.generate({
-      model,
-      contents: [
-        ...contents,
-        { role: 'model', parts: modelParts },
-        {
-          role: 'user',
-          parts: [{ functionResponse: { name: 'log_food', response: { result: functionResult } } }],
-        },
-      ],
-      config: {
-        systemInstruction,
-        // No Gemini 3, tirar as ferramentas de uma conversa que já tem
-        // chamadas fazia o modelo devolver vazio. Elas continuam declaradas,
-        // mas proibidas (mode NONE).
-        tools,
-        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } },
-        ...generation,
-      },
-    });
-    meta.rounds = 2;
-    meta.usage = addUsage(meta.usage, readUsage(followUp));
-    // Pedido de ferramenta na rodada proibida é ignorado (não registra de novo).
-    const extraCalls = followUp.functionCalls?.length ?? 0;
-    if (extraCalls) meta.ignoredToolCalls = extraCalls;
-    assistantMessage = replyText(followUp);
-  } catch (followErr) {
-    console.error('[chat] follow-up failed:', errorMessage(followErr));
-  }
-
-  if (!assistantMessage.trim()) {
-    meta.fallback = 'follow_up';
-    assistantMessage = foodLogged
-      ? `✅ Registrei ${foodName} (${Math.round(calories ?? 0)} kcal) no seu diário.`
-      : 'Não consegui registrar esse alimento. Pode me dizer o nome e a quantidade?';
-  }
-
-  return finish(assistantMessage, foodLogged, foodLog);
+  if (unknown.length) result += ` (parâmetros desconhecidos ignorados: ${unknown.join(', ')})`;
+  return { foodName, calories, foodLog, result };
 }

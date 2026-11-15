@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { getSession, getUserRow } from '@/lib/session';
 import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
-import NinaChat from '@/components/chat/NinaChat';
+import NinaChat, { type SavedConversation } from '@/components/chat/NinaChat';
+import { loadLatestConversation } from '@/lib/chat/store';
 
 export default async function NinaPage() {
   const session = await getSession();
@@ -12,7 +13,7 @@ export default async function NinaPage() {
   const today = brazilToday();
 
   // Só os totais do dia: o resumo no topo do chat mostra o que a Nina "vê".
-  const [profile, foodRows, waterRows] = await Promise.all([
+  const [profile, foodRows, waterRows, conversation] = await Promise.all([
     getUserRow(userId),
     sql`
       SELECT
@@ -26,6 +27,12 @@ export default async function NinaPage() {
       FROM water_logs
       WHERE user_id = ${userId} AND log_date = ${today}
     `,
+    // O chat abre na conversa mais recente. Sem a tabela chat_messages (ou
+    // com o banco instável), abre vazio em vez de quebrar a página.
+    loadLatestConversation(userId).catch((err): SavedConversation | null => {
+      console.error('[nina] latest conversation', err instanceof Error ? err.message : err);
+      return null;
+    }),
   ]);
   if (!profile) redirect('/login');
 
@@ -34,9 +41,8 @@ export default async function NinaPage() {
 
   return (
     <NinaChat
-      userId={userId}
-      day={today}
       profile={profile}
+      initialConversation={conversation}
       initialCalories={Number(food?.calories ?? 0)}
       initialProtein={Number(food?.protein ?? 0)}
       initialWater={Number(water?.water ?? 0)}

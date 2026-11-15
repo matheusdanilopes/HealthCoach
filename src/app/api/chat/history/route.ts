@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { isUuid } from '@/lib/chat/recovery';
-import { isMissingSchema, loadConversation } from '@/lib/chat/store';
+import { isMissingSchema, loadConversationForApp } from '@/lib/chat/store';
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    return NextResponse.json({ messages: await loadConversation(session.user.id, conversationId) });
+    return NextResponse.json({ messages: await loadConversationForApp(session.user.id, conversationId) });
   } catch (err) {
     console.error('[chat-history]', err instanceof Error ? err.message : err);
     if (isMissingSchema(err)) {
