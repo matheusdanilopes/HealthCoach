@@ -25,10 +25,10 @@ function strengthMet(rpe: number | null): number {
 
 async function latestWeight(userId: string): Promise<number> {
   const [[log], [user]] = await Promise.all([
-    sql`SELECT weight_kg FROM weight_logs WHERE user_id = ${userId} ORDER BY log_date DESC LIMIT 1`,
+    sql`SELECT weight FROM body_metrics WHERE user_id = ${userId} ORDER BY date DESC LIMIT 1`,
     sql`SELECT current_weight FROM users WHERE id = ${userId}`,
   ]);
-  const w = Number(log?.weight_kg ?? user?.current_weight);
+  const w = Number(log?.weight ?? user?.current_weight);
   return Number.isFinite(w) && w > 0 ? w : 70;
 }
 

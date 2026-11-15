@@ -14,19 +14,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Peso inválido' }, { status: 400 });
   }
 
-  // created_at is refreshed so a re-log on the same day counts as the latest
-  // entry when compared against the "Pesagem" records (see lib/weight).
-  const now = new Date().toISOString();
+  // Same table as the "Pesagem" screen. The upsert only touches weight, so a
+  // quick log on a day that already has a Pesagem keeps its body composition.
   try {
     await insertInto(
-      'weight_logs',
+      'body_metrics',
       {
         user_id: session.user.id,
-        weight_kg: weight,
-        log_date: brazilToday(),
-        created_at: now,
+        date: brazilToday(),
+        weight,
+        updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,log_date' }
+      { onConflict: 'user_id,date' }
     );
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

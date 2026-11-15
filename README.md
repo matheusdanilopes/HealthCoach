@@ -40,6 +40,9 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 O app usa Postgres no [Neon](https://neon.tech) via `@neondatabase/serverless` (`src/lib/db.ts`), configurado pela variável `DATABASE_URL`.
 
 - Schema completo: `db/schema.sql` (equivale às migrations 001–018 de `supabase/migrations`, que ficam só como histórico).
+- Alterações em bancos já existentes: `db/migrations/` (rodar em ordem, depois do deploy do código correspondente).
+- Peso: todo registro (dashboard e Pesagem) vai para `body_metrics`, um por dia.
+- Análise de dados: a view `daily_summary` dá uma linha por usuário e dia (kcal, macros, gasto em treino, água manual + refeições, treinos, peso e composição). As colunas têm `COMMENT ON` com as convenções, como a de que `food_logs.calories` negativo é treino.
 - O Supabase continua sendo usado apenas como agendador (`pg_cron` + `pg_net` chamando as rotas do app, ver abaixo); ele não guarda mais dados do app.
 
 ## IA (Gemini)

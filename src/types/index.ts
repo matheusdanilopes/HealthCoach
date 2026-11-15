@@ -41,13 +41,6 @@ export interface WaterLogEntry {
   created_at: string;
 }
 
-export interface WeightLog {
-  id: string;
-  user_id: string;
-  log_date: string;
-  weight_kg: number;
-}
-
 export interface DailyStats {
   totalCalories: number;
   totalProtein: number;
