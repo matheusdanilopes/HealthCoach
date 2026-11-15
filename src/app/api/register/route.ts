@@ -70,13 +70,13 @@ export async function POST(req: Request) {
     }
 
     try {
-      await insertInto('weight_logs', {
+      await insertInto('body_metrics', {
         user_id: newUser.id,
-        weight_kg: w,
-        log_date: today,
-      }, { onConflict: 'user_id,log_date' });
+        weight: w,
+        date: today,
+      }, { onConflict: 'user_id,date' });
     } catch (weightErr) {
-      console.error('weight_log insert failed (non-fatal):', weightErr);
+      console.error('body_metrics insert failed (non-fatal):', weightErr);
     }
 
     return NextResponse.json({ ok: true });

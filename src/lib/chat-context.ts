@@ -69,11 +69,6 @@ interface WaterLogRow {
   log_date: string;
 }
 
-interface WeightLogRow {
-  weight_kg: number;
-  log_date: string;
-}
-
 interface BodyMetricRow {
   date: string;
   weight: number | null;
@@ -253,9 +248,9 @@ async function fetchWeight(
 ): Promise<string> {
   const [wLogs, bm] = await Promise.all([
     sql`
-      SELECT weight_kg, log_date FROM weight_logs
-      WHERE user_id = ${userId} AND log_date >= ${thirtyDaysAgo}
-      ORDER BY log_date ASC
+      SELECT date, weight FROM body_metrics
+      WHERE user_id = ${userId} AND date >= ${thirtyDaysAgo}
+      ORDER BY date ASC
     `,
     sql`
       SELECT date, weight, muscle_mass, body_fat FROM body_metrics
@@ -263,9 +258,9 @@ async function fetchWeight(
     `,
   ]);
 
-  const logs   = wLogs as WeightLogRow[];
-  const latest = logs[logs.length - 1]?.weight_kg ?? currentWeight;
-  const oldest = logs[0]?.weight_kg;
+  const logs   = wLogs as { date: string; weight: number }[];
+  const latest = logs[logs.length - 1]?.weight ?? currentWeight;
+  const oldest = logs[0]?.weight;
   const diff   = latest && oldest && String(latest) !== String(oldest)
     ? (Number(latest) - Number(oldest)).toFixed(1) : null;
   const latestBM = (bm as BodyMetricRow[])[0];

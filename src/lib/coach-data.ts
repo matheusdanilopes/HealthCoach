@@ -130,7 +130,6 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
     [profile],
     foodData,
     waterData,
-    weightLogs,
     metrics,
     measurements,
   ] = await Promise.all([
@@ -149,11 +148,6 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
       SELECT amount_ml, log_date FROM water_logs
       WHERE user_id = ${userId} AND log_date >= ${periodStart} AND log_date <= ${periodEnd}
       LIMIT 5000
-    `,
-    sql`
-      SELECT weight_kg, log_date FROM weight_logs
-      WHERE user_id = ${userId} AND log_date >= ${bodyStart}
-      ORDER BY log_date
     `,
     sql`
       SELECT date, weight, body_fat, muscle_mass FROM body_metrics
@@ -252,9 +246,6 @@ export async function buildCoachSnapshot(userId: string): Promise<CoachSnapshot>
 
   // ── Body ──
   const weightByDate = new Map<string, number>();
-  for (const w of weightLogs as { weight_kg: number; log_date: string }[]) {
-    weightByDate.set(w.log_date, Number(w.weight_kg));
-  }
   const metricRows = metrics as { date: string; weight: number | null; body_fat: number | null; muscle_mass: number | null }[];
   for (const m of metricRows) {
     if (m.weight != null) weightByDate.set(m.date, Number(m.weight));

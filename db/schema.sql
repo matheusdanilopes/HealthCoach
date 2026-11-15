@@ -1,4 +1,5 @@
--- Schema consolidado do HealthCoach no Neon (equivalente às migrations 001–018 do Supabase).
+-- Schema consolidado do HealthCoach no Neon (equivalente às migrations 001–018 do Supabase,
+-- mais as limpezas de db/migrations).
 -- Agendamentos (pg_cron/pg_net/Vault) continuam no Supabase; ver README.
 
 CREATE TABLE IF NOT EXISTS users (
@@ -50,15 +51,8 @@ CREATE TABLE IF NOT EXISTS water_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_water_logs_user_date ON water_logs (user_id, log_date);
 
-CREATE TABLE IF NOT EXISTS weight_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  weight_kg numeric(5,2) NOT NULL CHECK (weight_kg > 0 AND weight_kg < 500),
-  log_date date NOT NULL DEFAULT CURRENT_DATE,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE (user_id, log_date)
-);
-
+-- Todo registro de peso fica aqui: registro rápido do dashboard e tela Pesagem
+-- (um por dia; composição corporal é opcional).
 CREATE TABLE IF NOT EXISTS body_metrics (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -90,35 +84,6 @@ CREATE TABLE IF NOT EXISTS body_measurements (
   updated_at timestamptz DEFAULT now(),
   UNIQUE (user_id, date)
 );
-
-CREATE TABLE IF NOT EXISTS ai_insights (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type text NOT NULL DEFAULT 'behavior' CHECK (type = ANY (ARRAY['nutrition','hydration','workout','body','behavior','motivation'])),
-  priority text NOT NULL DEFAULT 'informativo' CHECK (priority = ANY (ARRAY['informativo','atencao','positivo','recomendacao'])),
-  title text NOT NULL,
-  message text NOT NULL,
-  cta text,
-  metadata jsonb,
-  generated_at timestamptz NOT NULL DEFAULT now(),
-  read_at timestamptz
-);
-CREATE INDEX IF NOT EXISTS idx_ai_insights_user_generated ON ai_insights (user_id, generated_at DESC);
-
-CREATE TABLE IF NOT EXISTS meal_history (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  input_type text NOT NULL CHECK (input_type = ANY (ARRAY['text','image'])),
-  raw_text text,
-  image_url text,
-  parsed_json jsonb NOT NULL,
-  total_calories integer NOT NULL,
-  total_protein numeric(6,2),
-  total_carbs numeric(6,2),
-  total_fat numeric(6,2),
-  created_at timestamptz DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_meal_history_user_created ON meal_history (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS meal_prep_recipes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -152,7 +117,6 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   hydration boolean NOT NULL DEFAULT true,
   meals boolean NOT NULL DEFAULT true,
   workouts boolean NOT NULL DEFAULT true,
-  insights boolean NOT NULL DEFAULT true,
   goals boolean NOT NULL DEFAULT true,
   quiet_start integer NOT NULL DEFAULT 22,
   quiet_end integer NOT NULL DEFAULT 7,
@@ -168,9 +132,7 @@ CREATE TABLE IF NOT EXISTS notification_logs (
   sent_at timestamptz NOT NULL DEFAULT now(),
   opened_at timestamptz,
   status text NOT NULL DEFAULT 'sent' CHECK (status = ANY (ARRAY['sent','failed','expired','retrying'])),
-  attempt integer NOT NULL DEFAULT 1,
   error_msg text,
-  endpoint_hint text,
   ref text
 );
 CREATE INDEX IF NOT EXISTS idx_notification_logs_user_sent ON notification_logs (user_id, sent_at DESC);

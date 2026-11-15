@@ -14,7 +14,6 @@ export default async function HistoryPage() {
 
   const [
     [profileData],
-    weightData,
     foodData,
     workoutData,
     waterData,
@@ -24,11 +23,6 @@ export default async function HistoryPage() {
     sql`
       SELECT target_calories, target_protein_g, target_water_ml, current_weight
       FROM users WHERE id = ${userId}
-    `,
-    sql`
-      SELECT log_date, weight_kg FROM weight_logs
-      WHERE user_id = ${userId} AND log_date >= ${ninetyDaysAgo}
-      ORDER BY log_date
     `,
     sql`
       SELECT log_date, calories, protein FROM food_logs
@@ -59,11 +53,10 @@ export default async function HistoryPage() {
     currentWeight:  profileData?.current_weight ? Number(profileData.current_weight) : null,
   };
 
-  // Weight logs (ascending by date)
-  const weightLogs = weightData.map((r) => ({
-    date:   r.log_date,
-    weight: parseFloat(String(r.weight_kg)),
-  }));
+  // Weight series, last 90 days (ascending by date)
+  const weightLogs = bodyMetricsData
+    .filter((r) => String(r.date) >= ninetyDaysAgo)
+    .map((r) => ({ date: r.date, weight: Number(r.weight) }));
 
   // Aggregate food by date
   const foodByDate: Record<string, { calories: number; protein: number }> = {};
