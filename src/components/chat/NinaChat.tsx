@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, Fragment } from 'react';
 import {
-  ArrowUp, ThumbsUp, ThumbsDown, Info, Flame, Beef, Droplets, ChevronRight, ChevronDown,
+  ArrowUp, ThumbsUp, ThumbsDown, Info, ChevronRight, ChevronDown,
   SquarePen, CircleCheck, RotateCcw, Sparkles, History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -299,59 +299,6 @@ function Typing({ status }: { status: string | null }) {
         </span>
         {status && <span className="text-[12px] text-zinc-500 dark:text-zinc-400 animate-fade-in">{status}</span>}
       </div>
-    </div>
-  );
-}
-
-/* ─── Resumo do dia ─────────────────────────────────────────────────────── */
-
-function DayStat({ icon: Icon, tone, bar, value, target, unit, label, pct }: {
-  icon: typeof Flame; tone: string; bar: string; value: string; target: string | null;
-  unit: string; label: string; pct: number | null;
-}) {
-  return (
-    <div className="min-w-0 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 px-2.5 py-2" title={label}>
-      <p className="flex items-center gap-1 leading-none min-w-0">
-        <Icon size={12} className={cn('flex-shrink-0', tone)} aria-hidden />
-        <span className="text-[13px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100 truncate">{value}</span>
-        <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">{unit}</span>
-        <span className="sr-only"> {label}{target ? ` de ${target} ${unit}` : ''}</span>
-      </p>
-      {pct != null && (
-        <div className="mt-1.5 h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden" aria-hidden>
-          <div
-            className={cn('h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]', bar)}
-            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-          />
-        </div>
-      )}
-      {target && (
-        <p className="mt-1 text-[10px] leading-none text-zinc-400 dark:text-zinc-500 tabular-nums truncate" aria-hidden>
-          meta {target}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function DaySummary({ calories, caloriesTarget, protein, proteinTarget, waterMl, waterTargetMl }: {
-  calories: number; caloriesTarget: number | null;
-  protein: number; proteinTarget: number | null;
-  waterMl: number; waterTargetMl: number;
-}) {
-  const liters = (ml: number) => (ml / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-  const pct = (v: number, t: number | null) => (t ? (v / t) * 100 : null);
-  return (
-    <div className="grid grid-cols-3 gap-1.5 flex-shrink-0" aria-label="Resumo de hoje">
-      <DayStat icon={Flame} tone="text-orange-500" bar="bg-orange-400" label="calorias consumidas"
-        value={fmt(calories)} target={caloriesTarget ? fmt(caloriesTarget) : null} unit="kcal"
-        pct={pct(calories, caloriesTarget)} />
-      <DayStat icon={Beef} tone="text-rose-500" bar="bg-rose-400" label="proteína"
-        value={fmt(protein)} target={proteinTarget ? fmt(proteinTarget) : null} unit="g"
-        pct={pct(protein, proteinTarget)} />
-      <DayStat icon={Droplets} tone="text-sky-500" bar="bg-sky-400" label="água"
-        value={liters(waterMl)} target={liters(waterTargetMl)} unit="L"
-        pct={pct(waterMl, waterTargetMl)} />
     </div>
   );
 }
@@ -804,15 +751,6 @@ export default function NinaChat({ profile, initialConversation, initialCalories
           </button>
         </div>
       </div>
-
-      <DaySummary
-        calories={totals.calories}
-        caloriesTarget={profile.target_calories}
-        protein={totals.protein}
-        proteinTarget={profile.target_protein_g}
-        waterMl={initialWater}
-        waterTargetMl={profile.target_water_ml}
-      />
 
       {/* Mensagens */}
       <div className="relative flex-1 min-h-0">

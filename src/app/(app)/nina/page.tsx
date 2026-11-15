@@ -12,7 +12,7 @@ export default async function NinaPage() {
   const userId = session.user.id;
   const today = brazilToday();
 
-  // Só os totais do dia: o resumo no topo do chat mostra o que a Nina "vê".
+  // Totais do dia: as sugestões de pergunta usam o que ainda falta.
   const [profile, foodRows, waterRows, conversation] = await Promise.all([
     getUserRow(userId),
     sql`
