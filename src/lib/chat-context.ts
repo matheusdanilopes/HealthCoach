@@ -1,5 +1,5 @@
 import { sql } from '@/lib/db';
-import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
+import { brazilToday, brazilNDaysAgo, brazilHour, brazilMinute } from '@/lib/timezone';
 import { HISTORY_TOOL_NAME, pastConversationsContext, recentDaysContext, weekday } from '@/lib/chat/history';
 
 export type ChatIntent =
@@ -159,7 +159,9 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent, co
   const remainProt = Math.max(0, targetProt - todayProt);
   const waterPct   = targetWater > 0 ? Math.round((todayWater / targetWater) * 100) : 0;
 
-  let ctx = `DATA DE HOJE: ${today} (${weekday(today)})
+  const hour = brazilHour();
+  const period = hour < 5 ? 'madrugada' : hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';
+  let ctx = `DATA DE HOJE: ${today} (${weekday(today)}) | AGORA: ${String(hour).padStart(2, '0')}:${String(brazilMinute()).padStart(2, '0')} (${period})
 PERFIL: ${firstName} | Peso: ${profileData?.current_weight ?? '?'}kg | Objetivo: ${goal}
 META DIÁRIA: ${targetCal}kcal | Proteína: ${targetProt}g | Água: ${targetWater}ml
 HOJE: ${todayCal}kcal | ${todayProt}g prot | ${todayCarbs}g carbs | ${todayFat}g gord${workoutKcal > 0 ? ` | ${workoutKcal}kcal queimadas` : ''}
@@ -189,7 +191,7 @@ RESTANTE: ${remainCal}kcal | ${remainProt}g prot
   }
 
   if (memory) {
-    ctx += `\n\nCONVERSAS ANTERIORES (memória; use para dar continuidade, sem repetir à toa):\n${memory}`;
+    ctx += `\n\nCONVERSAS ANTERIORES (memória; use para dar continuidade e retomar o que ficou combinado. Não reaproveite as mesmas frases nem as mesmas dicas das suas respostas antigas):\n${memory}`;
   }
 
   return ctx;
