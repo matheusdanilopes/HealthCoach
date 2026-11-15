@@ -1,5 +1,5 @@
 /**
- * GET    /api/chat/conversations           — conversas do usuário com a Nina
+ * GET    /api/chat/conversations[?limit=n] — conversas do usuário com a Nina (recentes primeiro)
  * DELETE /api/chat/conversations?id=<uuid> — apaga uma conversa
  */
 
@@ -16,11 +16,12 @@ function failure(action: string, err: unknown) {
   return NextResponse.json({ error: 'Não foi possível carregar as conversas.' }, { status: 500 });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const limit = Math.min(50, Math.max(1, Number(new URL(req.url).searchParams.get('limit')) || 50));
   try {
-    return NextResponse.json({ conversations: await listConversations(session.user.id) });
+    return NextResponse.json({ conversations: await listConversations(session.user.id, limit) });
   } catch (err) {
     return failure('list', err);
   }

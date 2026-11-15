@@ -490,6 +490,45 @@ export default function NinaChat({ profile, initialConversation, initialCalories
     else addError(GENERIC_ERROR, text);
   }, [addReply, addError]);
 
+  /** Carrega as mensagens de uma conversa do servidor e passa a usá-la. */
+  const loadConversation = useCallback(async (id: string) => {
+    setSwitching(true);
+    try {
+      const r = await fetch(`/api/chat/history?conversation_id=${id}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`history ${r.status}`);
+      const data = await r.json();
+      const list = (Array.isArray(data.messages) ? data.messages : []).map(fromSaved);
+      if (!mountedRef.current) return;
+      conversationIdRef.current = id;
+      // Já no ref: um envio que esperava a conferência usa esta conversa.
+      messagesRef.current = list;
+      setCurrentConversation(id);
+      setMessages(list);
+      setAnimateFrom(list.length);
+      setScrollKey((k) => k + 1);
+    } finally {
+      if (mountedRef.current) setSwitching(false);
+    }
+  }, []);
+
+  // A página pode chegar de um cache (navegação de volta, service worker
+  // antigo) sem a conversa mais recente. Confere no servidor ao abrir; o envio
+  // espera essa conferência para não abrir uma conversa nova por engano.
+  const syncRef = useRef<Promise<void> | null>(null);
+  const waitingSyncRef = useRef(false);
+  const syncLatest = useCallback(async () => {
+    const before = messagesRef.current;
+    try {
+      const r = await fetch('/api/chat/conversations?limit=1', { cache: 'no-store' });
+      if (!r.ok) return;
+      const latest: string | undefined = (await r.json()).conversations?.[0]?.id;
+      if (!latest || latest === conversationIdRef.current || !mountedRef.current) return;
+      // A pessoa já começou outra coisa (nova conversa, outra da lista): respeita.
+      if (messagesRef.current !== before) return;
+      await loadConversation(latest);
+    } catch { /* sem conferência: segue com o que veio na página */ }
+  }, [loadConversation]);
+
   // Hora local só no cliente; e, se a tela foi fechada esperando a Nina
   // (a última mensagem é uma pergunta recente), busca a resposta.
   useEffect(() => {
@@ -505,6 +544,8 @@ export default function NinaChat({ profile, initialConversation, initialCalories
         setStatus(null);
         setLoading(false);
       });
+    } else {
+      syncRef.current = syncLatest().finally(() => { syncRef.current = null; });
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -554,7 +595,12 @@ export default function NinaChat({ profile, initialConversation, initialCalories
 
   const send = useCallback(async (raw: string, base?: UiMessage[]) => {
     const text = raw.trim().slice(0, MAX_INPUT_CHARS);
-    if (!text || loading) return;
+    if (!text || loading || waitingSyncRef.current) return;
+    if (syncRef.current) {
+      waitingSyncRef.current = true;
+      await syncRef.current;
+      waitingSyncRef.current = false;
+    }
 
     const conversationId = (conversationIdRef.current ??= newId());
     setCurrentConversation(conversationId);
@@ -646,22 +692,10 @@ export default function NinaChat({ profile, initialConversation, initialCalories
   const openConversation = async (id: string) => {
     setHistoryOpen(false);
     if (loading || id === conversationIdRef.current) return;
-    setSwitching(true);
     try {
-      const r = await fetch(`/api/chat/history?conversation_id=${id}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error(`history ${r.status}`);
-      const data = await r.json();
-      const list = (Array.isArray(data.messages) ? data.messages : []).map(fromSaved);
-      if (!mountedRef.current) return;
-      conversationIdRef.current = id;
-      setCurrentConversation(id);
-      setMessages(list);
-      setAnimateFrom(list.length);
-      setScrollKey((k) => k + 1);
+      await loadConversation(id);
     } catch {
       addError('Não consegui abrir essa conversa. Tente de novo.');
-    } finally {
-      if (mountedRef.current) setSwitching(false);
     }
   };
 
