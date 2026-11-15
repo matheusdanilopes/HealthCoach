@@ -16,7 +16,7 @@ import {
   type GenerateContentResponse,
   type Part,
 } from '@google/genai';
-import { GEMINI_MODEL, addUsage, geminiGenerationConfig, readUsage, type TokenUsage } from '@/lib/ai';
+import { DEFAULT_AI_TIMEOUT_MS, GEMINI_MODEL, addUsage, geminiGenerationConfig, readUsage, type ThinkingEffort, type TokenUsage } from '@/lib/ai';
 import { HISTORY_DECLARATION, HISTORY_TOOL_NAME } from '@/lib/chat/history';
 
 export const MEAL_TYPES = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'];
@@ -28,6 +28,13 @@ export const MAX_REPLY_TOKENS = 1024;
 const CHAT_TEMPERATURE = 0.7;
 /** Rodadas no modelo por mensagem (consultas ao histórico + resposta). */
 export const MAX_ROUNDS = 4;
+/** Limite por chamada com raciocínio "medium" (leva 30–60 s). */
+export const DEEP_TIMEOUT_MS = 55_000;
+/**
+ * Raciocínio "medium" só enquanto o turno tiver folga: passado esse tempo, as
+ * rodadas seguintes voltam para "low" para caber no maxDuration da rota (90 s).
+ */
+export const DEEP_BUDGET_MS = 30_000;
 export const EMPTY_REPLY = 'Desculpe, não consegui formular uma resposta agora. Pode repetir?';
 
 export const LOG_FOOD_DECLARATION = {
@@ -75,21 +82,21 @@ export const FOOD_COACHING_RULES = `INSTRUÇÕES:
    - Mandioca frita (1 pedaço ≈ 30g): 62 kcal | Batata frita: 180 kcal/100g (porção: 60-80g)
    - Pão francês (1 un ≈ 50g): 135 kcal | Maionese (5g): 33 kcal | Mussarela (25g): 66 kcal
    - Pastel pequeno (1 un ≈ 70g): 225 kcal | Amendoim (1 punhado ≈ 20g): 118 kcal
-3. Seja encorajador e use os dados reais para personalizar suas respostas.
+3. Ao registrar, confirme o alimento e as kcal em uma linha; comente o dia só se houver algo útil a dizer (ex.: proteína ainda baixa à noite), sem repetir o que já disse antes.
 4. Responda sempre em português do Brasil.
-5. Seja conciso — respostas curtas e diretas, com emojis quando apropriado.
-6. Dê feedback sobre o progresso baseado nos dados do contexto.`;
+5. Seja conciso: respostas curtas e diretas.
+6. Use os dados do contexto para personalizar, citando só os que respondem à pergunta atual.`;
 
 /** Como escrever no chat do app, que mostra **negrito** e listas formatados. */
 export const CHAT_FORMAT_RULES = `FORMATO DAS RESPOSTAS (o app exibe negrito e listas):
-- Abra com uma frase curta que responde direto à pergunta.
+- A primeira frase já responde à pergunta (sem cumprimento nem elogio de abertura).
 - Parágrafos de no máximo 2 frases, separados por uma linha em branco.
 - Com 3 ou mais itens (alimentos, números, opções), use lista: uma linha por item começando com "- ". Para passos em ordem, use "1. ", "2. ".
 - Use **negrito** só nos números-chave e nos nomes de alimentos (no máximo 4 destaques por resposta).
 - Pode abrir um bloco com uma linha curta em negrito como título (ex.: **Opções para o jantar:**).
 - Não use títulos com #, tabelas, blocos de código nem links.
-- Até ~90 palavras; passe disso só se o usuário pedir detalhes.
-- Feche, quando fizer sentido, com o próximo passo concreto em uma linha.`;
+- Até ~90 palavras; passe disso só se o usuário pedir detalhes ou a análise exigir.
+- Varie a estrutura: nem toda resposta precisa de lista, título em negrito ou fechamento com próximo passo.`;
 
 export function buildSystemInstruction(dynamicContext: string): string {
   return `${COACH_PERSONA}
@@ -158,7 +165,7 @@ export interface FoodLogRow {
 }
 
 export interface TurnDeps {
-  generate: (req: { model: string; contents: Content[]; config: GenerateContentConfig }) => Promise<GenerateContentResponse>;
+  generate: (req: { model: string; contents: Content[]; config: GenerateContentConfig; timeoutMs: number }) => Promise<GenerateContentResponse>;
   /** Grava o alimento; devolve a linha inserida ou null se falhar. */
   insertFoodLog: (row: FoodLogRow) => Promise<Record<string, unknown> | null>;
   /** Resposta só em texto quando o Gemini falha. */
@@ -175,6 +182,8 @@ export interface TurnInput {
   /** Dia do diário (calendário do Brasil). */
   logDate: string;
   model?: string;
+  /** Raciocínio do Gemini 3 (padrão: low). "medium" para perguntas de análise. */
+  thinking?: ThinkingEffort;
 }
 
 export interface ToolTrace {
@@ -189,6 +198,8 @@ export interface TurnMeta {
   provider: 'gemini' | 'groq';
   model: string;
   rounds: number;
+  /** Nível de raciocínio de cada rodada no Gemini. */
+  thinking: ThinkingEffort[];
   durationMs: number;
   usage?: TokenUsage;
   tools: ToolTrace[];
@@ -228,19 +239,29 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
   const tools = [{
     functionDeclarations: deps.queryHistory ? [LOG_FOOD_DECLARATION, HISTORY_DECLARATION] : [LOG_FOOD_DECLARATION],
   }];
-  const generation = geminiGenerationConfig({
-    model,
-    maxOutputTokens: MAX_REPLY_TOKENS,
-    temperature: CHAT_TEMPERATURE,
-    thinking: 'low',
-  });
+  // Esforço de cada rodada: o pedido (input.thinking) enquanto houver folga
+  // de tempo, "low" depois disso.
+  const roundSettings = () => {
+    const deep = input.thinking != null && input.thinking !== 'low' && now() - started < DEEP_BUDGET_MS;
+    const thinking: ThinkingEffort = deep ? input.thinking! : 'low';
+    return {
+      thinking,
+      timeoutMs: deep ? DEEP_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS,
+      generation: geminiGenerationConfig({
+        model,
+        maxOutputTokens: MAX_REPLY_TOKENS,
+        temperature: CHAT_TEMPERATURE,
+        thinking,
+      }),
+    };
+  };
 
   const contents: Content[] = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
 
-  const meta: TurnMeta = { provider: 'gemini', model, rounds: 0, durationMs: 0, tools: [] };
+  const meta: TurnMeta = { provider: 'gemini', model, rounds: 0, durationMs: 0, tools: [], thinking: [] };
   const finish = (message: string, foodLogged: boolean, foodLog: Record<string, unknown> | null): TurnResult => {
     meta.durationMs = now() - started;
     return { message, foodLogged, foodLog, meta };
@@ -248,14 +269,17 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
 
   let response: GenerateContentResponse;
   try {
+    const round = roundSettings();
+    meta.thinking.push(round.thinking);
     response = await deps.generate({
       model,
       contents: [...contents],
+      timeoutMs: round.timeoutMs,
       config: {
         systemInstruction,
         tools,
         toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-        ...generation,
+        ...round.generation,
       },
     });
     meta.rounds = 1;
@@ -326,9 +350,12 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
     mode = logAttempt || meta.rounds + 1 >= MAX_ROUNDS ? FunctionCallingConfigMode.NONE : FunctionCallingConfigMode.AUTO;
 
     try {
+      const round = roundSettings();
+      meta.thinking.push(round.thinking);
       response = await deps.generate({
         model,
         contents: [...contents],
+        timeoutMs: round.timeoutMs,
         config: {
           systemInstruction,
           // No Gemini 3, tirar as ferramentas de uma conversa que já tem
@@ -336,7 +363,7 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
           // e na rodada final ficam proibidas (mode NONE).
           tools,
           toolConfig: { functionCallingConfig: { mode } },
-          ...generation,
+          ...round.generation,
         },
       });
       meta.rounds++;

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FunctionCallingConfigMode, type Content, type GenerateContentConfig, type GenerateContentResponse } from '@google/genai';
 import {
+  DEEP_TIMEOUT_MS,
   EMPTY_REPLY,
   normalizeLogFoodArgs,
   runChatTurn,
@@ -12,7 +13,7 @@ import {
 } from '@/lib/chat/turn';
 import { geminiResponse, textResponse } from '@/lib/chat/testing';
 
-type Request = { model: string; contents: Content[]; config: GenerateContentConfig };
+type Request = { model: string; contents: Content[]; config: GenerateContentConfig; timeoutMs: number };
 
 /** Nomes das ferramentas declaradas numa requisição. */
 const toolNames = (req: Request) =>
@@ -313,4 +314,34 @@ test('rodada depois da consulta falha: o erro sobe (nada foi gravado, reenviar �
     new Error('503 overloaded'),
   ]);
   await assert.rejects(runChatTurn(input('Como foi minha semana?'), deps), /503/);
+});
+
+/* ─── nível de raciocínio ─────────────────────────────────────────────── */
+
+test('padrão: raciocínio low com o limite normal de 30 s', async () => {
+  const { deps, requests } = setup([textResponse('ok')]);
+  const r = await runChatTurn(input('Oi'), deps);
+  assert.equal(requests[0].config.thinkingConfig?.thinkingLevel, 'LOW');
+  assert.equal(requests[0].timeoutMs, 30_000);
+  assert.deepEqual(r.meta.thinking, ['low']);
+});
+
+test('medium: rodadas dentro da folga usam medium e limite maior; depois volta para low', async () => {
+  let clock = 0;
+  const s = withHistory([
+    historyCall({ data_inicio: '2026-10-01', data_fim: '2026-11-08' }),
+    historyCall({ data_inicio: '2026-09-01', data_fim: '2026-09-30' }),
+    textResponse('Análise'),
+  ]);
+  s.deps.now = () => clock;
+  const generate = s.deps.generate;
+  // Cada rodada "leva" 20 s: a 1ª e a 2ª começam com folga (0 s e 20 s), a 3ª não (40 s).
+  s.deps.generate = async (req) => { const res = await generate(req); clock += 20_000; return res; };
+
+  const r = await runChatTurn({ ...input('Por que não estou emagrecendo?'), thinking: 'medium' }, s.deps);
+
+  assert.equal(r.message, 'Análise');
+  assert.deepEqual(s.requests.map((q) => q.config.thinkingConfig?.thinkingLevel), ['MEDIUM', 'MEDIUM', 'LOW']);
+  assert.deepEqual(s.requests.map((q) => q.timeoutMs), [DEEP_TIMEOUT_MS, DEEP_TIMEOUT_MS, 30_000]);
+  assert.deepEqual(r.meta.thinking, ['medium', 'medium', 'low']);
 });
