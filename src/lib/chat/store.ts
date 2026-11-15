@@ -89,3 +89,69 @@ export async function rateMessage(userId: string, messageId: string, rating: 1 |
   `;
   return rows.length > 0;
 }
+
+/** Datas do banco chegam como Date; para o app, sempre texto ISO. */
+function iso(v: unknown): string {
+  return v instanceof Date ? v.toISOString() : String(v);
+}
+
+/** Mensagens de uma conversa prontas para o app (datas em ISO). */
+export async function loadConversationForApp(userId: string, conversationId: string): Promise<StoredMessage[]> {
+  const rows = await loadConversation(userId, conversationId);
+  return rows.map((m) => ({ ...m, created_at: iso(m.created_at) }));
+}
+
+export interface ConversationSummary {
+  id: string;
+  /** Primeira pergunta do usuário (vira o título na lista). */
+  title: string;
+  started_at: string;
+  last_at: string;
+  messages: number;
+}
+
+/** Conversas do usuário, da mais recente para a mais antiga. */
+export async function listConversations(userId: string, limit = 50): Promise<ConversationSummary[]> {
+  const rows = await sql`
+    SELECT conversation_id AS id,
+           (array_agg(content ORDER BY created_at) FILTER (WHERE role = 'user'))[1] AS title,
+           MIN(created_at) AS started_at,
+           MAX(created_at) AS last_at,
+           COUNT(*)::int AS messages
+      FROM chat_messages
+     WHERE user_id = ${userId}
+     GROUP BY conversation_id
+     ORDER BY MAX(created_at) DESC
+     LIMIT ${limit}
+  `;
+  return rows.map((r) => ({
+    id: r.id as string,
+    title: String(r.title ?? 'Conversa').slice(0, 140),
+    started_at: iso(r.started_at),
+    last_at: iso(r.last_at),
+    messages: Number(r.messages),
+  }));
+}
+
+/** A conversa mais recente com as mensagens (o chat abre nela). */
+export async function loadLatestConversation(userId: string): Promise<{ id: string; messages: StoredMessage[] } | null> {
+  const [latest] = await sql`
+    SELECT conversation_id FROM chat_messages
+     WHERE user_id = ${userId}
+     ORDER BY created_at DESC
+     LIMIT 1
+  `;
+  if (!latest) return null;
+  const id = latest.conversation_id as string;
+  return { id, messages: await loadConversationForApp(userId, id) };
+}
+
+/** Apaga a conversa (os alimentos registrados por ela continuam no diário). */
+export async function deleteConversation(userId: string, conversationId: string): Promise<number> {
+  const rows = await sql`
+    DELETE FROM chat_messages
+     WHERE user_id = ${userId} AND conversation_id = ${conversationId}
+    RETURNING id
+  `;
+  return rows.length;
+}

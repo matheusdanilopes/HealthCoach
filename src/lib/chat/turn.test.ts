@@ -14,6 +14,10 @@ import { geminiResponse, textResponse } from '@/lib/chat/testing';
 
 type Request = { model: string; contents: Content[]; config: GenerateContentConfig };
 
+/** Nomes das ferramentas declaradas numa requisição. */
+const toolNames = (req: Request) =>
+  (req.config.tools?.[0] as { functionDeclarations?: { name?: string }[] } | undefined)?.functionDeclarations?.map((d) => d.name);
+
 function setup(responses: Array<GenerateContentResponse | Error>, opts: { insertFails?: boolean; groq?: string | Error } = {}) {
   const requests: Request[] = [];
   const inserted: FoodLogRow[] = [];
@@ -210,4 +214,103 @@ test('sanitizeMessages descarta a saudação inicial e mensagens malformadas', (
     'lixo',
   ]);
   assert.deepEqual(out, [{ role: 'user', content: 'Comi pão' }, { role: 'assistant', content: 'Registrado' }]);
+});
+
+/* ─── consultar_historico ─────────────────────────────────────────────── */
+
+const historyCall = (args: Record<string, unknown>) =>
+  geminiResponse([{ functionCall: { name: 'consultar_historico', args }, thoughtSignature: 'sig-h' }]);
+
+function withHistory(responses: Array<GenerateContentResponse | Error>, answer: string | Error = 'Período 14/11 (sex): 1800 kcal') {
+  const s = setup(responses);
+  const queries: Record<string, unknown>[] = [];
+  s.deps.queryHistory = async (_userId, args) => {
+    queries.push(args);
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+  return { ...s, queries };
+}
+
+test('consulta o histórico e responde; ferramentas seguem liberadas depois da consulta', async () => {
+  const { deps, requests, queries } = withHistory([
+    historyCall({ data_inicio: '2026-11-08', data_fim: '2026-11-08' }),
+    textResponse('Ontem você comeu 1.800 kcal.'),
+  ]);
+  const r = await runChatTurn(input('O que comi ontem?'), deps);
+  assert.equal(r.message, 'Ontem você comeu 1.800 kcal.');
+  assert.equal(r.foodLogged, false);
+  assert.deepEqual(queries, [{ data_inicio: '2026-11-08', data_fim: '2026-11-08' }]);
+  assert.equal(r.meta.rounds, 2);
+  assert.deepEqual(toolNames(requests[0]), ['log_food', 'consultar_historico']);
+  assert.equal(requests[1].config.toolConfig?.functionCallingConfig?.mode, FunctionCallingConfigMode.AUTO);
+  assert.equal(requests[1].contents.at(-1)!.parts?.[0].functionResponse?.response?.result, 'Período 14/11 (sex): 1800 kcal');
+  assert.equal(requests[1].contents.at(-2)!.parts?.[0].thoughtSignature, 'sig-h');
+});
+
+test('sem queryHistory a ferramenta não é declarada', async () => {
+  const { deps, requests } = setup([textResponse('oi')]);
+  await runChatTurn(input('oi'), deps);
+  assert.deepEqual(toolNames(requests[0]), ['log_food']);
+});
+
+test('consultas em sequência param no limite de rodadas (última rodada sem ferramentas)', async () => {
+  const { deps, requests, queries } = withHistory([
+    historyCall({ data_inicio: '2026-11-01', data_fim: '2026-11-07' }),
+    historyCall({ data_inicio: '2026-10-01', data_fim: '2026-10-31' }),
+    historyCall({ data_inicio: '2026-09-01', data_fim: '2026-09-30' }),
+    textResponse('Resumo dos meses.'),
+  ]);
+  const r = await runChatTurn(input('Compare meus meses'), deps);
+  assert.equal(r.message, 'Resumo dos meses.');
+  assert.equal(queries.length, 3);
+  assert.equal(r.meta.rounds, 4);
+  assert.equal(requests[3].config.toolConfig?.functionCallingConfig?.mode, FunctionCallingConfigMode.NONE);
+});
+
+test('consulta e depois registra: rodada final proibida, um registro só', async () => {
+  const { deps, requests, inserted } = withHistory([
+    historyCall({ data_inicio: '2026-11-08', data_fim: '2026-11-08', incluir_refeicoes: true }),
+    logFoodCall({ food_name: 'Omelete', calories: 200, meal_type: 'dinner' }),
+    textResponse('Registrei o mesmo jantar de ontem!'),
+  ]);
+  const r = await runChatTurn(input('Jantei o mesmo de ontem'), deps);
+  assert.equal(inserted.length, 1);
+  assert.equal(r.foodLogged, true);
+  assert.equal(r.message, 'Registrei o mesmo jantar de ontem!');
+  assert.equal(requests[2].config.toolConfig?.functionCallingConfig?.mode, FunctionCallingConfigMode.NONE);
+});
+
+test('dois log_food na mesma resposta: só o primeiro grava, o segundo recebe aviso', async () => {
+  const { deps, requests, inserted } = setup([
+    geminiResponse([
+      { functionCall: { name: 'log_food', args: { food_name: 'Arroz', calories: 130, meal_type: 'lunch' } } },
+      { functionCall: { name: 'log_food', args: { food_name: 'Feijão', calories: 80, meal_type: 'lunch' } } },
+    ]),
+    textResponse('Registrei o arroz.'),
+  ]);
+  const r = await runChatTurn(input('Almocei arroz e feijão'), deps);
+  assert.equal(inserted.length, 1);
+  assert.equal(r.foodLogged, true);
+  const parts = requests[1].contents.at(-1)!.parts!;
+  assert.equal(parts.length, 2, 'uma resposta para cada chamada');
+  assert.match(parts[1].functionResponse?.response?.result as string, /Ignorado/);
+});
+
+test('falha na consulta vira aviso ao modelo, não erro', async () => {
+  const { deps, requests } = withHistory([
+    historyCall({ data_inicio: '2026-11-01', data_fim: '2026-11-07' }),
+    textResponse('Não consegui ver a semana.'),
+  ], new Error('db down'));
+  const r = await quiet(() => runChatTurn(input('Como foi minha semana?'), deps));
+  assert.equal(r.message, 'Não consegui ver a semana.');
+  assert.match(requests[1].contents.at(-1)!.parts?.[0].functionResponse?.response?.result as string, /Erro ao consultar/);
+});
+
+test('rodada depois da consulta falha: o erro sobe (nada foi gravado, reenviar é seguro)', async () => {
+  const { deps } = withHistory([
+    historyCall({ data_inicio: '2026-11-01', data_fim: '2026-11-07' }),
+    new Error('503 overloaded'),
+  ]);
+  await assert.rejects(runChatTurn(input('Como foi minha semana?'), deps), /503/);
 });

@@ -5,7 +5,7 @@
  * no celular a conexão cai quando a pessoa sai do app no meio da espera. O
  * turno roda desacoplado do stream (registrado com after()), termina e grava
  * a resposta em chat_messages mesmo com o cliente desconectado; o app a busca
- * em /api/chat/history quando a conexão cai (ver AIChat).
+ * em /api/chat/history quando a conexão cai (ver NinaChat).
  *
  * Corpo: { conversation_id, message_id, messages }
  *   conversation_id / message_id: uuids gerados pelo app — é pelo message_id
@@ -28,6 +28,7 @@ import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
 import { formatSSE } from '@/lib/chat/sse';
 import { isUuid, newId } from '@/lib/chat/recovery';
 import { saveAssistantMessage, saveUserMessage } from '@/lib/chat/store';
+import { queryHistory } from '@/lib/chat/history';
 import {
   MAX_REPLY_TOKENS,
   buildSystemInstruction,
@@ -73,6 +74,7 @@ const deps: TurnDeps = {
     return data ?? null;
   },
   groqReply,
+  queryHistory,
 };
 
 export async function POST(req: Request) {
@@ -112,7 +114,7 @@ export async function POST(req: Request) {
           await saveUserMessage({ id: questionId, userId, conversationId, content: question });
 
           const intent = detectIntent(question);
-          const dynamicContext = await buildDynamicContext(userId, intent);
+          const dynamicContext = await buildDynamicContext(userId, intent, conversationId);
           console.log(`[chat] intent=${intent} | user=${userId}`);
 
           const result = await runChatTurn(

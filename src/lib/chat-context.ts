@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { brazilToday, brazilNDaysAgo } from '@/lib/timezone';
+import { HISTORY_TOOL_NAME, pastConversationsContext, recentDaysContext, weekday } from '@/lib/chat/history';
 
 export type ChatIntent =
   | 'food_logging'
@@ -95,7 +96,12 @@ const MEAL_LABEL: Record<string, string> = {
   pre_workout: 'Pré-treino', post_workout: 'Pós-treino', other: 'Outro',
 };
 
-export async function buildDynamicContext(userId: string, intent: ChatIntent): Promise<string> {
+/**
+ * Contexto da Nina: perfil, hoje, os últimos 7 dias e, com `conversationId`,
+ * o resumo das conversas anteriores. Outros períodos ela busca com a
+ * ferramenta consultar_historico.
+ */
+export async function buildDynamicContext(userId: string, intent: ChatIntent, conversationId?: string): Promise<string> {
   const today = brazilToday();
   const sevenDaysAgo  = brazilNDaysAgo(7, today);
   const thirtyDaysAgo = brazilNDaysAgo(30, today);
@@ -106,8 +112,8 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent): P
   const needsTraining  = intent === 'training_analysis'  || intent === 'correlation_analysis';
   const needsMeals     = intent === 'food_logging'       || intent === 'general_coaching';
 
-  // Phase 1: always fetch profile + today's summary
-  const [[profileData], todayLogsData, todayWaterData] = await Promise.all([
+  // Phase 1: always fetch profile, today, the last 7 days and the memory
+  const [[profileData], todayLogsData, todayWaterData, recentDays, memory] = await Promise.all([
     sql`
       SELECT full_name, current_weight, target_calories, target_protein_g, target_water_ml, tdee
       FROM users WHERE id = ${userId}
@@ -117,6 +123,11 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent): P
       FROM food_logs WHERE user_id = ${userId} AND log_date = ${today}
     `,
     sql`SELECT amount_ml FROM water_logs WHERE user_id = ${userId} AND log_date = ${today}`,
+    recentDaysContext(userId, today).catch((err) => {
+      console.error('[chat-context] recent days', err instanceof Error ? err.message : err);
+      return null;
+    }),
+    conversationId ? pastConversationsContext(userId, conversationId) : Promise.resolve(''),
   ]);
 
   const targetCal   = profileData?.target_calories ?? 0;
@@ -148,7 +159,8 @@ export async function buildDynamicContext(userId: string, intent: ChatIntent): P
   const remainProt = Math.max(0, targetProt - todayProt);
   const waterPct   = targetWater > 0 ? Math.round((todayWater / targetWater) * 100) : 0;
 
-  let ctx = `PERFIL: ${firstName} | Peso: ${profileData?.current_weight ?? '?'}kg | Objetivo: ${goal}
+  let ctx = `DATA DE HOJE: ${today} (${weekday(today)})
+PERFIL: ${firstName} | Peso: ${profileData?.current_weight ?? '?'}kg | Objetivo: ${goal}
 META DIÁRIA: ${targetCal}kcal | Proteína: ${targetProt}g | Água: ${targetWater}ml
 HOJE: ${todayCal}kcal | ${todayProt}g prot | ${todayCarbs}g carbs | ${todayFat}g gord${workoutKcal > 0 ? ` | ${workoutKcal}kcal queimadas` : ''}
 RESTANTE: ${remainCal}kcal | ${remainProt}g prot
@@ -162,6 +174,8 @@ RESTANTE: ${remainCal}kcal | ${remainProt}g prot
     needsTraining  ? fetchTraining(userId, today, thirtyDaysAgo) : null,
   ]);
 
+  if (recentDays) ctx += `\n\nÚLTIMOS 7 DIAS (antes de hoje):\n${recentDays}`;
+  ctx += `\n\nACESSO AO HISTÓRICO: você tem acesso a todos os registros do usuário. Para qualquer dia ou período fora do que está acima (ou para ver as refeições de um dia), chame a ferramenta ${HISTORY_TOOL_NAME} antes de responder. Nunca diga que só vê os dados de hoje.`;
   if (hydData) ctx += `\n\nHIDRATAÇÃO (histórico):\n${hydData}`;
   if (nutData) ctx += `\n\nNUTRIÇÃO (30d):\n${nutData}`;
   if (wgtData) ctx += `\n\nPESO E COMPOSIÇÃO:\n${wgtData}`;
@@ -172,6 +186,10 @@ RESTANTE: ${remainCal}kcal | ${remainProt}g prot
       .map(l => `  • ${MEAL_LABEL[l.meal_type ?? ''] ?? 'Refeição'}: ${l.food_name} — ${l.calories}kcal${l.protein ? ` ${Math.round(l.protein)}g prot` : ''}`)
       .join('\n');
     ctx += `\n\nREFEIÇÕES HOJE:\n${lines}`;
+  }
+
+  if (memory) {
+    ctx += `\n\nCONVERSAS ANTERIORES (memória; use para dar continuidade, sem repetir à toa):\n${memory}`;
   }
 
   return ctx;
