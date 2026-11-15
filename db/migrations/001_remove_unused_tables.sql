@@ -20,6 +20,10 @@ BEGIN
 END $$;
 
 -- 2. Tabelas sem uso no código.
+--    food_logs.taco_food_id/custom_food_id sobraram do TACO revertido (PR #101)
+--    e são FKs para taco_foods/custom_foods; saem antes das tabelas.
+ALTER TABLE food_logs DROP COLUMN IF EXISTS taco_food_id;
+ALTER TABLE food_logs DROP COLUMN IF EXISTS custom_food_id;
 DROP TABLE IF EXISTS ai_insights;   -- funcionalidade removida (supabase 016)
 DROP TABLE IF EXISTS meal_history;  -- nunca usada
 DROP TABLE IF EXISTS custom_foods;  -- vazia, fora do schema
