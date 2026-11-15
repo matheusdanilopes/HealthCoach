@@ -10,7 +10,6 @@ import DailySummaryCard from '@/components/dashboard/DailySummaryCard';
 import MealsOverview from '@/components/dashboard/MealsOverview';
 import WeekStrip from '@/components/dashboard/WeekStrip';
 import WaterTracker from '@/components/dashboard/WaterTracker';
-import AIChat from '@/components/chat/AIChat';
 import { cn, todayISO, suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType, Profile, WaterLogEntry } from '@/types';
 
@@ -56,8 +55,6 @@ export default function DashboardClient({
   const [loadingDate, setLoadingDate] = useState(false);
 
   const greetingText = useMemo(() => getGreeting(), []);
-
-  const water = useMemo(() => waterLogs.reduce((s, l) => s + l.amount_ml, 0), [waterLogs]);
 
   const mealHydrationMl = useMemo(
     () => foodLogs.reduce((s, l) => s + (l.hydration_ml ?? 0), 0),
@@ -259,17 +256,6 @@ export default function DashboardClient({
           userId={userId}
           currentWeight={latestWeight}
           onLogged={() => router.refresh()}
-        />
-      )}
-
-      {profile && isToday && (
-        <AIChat
-          profile={profile}
-          dailyCalories={stats.calories}
-          dailyProtein={stats.protein}
-          dailyWater={water}
-          userId={userId}
-          onFoodLogged={handleFoodAdded}
         />
       )}
     </div>

@@ -5,7 +5,7 @@
  * no celular a conexão cai quando a pessoa sai do app no meio da espera. O
  * turno roda desacoplado do stream (registrado com after()), termina e grava
  * a resposta em chat_messages mesmo com o cliente desconectado; o app a busca
- * em /api/chat/history quando a conexão cai (ver AIChat).
+ * em /api/chat/history quando a conexão cai (ver NinaChat).
  *
  * Corpo: { conversation_id, message_id, messages }
  *   conversation_id / message_id: uuids gerados pelo app — é pelo message_id

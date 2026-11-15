@@ -77,6 +77,17 @@ export const FOOD_COACHING_RULES = `INSTRUÇÕES:
 5. Seja conciso — respostas curtas e diretas, com emojis quando apropriado.
 6. Dê feedback sobre o progresso baseado nos dados do contexto.`;
 
+/** Como escrever no chat do app, que mostra **negrito** e listas formatados. */
+export const CHAT_FORMAT_RULES = `FORMATO DAS RESPOSTAS (o app exibe negrito e listas):
+- Abra com uma frase curta que responde direto à pergunta.
+- Parágrafos de no máximo 2 frases, separados por uma linha em branco.
+- Com 3 ou mais itens (alimentos, números, opções), use lista: uma linha por item começando com "- ". Para passos em ordem, use "1. ", "2. ".
+- Use **negrito** só nos números-chave e nos nomes de alimentos (no máximo 4 destaques por resposta).
+- Pode abrir um bloco com uma linha curta em negrito como título (ex.: **Opções para o jantar:**).
+- Não use títulos com #, tabelas, blocos de código nem links.
+- Até ~90 palavras; passe disso só se o usuário pedir detalhes.
+- Feche, quando fizer sentido, com o próximo passo concreto em uma linha.`;
+
 export function buildSystemInstruction(dynamicContext: string): string {
   return `${COACH_PERSONA}
 
@@ -85,7 +96,9 @@ Neste chat você ajuda o usuário a alcançar os objetivos de saúde dele atrav�
 CONTEXTO DO USUÁRIO:
 ${dynamicContext}
 
-${FOOD_COACHING_RULES}`;
+${FOOD_COACHING_RULES}
+
+${CHAT_FORMAT_RULES}`;
 }
 
 export interface IncomingMessage {

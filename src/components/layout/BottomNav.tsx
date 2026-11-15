@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, HeartPulse, Scale, User, Ruler, BookOpen, TrendingUp, ChefHat, Brain, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { COACH_NAME } from '@/lib/coach-persona';
+import CoachAvatar from '@/components/chat/CoachAvatar';
 
 const BODY_PATHS = ['/body-metrics', '/body-measurements', '/treinos'];
 const SAUDE_PATHS = ['/diary', '/history', '/marmitas', '/coach'];
+const NINA_PATH = '/nina';
 
 const BODY_SUB_ITEMS = [
   { href: '/body-metrics',      icon: Scale,  label: 'Pesagem',  desc: 'Peso e composição' },
@@ -77,6 +80,79 @@ function SubMenu({
   );
 }
 
+/** Conteúdo de uma aba comum: indicador, ícone e rótulo. */
+function TabContent({ icon: Icon, label, active }: { icon: typeof Scale; label: string; active: boolean }) {
+  return (
+    <>
+      {active && (
+        <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+      )}
+      <Icon size={20} strokeWidth={active ? 2.25 : 1.75} className={cn('transition-all duration-200', active && 'nav-icon-active')} />
+      <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', active ? 'opacity-100' : 'opacity-55')}>
+        {label}
+      </span>
+    </>
+  );
+}
+
+const tabClass = (active: boolean) => cn(
+  'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl active:scale-90',
+  active
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
+);
+
+/** Botão central, elevado acima da barra, que abre o chat com a Nina. */
+function NinaTab({ active }: { active: boolean }) {
+  return (
+    <Link
+      href={NINA_PATH}
+      aria-label={`Conversar com a ${COACH_NAME}`}
+      aria-current={active ? 'page' : undefined}
+      className="group relative flex flex-col items-center justify-end w-full h-full pb-[7px] outline-none"
+    >
+      <span className="absolute left-1/2 -translate-x-1/2 -top-[22px] h-[60px] w-[60px]">
+        {/* Halo que "respira" — chama atenção sem pedir */}
+        <span
+          aria-hidden
+          className={cn(
+            'nina-nav-halo absolute inset-0 rounded-full bg-emerald-400/35 dark:bg-emerald-400/25',
+            active && 'opacity-0'
+          )}
+        />
+        {/* Anel em gradiente: gira quando a Nina está aberta */}
+        <span
+          aria-hidden
+          className={cn(
+            'absolute inset-0 rounded-full p-[3px] transition-[box-shadow,transform] duration-300',
+            'bg-[conic-gradient(from_0deg,#34d399,#059669,#a7f3d0,#10b981,#34d399)]',
+            'shadow-lg shadow-emerald-600/30 dark:shadow-emerald-500/20',
+            'group-hover:-translate-y-0.5 group-active:scale-90',
+            active ? 'nina-ring shadow-emerald-500/50' : ''
+          )}
+        />
+        <span
+          className={cn(
+            'absolute inset-[3px] rounded-full bg-white dark:bg-zinc-950 p-[2px] transition-transform duration-300',
+            'group-hover:-translate-y-0.5 group-active:scale-90',
+            active && 'nina-nav-pop'
+          )}
+        >
+          <CoachAvatar size={50} className="h-full w-full" />
+        </span>
+      </span>
+      <span
+        className={cn(
+          'text-[10px] font-semibold tracking-tight transition-all duration-200',
+          active ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-500 dark:text-zinc-400'
+        )}
+      >
+        {COACH_NAME}
+      </span>
+    </Link>
+  );
+}
+
 export default function BottomNav() {
   const pathname = usePathname();
   const [saudeOpen, setSaudeOpen] = useState(false);
@@ -86,6 +162,7 @@ export default function BottomNav() {
 
   const isSaudeActive = SAUDE_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
   const isBodyActive  = BODY_PATHS.includes(pathname);
+  const isNinaActive  = pathname === NINA_PATH;
 
   // Close both submenus whenever the route changes
   const [prevPathname, setPrevPathname] = useState(pathname);
@@ -113,90 +190,51 @@ export default function BottomNav() {
       <div className="flex items-center max-w-2xl mx-auto h-[60px] px-2">
 
         {/* Início */}
-        <Link
-          href="/dashboard"
-          className={cn(
-            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
-            pathname === '/dashboard'
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
-          )}
-        >
-          {pathname === '/dashboard' && (
-            <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-          )}
-          <LayoutDashboard size={20} strokeWidth={pathname === '/dashboard' ? 2.25 : 1.75} className={cn('transition-all duration-200', (pathname === '/dashboard') && 'nav-icon-active')} />
-          <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', pathname === '/dashboard' ? 'opacity-100' : 'opacity-55')}>
-            Início
-          </span>
-        </Link>
+        <div className="flex-1 h-full px-0.5">
+          <Link href="/dashboard" className={tabClass(pathname === '/dashboard')}>
+            <TabContent icon={LayoutDashboard} label="Início" active={pathname === '/dashboard'} />
+          </Link>
+        </div>
 
         {/* Saúde */}
-        <div ref={saudeRef} className="relative flex-1 flex items-center justify-center h-full">
+        <div ref={saudeRef} className="relative flex-1 flex items-center justify-center h-full px-0.5">
           {saudeOpen && (
             <SubMenu items={SAUDE_SUB_ITEMS} pathname={pathname} onClose={() => setSaudeOpen(false)} />
           )}
           <button
             onClick={() => { setSaudeOpen((v) => !v); setBodyOpen(false); }}
-            className={cn(
-              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
-              isSaudeActive || saudeOpen
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
-            )}
+            aria-expanded={saudeOpen}
+            className={tabClass(isSaudeActive || saudeOpen)}
           >
-            {(isSaudeActive || saudeOpen) && (
-              <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-            )}
-            <HeartPulse size={20} strokeWidth={isSaudeActive || saudeOpen ? 2.25 : 1.75} className={cn('transition-all duration-200', (isSaudeActive || saudeOpen) && 'nav-icon-active')} />
-            <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', isSaudeActive || saudeOpen ? 'opacity-100' : 'opacity-55')}>
-              Saúde
-            </span>
+            <TabContent icon={HeartPulse} label="Saúde" active={isSaudeActive || saudeOpen} />
           </button>
         </div>
 
+        {/* Nina (centro) */}
+        <div className="relative flex-1 h-full">
+          <NinaTab active={isNinaActive} />
+        </div>
+
         {/* Corpo */}
-        <div ref={bodyRef} className="relative flex-1 flex items-center justify-center h-full">
+        <div ref={bodyRef} className="relative flex-1 flex items-center justify-center h-full px-0.5">
           {bodyOpen && (
             <SubMenu items={BODY_SUB_ITEMS} pathname={pathname} onClose={() => setBodyOpen(false)} />
           )}
           <button
             onClick={() => { setBodyOpen((v) => !v); setSaudeOpen(false); }}
-            className={cn(
-              'relative flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
-              isBodyActive || bodyOpen
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
-            )}
+            aria-expanded={bodyOpen}
+            className={tabClass(isBodyActive || bodyOpen)}
           >
-            {(isBodyActive || bodyOpen) && (
-              <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-            )}
-            <Scale size={20} strokeWidth={isBodyActive || bodyOpen ? 2.25 : 1.75} className={cn('transition-all duration-200', (isBodyActive || bodyOpen) && 'nav-icon-active')} />
-            <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', isBodyActive || bodyOpen ? 'opacity-100' : 'opacity-55')}>
-              Corpo
-            </span>
+            <TabContent icon={Scale} label="Corpo" active={isBodyActive || bodyOpen} />
           </button>
         </div>
 
         {/* Perfil */}
-        <Link
-          href="/profile"
-          className={cn(
-            'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-all duration-200 rounded-xl mx-0.5 active:scale-90',
-            pathname === '/profile'
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
-          )}
-        >
-          {pathname === '/profile' && (
-            <span className="nav-indicator absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-          )}
-          <User size={20} strokeWidth={pathname === '/profile' ? 2.25 : 1.75} className={cn('transition-all duration-200', (pathname === '/profile') && 'nav-icon-active')} />
-          <span className={cn('text-[10px] font-semibold tracking-tight transition-all duration-200', pathname === '/profile' ? 'opacity-100' : 'opacity-55')}>
-            Perfil
-          </span>
-        </Link>
+        <div className="flex-1 h-full px-0.5">
+          <Link href="/profile" className={tabClass(pathname === '/profile')}>
+            <TabContent icon={User} label="Perfil" active={pathname === '/profile'} />
+          </Link>
+        </div>
 
       </div>
     </nav>

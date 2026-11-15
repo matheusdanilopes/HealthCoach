@@ -12,6 +12,7 @@ const ROUTE_ORDER: [string, number][] = [
   ['/history',           1.2],
   ['/marmitas',          1.3],
   ['/coach',             1.4],
+  ['/nina',              1.5],
   ['/body-metrics',      2],
   ['/body-measurements', 2.1],
   ['/treinos',           2.2],

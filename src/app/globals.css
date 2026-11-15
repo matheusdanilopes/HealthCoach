@@ -495,6 +495,113 @@ html.no-splash #hc-splash {
   to   { top: 100%; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Chat com a Nina (NinaChat) e botão central do menu
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Bolhas entram crescendo do canto de onde "saem" */
+.chat-in-user {
+  animation: chat-in-user 0.42s var(--ease-spring) backwards;
+  transform-origin: bottom right;
+}
+.chat-in-nina {
+  animation: chat-in-nina 0.5s var(--ease-out-expo) backwards;
+  transform-origin: bottom left;
+}
+@keyframes chat-in-user {
+  from { opacity: 0; transform: translate3d(14px, 10px, 0) scale(0.9); }
+}
+@keyframes chat-in-nina {
+  from { opacity: 0; transform: translate3d(-10px, 12px, 0) scale(0.94); }
+}
+
+/* Cartão "registrado no diário" e o check */
+.chat-card-in {
+  animation: chat-card-in 0.5s var(--ease-spring) 0.25s backwards;
+}
+@keyframes chat-card-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.92); }
+}
+.chat-check-draw {
+  animation: chat-check 0.55s var(--ease-spring) 0.45s backwards;
+}
+@keyframes chat-check {
+  from { opacity: 0; transform: scale(0.2) rotate(-45deg); }
+}
+
+/* 👍/👎 */
+.chat-rate-pop {
+  animation: chat-rate-pop 0.45s var(--ease-spring);
+}
+@keyframes chat-rate-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.45) rotate(-12deg); }
+  100% { transform: scale(1); }
+}
+
+/* As mensagens somem suavemente sob o resumo do dia ao rolar */
+.chat-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 10px), transparent 100%);
+}
+
+/* Nina "pensando" enquanto escreve */
+.nina-typing-avatar {
+  animation: nina-think 1.6s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes nina-think {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  30%      { transform: rotate(-6deg) translateY(-1px); }
+  60%      { transform: rotate(4deg) translateY(0); }
+}
+
+/* Boas-vindas */
+.nina-float {
+  animation: nina-float 3.2s ease-in-out infinite;
+}
+@keyframes nina-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+.nina-wave {
+  animation: nina-wave 2.4s ease-in-out 0.6s infinite;
+  transform-origin: 70% 80%;
+}
+@keyframes nina-wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30%      { transform: rotate(16deg); }
+  20%, 40%      { transform: rotate(-8deg); }
+}
+
+/* Bolinha "online" */
+.nina-online {
+  animation: nina-online 2s ease-out infinite;
+}
+@keyframes nina-online {
+  0%   { transform: scale(1);   opacity: 0.8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* Botão central do menu: halo que respira e "pulo" ao abrir */
+.nina-nav-halo {
+  animation: nina-nav-halo 2.8s ease-out infinite;
+  transition: opacity 0.3s;
+}
+@keyframes nina-nav-halo {
+  0%   { transform: scale(0.95); opacity: 0.9; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.nina-nav-pop {
+  animation: nina-nav-pop 0.6s var(--ease-spring);
+}
+@keyframes nina-nav-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.14) translateY(-3px); }
+  100% { transform: scale(1); }
+}
+
 /* ─── Reduced motion: keep the app, drop the movement ─── */
 @media (prefers-reduced-motion: reduce) {
   #hc-splash { display: none; }
@@ -513,7 +620,18 @@ html.no-splash #hc-splash {
   .nina-orbit,
   .nina-orbit-item,
   .nina-dot,
-  .nina-scan::after {
+  .nina-scan::after,
+  .chat-in-user,
+  .chat-in-nina,
+  .chat-card-in,
+  .chat-check-draw,
+  .chat-rate-pop,
+  .nina-typing-avatar,
+  .nina-float,
+  .nina-wave,
+  .nina-online,
+  .nina-nav-halo,
+  .nina-nav-pop {
     animation: none !important;
   }
   .nina-scan::after { display: none; }
