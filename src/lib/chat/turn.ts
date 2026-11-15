@@ -16,7 +16,7 @@ import {
   type GenerateContentResponse,
   type Part,
 } from '@google/genai';
-import { GEMINI_MODEL, addUsage, geminiGenerationConfig, readUsage, type TokenUsage } from '@/lib/ai';
+import { DEFAULT_AI_TIMEOUT_MS, GEMINI_MODEL, addUsage, geminiGenerationConfig, readUsage, type ThinkingEffort, type TokenUsage } from '@/lib/ai';
 import { HISTORY_DECLARATION, HISTORY_TOOL_NAME } from '@/lib/chat/history';
 
 export const MEAL_TYPES = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'supper', 'pre_workout', 'post_workout', 'other'];
@@ -28,6 +28,13 @@ export const MAX_REPLY_TOKENS = 1024;
 const CHAT_TEMPERATURE = 0.7;
 /** Rodadas no modelo por mensagem (consultas ao histórico + resposta). */
 export const MAX_ROUNDS = 4;
+/** Limite por chamada com raciocínio "medium" (leva 30–60 s). */
+export const DEEP_TIMEOUT_MS = 55_000;
+/**
+ * Raciocínio "medium" só enquanto o turno tiver folga: passado esse tempo, as
+ * rodadas seguintes voltam para "low" para caber no maxDuration da rota (90 s).
+ */
+export const DEEP_BUDGET_MS = 30_000;
 export const EMPTY_REPLY = 'Desculpe, não consegui formular uma resposta agora. Pode repetir?';
 
 export const LOG_FOOD_DECLARATION = {
@@ -158,7 +165,7 @@ export interface FoodLogRow {
 }
 
 export interface TurnDeps {
-  generate: (req: { model: string; contents: Content[]; config: GenerateContentConfig }) => Promise<GenerateContentResponse>;
+  generate: (req: { model: string; contents: Content[]; config: GenerateContentConfig; timeoutMs: number }) => Promise<GenerateContentResponse>;
   /** Grava o alimento; devolve a linha inserida ou null se falhar. */
   insertFoodLog: (row: FoodLogRow) => Promise<Record<string, unknown> | null>;
   /** Resposta só em texto quando o Gemini falha. */
@@ -175,6 +182,8 @@ export interface TurnInput {
   /** Dia do diário (calendário do Brasil). */
   logDate: string;
   model?: string;
+  /** Raciocínio do Gemini 3 (padrão: low). "medium" para perguntas de análise. */
+  thinking?: ThinkingEffort;
 }
 
 export interface ToolTrace {
@@ -189,6 +198,8 @@ export interface TurnMeta {
   provider: 'gemini' | 'groq';
   model: string;
   rounds: number;
+  /** Nível de raciocínio de cada rodada no Gemini. */
+  thinking: ThinkingEffort[];
   durationMs: number;
   usage?: TokenUsage;
   tools: ToolTrace[];
@@ -228,19 +239,29 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
   const tools = [{
     functionDeclarations: deps.queryHistory ? [LOG_FOOD_DECLARATION, HISTORY_DECLARATION] : [LOG_FOOD_DECLARATION],
   }];
-  const generation = geminiGenerationConfig({
-    model,
-    maxOutputTokens: MAX_REPLY_TOKENS,
-    temperature: CHAT_TEMPERATURE,
-    thinking: 'low',
-  });
+  // Esforço de cada rodada: o pedido (input.thinking) enquanto houver folga
+  // de tempo, "low" depois disso.
+  const roundSettings = () => {
+    const deep = input.thinking != null && input.thinking !== 'low' && now() - started < DEEP_BUDGET_MS;
+    const thinking: ThinkingEffort = deep ? input.thinking! : 'low';
+    return {
+      thinking,
+      timeoutMs: deep ? DEEP_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS,
+      generation: geminiGenerationConfig({
+        model,
+        maxOutputTokens: MAX_REPLY_TOKENS,
+        temperature: CHAT_TEMPERATURE,
+        thinking,
+      }),
+    };
+  };
 
   const contents: Content[] = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
 
-  const meta: TurnMeta = { provider: 'gemini', model, rounds: 0, durationMs: 0, tools: [] };
+  const meta: TurnMeta = { provider: 'gemini', model, rounds: 0, durationMs: 0, tools: [], thinking: [] };
   const finish = (message: string, foodLogged: boolean, foodLog: Record<string, unknown> | null): TurnResult => {
     meta.durationMs = now() - started;
     return { message, foodLogged, foodLog, meta };
@@ -248,14 +269,17 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
 
   let response: GenerateContentResponse;
   try {
+    const round = roundSettings();
+    meta.thinking.push(round.thinking);
     response = await deps.generate({
       model,
       contents: [...contents],
+      timeoutMs: round.timeoutMs,
       config: {
         systemInstruction,
         tools,
         toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-        ...generation,
+        ...round.generation,
       },
     });
     meta.rounds = 1;
@@ -326,9 +350,12 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
     mode = logAttempt || meta.rounds + 1 >= MAX_ROUNDS ? FunctionCallingConfigMode.NONE : FunctionCallingConfigMode.AUTO;
 
     try {
+      const round = roundSettings();
+      meta.thinking.push(round.thinking);
       response = await deps.generate({
         model,
         contents: [...contents],
+        timeoutMs: round.timeoutMs,
         config: {
           systemInstruction,
           // No Gemini 3, tirar as ferramentas de uma conversa que já tem
@@ -336,7 +363,7 @@ export async function runChatTurn(input: TurnInput, deps: TurnDeps): Promise<Tur
           // e na rodada final ficam proibidas (mode NONE).
           tools,
           toolConfig: { functionCallingConfig: { mode } },
-          ...generation,
+          ...round.generation,
         },
       });
       meta.rounds++;

@@ -20,11 +20,12 @@
 import { NextResponse, after } from 'next/server';
 import { auth } from '@/auth';
 import { insertInto } from '@/lib/db';
-import { DEFAULT_AI_TIMEOUT_MS, aiErrorInfo, getGemini } from '@/lib/ai';
+import { aiErrorInfo, getGemini } from '@/lib/ai';
 import { withGeminiRetry } from '@/lib/gemini-retry';
 import { callGroq } from '@/lib/groq';
 import { brazilToday } from '@/lib/timezone';
-import { detectIntent, buildDynamicContext } from '@/lib/chat-context';
+import { detectIntent, buildDynamicContext, type ChatIntent } from '@/lib/chat-context';
+import type { ThinkingEffort } from '@/lib/ai';
 import { formatSSE } from '@/lib/chat/sse';
 import { isUuid, newId } from '@/lib/chat/recovery';
 import { saveAssistantMessage, saveUserMessage } from '@/lib/chat/store';
@@ -60,13 +61,19 @@ Responda somente à última mensagem do usuário, como Coach, sem prefixo.`,
   );
 }
 
+// Perguntas de "por quê" e análises completas cruzam vários dados: raciocínio
+// "medium" (mais lento). O resto segue em "low" para responder rápido.
+function thinkingFor(intent: ChatIntent): ThinkingEffort {
+  return intent === 'correlation_analysis' ? 'medium' : 'low';
+}
+
 const deps: TurnDeps = {
-  generate: ({ model, contents, config }) =>
+  generate: ({ model, contents, config, timeoutMs }) =>
     withGeminiRetry(() =>
       getGemini().models.generateContent({
         model,
         contents,
-        config: { ...config, httpOptions: { timeout: DEFAULT_AI_TIMEOUT_MS } },
+        config: { ...config, httpOptions: { timeout: timeoutMs } },
       })
     ),
   insertFoodLog: async (row) => {
@@ -124,6 +131,7 @@ export async function POST(req: Request) {
               messages,
               // Diary days follow the Brazil calendar, not UTC.
               logDate: brazilToday(),
+              thinking: thinkingFor(intent),
             },
             deps
           );
