@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS users (
 -- TMB informada manualmente no Perfil (NULL = calculada pela fórmula com o peso atual).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_tmb integer;
 
+-- Dias analisados pela projeção de peso do dashboard (NULL = padrão de 14).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS projection_days integer
+  CHECK (projection_days BETWEEN 3 AND 90);
+
 CREATE TABLE IF NOT EXISTS food_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

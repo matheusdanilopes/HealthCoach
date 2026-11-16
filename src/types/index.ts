@@ -11,6 +11,8 @@ export interface Profile {
   target_calories: number | null;
   target_protein_g: number | null;
   target_water_ml: number;
+  // Days analysed by the dashboard weight projection (NULL = default).
+  projection_days?: number | null;
 }
 
 export interface FoodLog {

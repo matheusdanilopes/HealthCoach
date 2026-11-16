@@ -19,6 +19,7 @@ import {
   Calculator,
   RotateCcw,
   Send,
+  TrendingDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -31,7 +32,15 @@ import {
   ACTIVITY_MULTIPLIERS,
   type ActivityLevel,
 } from '@/lib/calculations';
+import {
+  DEFAULT_PROJECTION_DAYS,
+  MAX_PROJECTION_DAYS,
+  MIN_PROJECTION_DAYS,
+  normalizeProjectionDays,
+} from '@/lib/weight-projection';
 import type { Profile } from '@/types';
+
+const PROJECTION_PRESETS = [7, 14, 21, 30];
 
 interface ProfileClientProps {
   profile: Profile | null;
@@ -162,6 +171,11 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
     profile?.target_protein_g != null ? String(Math.round(Number(profile.target_protein_g))) : ''
   );
 
+  // Dashboard weight projection window
+  const [projectionDays, setProjectionDays] = useState(
+    String(normalizeProjectionDays(profile?.projection_days ?? DEFAULT_PROJECTION_DAYS))
+  );
+
   // UI states
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -249,6 +263,7 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
         // null lets the API use TDEE − 500 for the TDEE it computes.
         customTargetCalories: isMetaManual && metaNum > 0 ? metaNum : null,
         targetProtein: targetProtein ? Number(targetProtein) : null,
+        projectionDays: normalizeProjectionDays(projectionDays),
       }),
     });
     setLoading(false);
@@ -524,6 +539,58 @@ export default function ProfileClient({ profile, userId, email }: ProfileClientP
             />
             <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
               Sugestão de 1,8 g por kg de peso. Deixe em branco para não acompanhar proteína.
+            </p>
+          </div>
+        </SectionCard>
+
+        {/* Projeção de peso */}
+        <SectionCard title="Projeção de peso">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <TrendingDown size={13} className="text-emerald-600 dark:text-emerald-400" />
+              <label
+                htmlFor="projection-days"
+                className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest"
+              >
+                Analisar os últimos (dias)
+              </label>
+            </div>
+            <div className="grid grid-cols-[repeat(4,minmax(0,1fr))_5rem] gap-2">
+              {PROJECTION_PRESETS.map((d) => {
+                const isSelected = Number(projectionDays) === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setProjectionDays(String(d))}
+                    className={cn(
+                      'h-11 rounded-xl border text-[13px] font-semibold tabular-nums transition-all duration-150 active:scale-[0.97]',
+                      isSelected
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    )}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
+              <input
+                id="projection-days"
+                type="number"
+                inputMode="numeric"
+                value={projectionDays}
+                onChange={(e) => setProjectionDays(e.target.value)}
+                onBlur={() => setProjectionDays(String(normalizeProjectionDays(projectionDays)))}
+                min={MIN_PROJECTION_DAYS}
+                max={MAX_PROJECTION_DAYS}
+                aria-label="Número de dias personalizado"
+                className="h-11 w-full rounded-xl px-2 text-center text-sm tabular-nums bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/50 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-400/80 transition-all duration-150"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              O card do início usa as calorias e as pesagens desse período para estimar quanto você deve ganhar
+              ou perder na próxima semana. Entre {MIN_PROJECTION_DAYS} e {MAX_PROJECTION_DAYS} dias; períodos maiores
+              são mais estáveis, menores reagem mais rápido a mudanças.
             </p>
           </div>
         </SectionCard>

@@ -9,6 +9,7 @@ import {
   calculateWaterTarget,
   normalizeActivityLevel,
 } from '@/lib/calculations';
+import { normalizeProjectionDays } from '@/lib/weight-projection';
 
 export async function PUT(req: Request) {
   const session = await auth();
@@ -25,6 +26,7 @@ export async function PUT(req: Request) {
     tmbManual,
     customTargetCalories,
     targetProtein,
+    projectionDays,
   } = await req.json();
 
   const w = parseFloat(weight);
@@ -51,7 +53,7 @@ export async function PUT(req: Request) {
   // The screen always sends the target it shows. When that is still the
   // automatic target saved before (TDEE − 500) and wasn't edited, follow the
   // new TDEE instead of freezing the old value as a manual target.
-  const [prev] = await sql`SELECT tdee, target_calories FROM users WHERE id = ${session.user.id}`;
+  const [prev] = await sql`SELECT * FROM users WHERE id = ${session.user.id}`;
   const prevTdee = prev?.tdee != null ? Number(prev.tdee) : null;
   const prevTarget = prev?.target_calories != null ? Number(prev.target_calories) : null;
   const prevTargetWasFormula =
@@ -73,6 +75,12 @@ export async function PUT(req: Request) {
       : { target_protein_g: targetProtein === null || targetProtein === '' || !Number.isFinite(proteinNum) || proteinNum <= 0
           ? null
           : Math.min(Math.max(Math.round(proteinNum), 20), 400) };
+  // Omitted (older clients) keeps it. Skipped while db/migrations/003 hasn't
+  // added the column, so saving the profile never breaks because of it.
+  const projectionUpdate =
+    projectionDays === undefined || !prev || !('projection_days' in prev)
+      ? {}
+      : { projection_days: normalizeProjectionDays(projectionDays) };
 
   await updateWhere('users', {
       full_name: fullName,
@@ -86,6 +94,7 @@ export async function PUT(req: Request) {
       target_calories: targetCal,
       target_water_ml: targetWater,
       ...proteinUpdate,
+      ...projectionUpdate,
       updated_at: new Date().toISOString(),
   }, { id: session.user.id });
 

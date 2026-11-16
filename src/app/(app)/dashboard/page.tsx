@@ -3,6 +3,8 @@ import { getSession, getUserRow } from '@/lib/session';
 import { sql } from '@/lib/db';
 import { brazilToday } from '@/lib/timezone';
 import { getLatestWeight } from '@/lib/weight';
+import { getWeightProjection } from '@/lib/weight-projection-data';
+import { normalizeProjectionDays } from '@/lib/weight-projection';
 import DashboardClient from './DashboardClient';
 import type { FoodLog, WaterLogEntry } from '@/types';
 
@@ -39,6 +41,18 @@ export default async function DashboardPage() {
 
   const initialWaterLogs = waterData as WaterLogEntry[];
 
+  const projectionDays = normalizeProjectionDays(profile?.projection_days);
+  // The card is a bonus: a failure here must not take the dashboard down.
+  const weightProjection = await getWeightProjection(userId, {
+    today,
+    windowDays: projectionDays,
+    tdee: profile?.tdee ?? null,
+    currentWeight: latestWeight || null,
+  }).catch((err) => {
+    console.error('[dashboard] weight projection failed:', err instanceof Error ? err.message : err);
+    return null;
+  });
+
   return (
     <DashboardClient
       profile={profile}
@@ -47,6 +61,8 @@ export default async function DashboardPage() {
       userId={userId}
       initialFoodLogs={foodData as FoodLog[]}
       initialWaterLogs={initialWaterLogs}
+      weightProjection={weightProjection}
+      projectionDays={projectionDays}
     />
   );
 }
