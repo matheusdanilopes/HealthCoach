@@ -10,6 +10,8 @@ import DailySummaryCard from '@/components/dashboard/DailySummaryCard';
 import MealsOverview from '@/components/dashboard/MealsOverview';
 import WeekStrip from '@/components/dashboard/WeekStrip';
 import WaterTracker from '@/components/dashboard/WaterTracker';
+import WeightProjectionCard from '@/components/dashboard/WeightProjectionCard';
+import type { WeightProjection } from '@/lib/weight-projection';
 import { cn, todayISO, suggestMealType } from '@/lib/utils';
 import type { FoodLog, MealType, Profile, WaterLogEntry } from '@/types';
 
@@ -27,6 +29,8 @@ interface DashboardClientProps {
   userId: string;
   initialFoodLogs: FoodLog[];
   initialWaterLogs: WaterLogEntry[];
+  weightProjection: WeightProjection | null;
+  projectionDays: number;
 }
 
 function getGreeting() {
@@ -43,6 +47,8 @@ export default function DashboardClient({
   userId,
   initialFoodLogs,
   initialWaterLogs,
+  weightProjection,
+  projectionDays,
 }: DashboardClientProps) {
   const router = useRouter();
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>(initialFoodLogs);
@@ -220,6 +226,10 @@ export default function DashboardClient({
           onAdded={handleWaterAdded}
           mealHydrationMl={mealHydrationMl}
         />
+
+        {isToday && (
+          <WeightProjectionCard projection={weightProjection} windowDays={projectionDays} />
+        )}
 
         <MealsOverview
           logs={foodLogs}
