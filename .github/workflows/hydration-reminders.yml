@@ -2,9 +2,10 @@ name: Notifications Cron
 
 on:
   schedule:
-    # Runs every 2 hours (UTC). Backend ignores quiet hours (10pm–7am BRT).
-    # Active hours in BRT: 7am, 9am, 11am, 1pm, 3pm, 5pm, 7pm
-    - cron: '0 */2 * * *'
+    # Runs every 2 hours, only in active hours (UTC). Backend ignores quiet hours
+    # (10pm–7am BRT), so night runs only woke the Neon database for nothing.
+    # BRT: 7am, 9am, 11am, 1pm, 3pm, 5pm, 7pm, 9pm
+    - cron: '0 0,10,12,14,16,18,20,22 * * *'
   workflow_dispatch: # allows manual trigger from GitHub
 
 jobs:
